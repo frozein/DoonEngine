@@ -1,0 +1,197 @@
+#version 430
+
+#define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
+#define MAP_SIZE ivec3(2, 2, 2) //size of the map (number of chunks in each direction)
+#define MAX_CHUNKS 2 //the maximum number of chunks that can be stored at once
+
+struct Chunk //a chunk of voxels
+{
+	vec4 voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
+};
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
+layout(rgba32f, binding = 0) uniform image2D img_output; //the output texture
+
+layout(std140, binding = 0) uniform mapBuffer //the buffer that contains the chunk map
+{
+	uint map[MAP_SIZE.x][MAP_SIZE.y][MAP_SIZE.z];
+};
+
+layout(std140, binding = 1) uniform chunkBuffer //the buffer that contains all of the chunks
+{
+	Chunk chunks[MAX_CHUNKS];
+};
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+uniform vec3 camPos;    //the camera's position
+uniform vec3 camDir;    //the direction the camera is pointing
+uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
+uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+bool in_map_bounds(vec3 pos) //returns whether a position is in bounds in the map
+{
+	return pos.x < MAP_SIZE.x && pos.y < MAP_SIZE.y && pos.z < MAP_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+}
+
+bool in_chunk_bounds(vec3 pos) //returns whether a position is in bounds in a chunk
+{
+	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+uint get_map_tile(vec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
+{
+	ivec3 ipos = ivec3(pos);
+	return map[ipos.x][ipos.y][ipos.z];
+}
+
+vec4 get_voxel(uint chunk, vec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
+{
+	ivec3 ipos = ivec3(pos);
+	return chunks[chunk].voxels[ipos.x][ipos.y][ipos.z];
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //returns how far along a ray a box is intersected
+{
+    vec3 tMin = (boxMin - rayPos) * invRayDir;
+    vec3 tMax = (boxMax - rayPos) * invRayDir;
+
+    vec3 t1 = min(tMin, tMax);
+    vec3 t2 = max(tMin, tMax);
+
+    float tNear = max(max(t1.x, t1.y), t1.z);
+    float tFar  = min(min(t2.x, t2.y), t2.z);
+
+    return vec2(tNear, tFar);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 mapPos) //steps through one tile with the DDA algorithm, the x-xomponent is the near intersection, y-component is far
+{
+	//https://www.youtube.com/watch?v=NbSee-XM7WA <- see this video for a good overview of the algorithm
+
+	if (sideDist.x < sideDist.y) 
+	{
+		if (sideDist.x < sideDist.z) 
+		{
+			sideDist.x += deltaDist.x;
+			mapPos.x += rayStep.x;
+		}
+		else 
+		{
+			sideDist.z += deltaDist.z;
+			mapPos.z += rayStep.z;
+		}
+	}
+	else
+	{
+		if (sideDist.y < sideDist.z) 
+		{
+			sideDist.y += deltaDist.y;
+			mapPos.y += rayStep.y;
+		}
+		else 
+		{
+			sideDist.z += deltaDist.z;
+			mapPos.z += rayStep.z;
+		}
+	}
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, inout vec3 color) //steps a ray through a chunk, returns true if something was hit
+{
+	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
+	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
+	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
+	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+
+	while(in_chunk_bounds(mapPos))
+	{
+		//check if a solid voxel has been hit:
+		vec4 res = get_voxel(chunk, mapPos);
+		if (res.w > 0)
+		{
+			color = res.xyz;
+			return true;
+		}
+
+		//iterate the dda algorithm:
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+	}
+}
+
+bool step_map(vec3 rayDir, vec3 invRayDir, vec3 rayPos, inout vec3 color) //steps a ray through the map (not individual chunks), returns true if something was hit
+{
+	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
+	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
+	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
+	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+
+	while(in_map_bounds(mapPos))
+	{
+		//check if a solid voxel has been hit:
+		if (get_map_tile(mapPos) == 1)
+		{
+			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1); //find exactly where the ray intersects TODO try to optimize
+			if(intersection.x > 0) //only increment rayPos if outside the box
+				rayPos += rayDir * (intersection.x + 0.00001);
+			
+			if(step_chunk(0, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, color))
+				return true;
+		}
+
+		//iterate the dda algorithm:
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+	}
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+void main()
+{
+	vec3 finalColor; //the final color that gets written to the texture
+
+	//calculate ray position and direction:
+	vec2 screenPos;
+	screenPos.x = float(gl_GlobalInvocationID.x) / (gl_NumWorkGroups.x * 8) - 1; //(0,0) at the center of the screen
+	screenPos.y = float(gl_GlobalInvocationID.y) / (gl_NumWorkGroups.y * 8) - 1;
+
+	vec3 rayDir = normalize(camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV);
+	vec3 invRayDir = 1 / rayDir;
+	vec3 rayPos = camPos;
+
+	//check if ray hits the map at all:
+	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0), MAP_SIZE);
+
+	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
+	{
+		//vec3(0.71, 0.85, 0.90);
+		//vec3(0.00, 0.45, 0.74);
+		finalColor = mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1);
+	}
+	else //if the map is hit, step through it
+	{
+		if(intersection.x > 0) //only increment rayPos if outside the box
+			rayPos += rayDir * (intersection.x + 0.00001);
+
+		if(!step_map(rayDir, invRayDir, rayPos, finalColor)) //step through the map
+		{
+			finalColor = mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1);
+		}
+	}
+
+	//store final color to texture:
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	imageStore(img_output, coords, vec4(finalColor, 1.0));
+}
