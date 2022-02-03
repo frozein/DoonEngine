@@ -52,8 +52,8 @@ GLuint quadIndices[] = {
 };
 
 //screen dimensions:
-GLuint SCREEN_W = 1280;
-GLuint SCREEN_H = 720;
+GLuint SCREEN_W = 1280 * 4;
+GLuint SCREEN_H = 720 * 4;
 GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
@@ -75,14 +75,22 @@ float deltaTime = 0.0f;
 #define CHUNK_SIZE_X 8
 #define CHUNK_SIZE_Y 8
 #define CHUNK_SIZE_Z 8
-#define MAP_SIZE_X 2
-#define MAP_SIZE_Y 2
-#define MAP_SIZE_Z 2
+
+#define MAP_SIZE_X 3
+#define MAP_SIZE_Y 3
+#define MAP_SIZE_Z 3
+
 #define MAX_CHUNKS 2
+
+typedef struct Voxel
+{
+	vec3 color;
+	unsigned int material;
+} Voxel;
 
 typedef struct Chunk
 {
-	vec4 voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
+	Voxel voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
 } Chunk;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -100,7 +108,7 @@ int main()
 	//create and init window:
 	//---------------------------------
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-	GLFWwindow* window = glfwCreateWindow(SCREEN_W, SCREEN_H, "VoxelEngine", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCREEN_W / 4, SCREEN_H / 4, "VoxelEngine", NULL, NULL);
 	if(window == NULL)
 	{
 		printf("Failed to create GLFW window\n");
@@ -119,7 +127,7 @@ int main()
 
 	//set gl viewport:
 	//---------------------------------
-	glViewport(0, 0, SCREEN_W, SCREEN_H);
+	glViewport(0, 0, SCREEN_W / 4, SCREEN_H / 4);
 
 	glEnable              ( GL_DEBUG_OUTPUT );
 	glDebugMessageCallback( MessageCallback, 0 );
@@ -166,19 +174,19 @@ int main()
 			for(int z = 0; z < CHUNK_SIZE_Z; z++)
 			{
 				float distance = vec3_distance((vec3){0, 0, 0}, (vec3){x, y, z});
-				chunks[0].voxels[x][y][z].w = (distance < 7.0f) && (distance > 4.0f);
-				chunks[0].voxels[x][y][z].x = x / 8.0f;
-				chunks[0].voxels[x][y][z].y = y / 8.0f;
-				chunks[0].voxels[x][y][z].z = z / 8.0f;
+				chunks[0].voxels[x][y][z].material = ((distance < 7.0f) && (distance > 4.0f)) - 1;
+				chunks[0].voxels[x][y][z].color.x = x / 8.0f;
+				chunks[0].voxels[x][y][z].color.y = y / 8.0f;
+				chunks[0].voxels[x][y][z].color.z = z / 8.0f;
 			}
-	chunks[0].voxels[0][0][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f}; //add corners
+	chunks[0].voxels[0][0][0] = (Voxel){0.0f, 0.0f, 0.0f, 0}; //add corners
 	//chunks[0].voxels[0][7][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
 	//chunks[0].voxels[0][0][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
 	//chunks[0].voxels[0][7][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
 	//chunks[0].voxels[7][0][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
 	//chunks[0].voxels[7][7][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
 	//chunks[0].voxels[7][0][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	chunks[0].voxels[7][7][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
+	chunks[0].voxels[7][7][7] = (Voxel){0.0f, 0.0f, 0.0f, 0};
 
 	glBindBuffer(GL_UNIFORM_BUFFER, chunkBuffer);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(Chunk) * MAX_CHUNKS, chunks);
@@ -189,7 +197,7 @@ int main()
 		for(int y = 0; y < MAP_SIZE_Y; y++)
 			for(int z = 0; z < MAP_SIZE_Z; z++)
 			{
-				(GLuint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 1;//(x == y) && (z == y);
+				(GLuint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 0;//(x == y) && (z == y);
 			}
 
 	glBindBuffer(GL_UNIFORM_BUFFER, mapBuffer);
