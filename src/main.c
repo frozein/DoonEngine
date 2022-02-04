@@ -69,6 +69,8 @@ float fov = 0.8f;
 
 float deltaTime = 0.0f;
 
+unsigned int viewMode = 0;
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //voxel map stuff:
@@ -189,6 +191,7 @@ int main()
 	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(Chunk) * MAX_CHUNKS, chunks);
 
 	//--------------//
+
 	vec4* map = malloc(sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z); //needs to be a vec4 for alignment
 	for(int x = 0; x < MAP_SIZE_X; x++)
 		for(int y = 0; y < MAP_SIZE_Y; y++)
@@ -251,7 +254,8 @@ int main()
 		shader_uniform_vec3(voxelShader, "camDir", camFront);
 		shader_uniform_vec3(voxelShader, "camPlaneU", camPlaneU);
 		shader_uniform_vec3(voxelShader, "camPlaneV", camPlaneV);
-		shader_uniform_float(voxelShader, "time", glfwGetTime());
+		shader_uniform_uint(voxelShader, "viewMode", viewMode);
+
 
 		glDispatchCompute(SCREEN_W / 16, SCREEN_H / 16, 1); //TODO: ALLOW FOR WINDOW RESIZING, NEED TO REGEN TEXTURE EACH TIME
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
@@ -328,9 +332,11 @@ void process_input(GLFWwindow *window)
 		glfwSetWindowShouldClose(window, true);
 
 	if(glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+		viewMode = 0;
 	if(glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
-		glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+		viewMode = 1;
+	if(glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
+		viewMode = 2;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((vec3){camFront.x, 0.0f, camFront.z}), camSpeed));

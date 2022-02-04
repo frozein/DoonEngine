@@ -40,6 +40,8 @@ uniform vec3 camDir;    //the direction the camera is pointing
 uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
 uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
 
+uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 bool in_map_bounds(vec3 pos) //returns whether a position is in bounds in the map
@@ -82,9 +84,19 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
     return vec2(tNear, tFar);
 }
 
+vec3 normal_AABB(vec3 intersectPos, vec3 boxMin, vec3 boxMax) //returns the normal of an AABB at a point
+{
+	vec3 c = (boxMin + boxMax) * 0.5;
+	vec3 p = intersectPos - c;
+	vec3 d = (boxMax - boxMin) * 0.5;
+	const float bias = 1.000001;
+
+	return normalize(trunc(p / d * bias));
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 mapPos, out vec3 normal) //steps through one tile with the DDA algorithm, the x-xomponent is the near intersection, y-component is far
+void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 mapPos, out vec3 normal) //steps through one tile with the DDA algorithm
 {
 	//https://www.youtube.com/watch?v=NbSee-XM7WA <- see this video for a good overview of the algorithm
 
@@ -109,7 +121,7 @@ void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 m
 		{
 			sideDist.y += deltaDist.y;
 			mapPos.y += rayStep.y;
-			rayStep = vec3(0, -rayStep.y, 0);
+			normal = vec3(0, -rayStep.y, 0);
 		}
 		else 
 		{
@@ -155,7 +167,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 c
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, out vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, inout vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -174,7 +186,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, ou
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
 				rayPos += rayDir * (intersection.x + 0.00001); //add so that new pos is inside the chunk
-			
+
 			vec3 finalMapPos;
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, color, normal, finalMapPos))
 			{
@@ -218,18 +230,37 @@ void main()
 	else //if the map is hit, step through it
 	{
 		if(intersection.x > 0) //only increment rayPos if outside the box
-			rayPos += rayDir * (intersection.x + 0.00001);
+			rayPos += rayDir * (intersection.x - 0.00001);
+
+		finalNormal = normal_AABB(rayPos, vec3(0), MAP_SIZE);
 
 		if(step_map(rayDir, invRayDir, rayPos, finalColor, finalNormal))
 		{
-			//finalColor = vec3(length(camPos - rayPos) / 16); //depth
-			vec3 sun = normalize(vec3(0.9, 1.0, 0.9));
-
-			vec3 temp;  //stores the color of the shadow ray, not used currently 
-			vec3 temp2; //stores the normal of the shadow ray, not used currently 
-			if(step_map(sun, 1 / sun, rayPos, temp, temp2))
+			switch(viewMode)
 			{
-				finalColor *= 0.5;
+			case 0: //lighting
+			{
+				vec3 sun = normalize(vec3(0.9, 1.0, 0.9));
+
+				vec3 temp;  //stores the color of the shadow ray, not used currently 
+				vec3 temp2; //stores the normal of the shadow ray, not used currently 
+				if(step_map(sun, 1 / sun, rayPos, temp, temp2))
+				{
+					finalColor *= 0.5;
+				}
+
+				break;
+			}
+			case 1: //depth
+			{
+				finalColor = vec3(1 / length(camPos - rayPos));
+				break;
+			}
+			case 2: //normal
+			{
+				finalColor = abs(finalNormal);
+				break;
+			}
 			}
 		}
 		else
