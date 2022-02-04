@@ -54,7 +54,7 @@ bool in_chunk_bounds(vec3 pos) //returns whether a position is in bounds in a ch
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uint get_map_tile(vec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
+int get_map_tile(vec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
 	ivec3 ipos = ivec3(pos);
 	return map[ipos.x][ipos.y][ipos.z];
@@ -129,13 +129,12 @@ vec3 sky_color(vec3 rayDir)
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 color, out vec3 finalMapPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 color, inout vec3 normal, out vec3 finalMapPos) //steps a ray through a chunk, returns true if something was hit
 {
 	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
 	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
-	vec3 normal;
 
 	while(in_chunk_bounds(mapPos))
 	{
@@ -156,29 +155,31 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 c
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, out vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
 	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
-	vec3 normal;
+
+	if(!in_map_bounds(mapPos)) //iterate once if not in bounds to stop from exiting if the ray is *just* outside
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
 
 	while(in_map_bounds(mapPos))
 	{
 		//check if a solid voxel has been hit:
-		if (get_map_tile(mapPos) >= 0)
+		int res = get_map_tile(mapPos);
+		if (res >= 0)
 		{
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
 				rayPos += rayDir * (intersection.x + 0.00001); //add so that new pos is inside the chunk
 			
 			vec3 finalMapPos;
-			if(step_chunk(0, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, color, finalMapPos))
+			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, color, normal, finalMapPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + finalMapPos * INV_CHUNK_SIZE, mapPos + finalMapPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				if(intersection.x > 0) //only increment rayPos if outside the box
-					rayPos += rayDir * (intersection.x - 0.00001); //subtract so that new pos isnt inside a voxel
+				rayPos += rayDir * (intersection.x - 0.00001); //subtract so that new pos isnt inside a voxel
 
 				return true;
 			}
@@ -196,6 +197,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color) //
 void main()
 {
 	vec3 finalColor; //the final color that gets written to the texture
+	vec3 finalNormal;
 
 	//calculate ray position and direction:
 	vec2 screenPos;
@@ -218,13 +220,14 @@ void main()
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + 0.00001);
 
-		if(step_map(rayDir, invRayDir, rayPos, finalColor))
+		if(step_map(rayDir, invRayDir, rayPos, finalColor, finalNormal))
 		{
 			//finalColor = vec3(length(camPos - rayPos) / 16); //depth
+			vec3 sun = normalize(vec3(0.9, 1.0, 0.9));
 
-			vec3 sun = vec3(0.5298, 0.6622, 0.5298); //opposite direction sun points
-			vec3 temp; //stores the color of the shadow ray, not used currently 
-			if(step_map(sun, 1 / sun, rayPos, temp))
+			vec3 temp;  //stores the color of the shadow ray, not used currently 
+			vec3 temp2; //stores the normal of the shadow ray, not used currently 
+			if(step_map(sun, 1 / sun, rayPos, temp, temp2))
 			{
 				finalColor *= 0.5;
 			}

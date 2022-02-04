@@ -52,8 +52,8 @@ GLuint quadIndices[] = {
 };
 
 //screen dimensions:
-GLuint SCREEN_W = 1280 * 4;
-GLuint SCREEN_H = 720 * 4;
+GLuint SCREEN_W = 1280;
+GLuint SCREEN_H = 720;
 GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
@@ -108,7 +108,7 @@ int main()
 	//create and init window:
 	//---------------------------------
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-	GLFWwindow* window = glfwCreateWindow(SCREEN_W / 4, SCREEN_H / 4, "VoxelEngine", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCREEN_W, SCREEN_H, "VoxelEngine", NULL, NULL);
 	if(window == NULL)
 	{
 		printf("Failed to create GLFW window\n");
@@ -127,7 +127,7 @@ int main()
 
 	//set gl viewport:
 	//---------------------------------
-	glViewport(0, 0, SCREEN_W / 4, SCREEN_H / 4);
+	glViewport(0, 0, SCREEN_W, SCREEN_H);
 
 	glEnable              ( GL_DEBUG_OUTPUT );
 	glDebugMessageCallback( MessageCallback, 0 );
@@ -173,20 +173,17 @@ int main()
 		for(int y = 0; y < CHUNK_SIZE_Y; y++)
 			for(int z = 0; z < CHUNK_SIZE_Z; z++)
 			{
-				float distance = vec3_distance((vec3){0, 0, 0}, (vec3){x, y, z});
-				chunks[0].voxels[x][y][z].material = ((distance < 7.0f) && (distance > 4.0f)) - 1;
+				//cylinder:
+				float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
+				chunks[0].voxels[x][y][z].material = (distance < 4.0f) - 1;
 				chunks[0].voxels[x][y][z].color.x = x / 8.0f;
 				chunks[0].voxels[x][y][z].color.y = y / 8.0f;
 				chunks[0].voxels[x][y][z].color.z = z / 8.0f;
+
+				//block:
+				chunks[1].voxels[x][y][z].material = 0;
+				chunks[1].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
 			}
-	chunks[0].voxels[0][0][0] = (Voxel){0.0f, 0.0f, 0.0f, 0}; //add corners
-	//chunks[0].voxels[0][7][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	//chunks[0].voxels[0][0][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	//chunks[0].voxels[0][7][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	//chunks[0].voxels[7][0][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	//chunks[0].voxels[7][7][0] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	//chunks[0].voxels[7][0][7] = (vec4){0.0f, 0.0f, 0.0f, 1.0f};
-	chunks[0].voxels[7][7][7] = (Voxel){0.0f, 0.0f, 0.0f, 0};
 
 	glBindBuffer(GL_UNIFORM_BUFFER, chunkBuffer);
 	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(Chunk) * MAX_CHUNKS, chunks);
@@ -197,7 +194,12 @@ int main()
 		for(int y = 0; y < MAP_SIZE_Y; y++)
 			for(int z = 0; z < MAP_SIZE_Z; z++)
 			{
-				(GLuint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 0;//(x == y) && (z == y);
+				if(y == 0)
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 1;
+				else if(x == 1 && z == 1)
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 0;
+				else
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = -1;//(x == y) && (z == y);
 			}
 
 	glBindBuffer(GL_UNIFORM_BUFFER, mapBuffer);
@@ -249,6 +251,7 @@ int main()
 		shader_uniform_vec3(voxelShader, "camDir", camFront);
 		shader_uniform_vec3(voxelShader, "camPlaneU", camPlaneU);
 		shader_uniform_vec3(voxelShader, "camPlaneV", camPlaneV);
+		shader_uniform_float(voxelShader, "time", glfwGetTime());
 
 		glDispatchCompute(SCREEN_W / 16, SCREEN_H / 16, 1); //TODO: ALLOW FOR WINDOW RESIZING, NEED TO REGEN TEXTURE EACH TIME
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
