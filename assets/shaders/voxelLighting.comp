@@ -2,6 +2,7 @@
 
 #define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
+#define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / CHUNK_SIZE, precomputed
 #define MAP_SIZE ivec3(3, 3, 3) //size of the map (number of chunks in each direction)
 #define MAX_CHUNKS 11 //the maximum number of chunks that can be stored at once
 
@@ -23,27 +24,17 @@ struct Chunk //a chunk of voxels
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
-layout(rgba32f, binding = 0) uniform image2D img_output; //the output texture
+layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
 
-layout(std140, binding = 0) restrict readonly buffer mapBuffer //the buffer that contains the chunk map
+layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains the chunk map
 {
 	int map[MAP_SIZE.x][MAP_SIZE.y][MAP_SIZE.z];
 };
 
-layout(std140, binding = 1) restrict readonly buffer chunkBuffer //the buffer that contains all of the chunks
+layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
 {
 	Chunk chunks[MAX_CHUNKS];
 };
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-
-uniform vec3 camPos;    //the camera's position
-uniform vec3 camDir;    //the direction the camera is pointing
-uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
-uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
-
-uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -87,16 +78,6 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
     return vec2(tNear, tFar);
 }
 
-vec3 normal_AABB(vec3 intersectPos, vec3 boxMin, vec3 boxMax) //returns the normal of an AABB at a point
-{
-	vec3 c = (boxMin + boxMax) * 0.5;
-	vec3 p = intersectPos - c;
-	vec3 d = (boxMax - boxMin) * 0.5;
-	const float bias = 1.00001;
-
-	return normalize(trunc(p / d * bias));
-}
-
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 mapPos, out vec3 normal) //steps through one tile with the DDA algorithm
@@ -137,14 +118,7 @@ void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 m
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-vec3 sky_color(vec3 rayDir)
-{
-	return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1);
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 color, inout vec3 normal, out vec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, vec3 ignore, out vec3 color, inout vec3 normal, out vec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
 {
 	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -155,9 +129,9 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 c
 	{
 		//check if a solid voxel has been hit:
 		Voxel res = get_voxel(chunk, mapPos);
-		if (res.material >= 0)
+		if (res.material >= 0 && mapPos != ignore)
 		{
-			color = res.accumColor / res.numSamples;
+			color = res.color;
 			chunkPos = mapPos;
 
 			return true;
@@ -170,7 +144,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out vec3 c
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, inout vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, vec3 ignore, out vec3 color, inout vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -191,7 +165,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, in
 				rayPos += rayDir * (intersection.x + 0.00001); //add so that new pos is inside the chunk
 
 			vec3 chunkPos;
-			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, color, normal, chunkPos))
+			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignore, color, normal, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x - 0.00001); //subtract so that new pos isnt inside a voxel
@@ -209,63 +183,66 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out vec3 color, in
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+uniform uint test; //chunk index
+uniform vec3 test2; //chunk position
+
+bool shadow_ray(vec3 face, vec3 rayPos) //returns true if the shadow ray hit the map
+{
+	uvec3 localPos = gl_LocalInvocationID;
+
+	if(!in_chunk_bounds(localPos + face) || get_voxel(test, localPos + face).material < 0) //only send ray if the face is open
+	{
+		vec3 sunDir = normalize(vec3(0.9, 1.0, 0.9));
+		vec3 updatedRayPos = rayPos + HALF_INV_CHUNK_SIZE * face;
+
+		vec3 temp;  //stores the color of the shadow ray, not used currently
+		vec3 temp2; //stores the normal of the shadow ray, not used currently
+
+		if(step_map(sunDir, 1 / sunDir, updatedRayPos, localPos, temp, temp2))
+			return true;
+		else
+			return false;
+	}
+	else
+		return true;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+float random (float x) { //temp rand function
+	return fract(sin(x)*100000.0);
+}
+
 void main()
 {
-	vec3 finalColor; //the final color that gets written to the texture
-	vec3 finalNormal;
-	vec3 finalMapPos;
+	uvec3 localPos = gl_LocalInvocationID;
+	vec3 rayPos = INV_CHUNK_SIZE * localPos + test2 + HALF_INV_CHUNK_SIZE;
+	vec3 sum = vec3(0);
 
-	//calculate ray position and direction:
-	vec2 screenPos;
-	screenPos.x = float(gl_GlobalInvocationID.x) / (gl_NumWorkGroups.x * 8) - 1; //(0,0) at the center of the screen
-	screenPos.y = float(gl_GlobalInvocationID.y) / (gl_NumWorkGroups.y * 8) - 1;
-
-	vec3 rayDir = normalize(camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV);
-	vec3 invRayDir = 1 / rayDir;
-	vec3 rayPos = camPos;
-
-	//check if ray hits the map at all:
-	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0), MAP_SIZE);
-
-	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
+	for(int i = 0; i < 50; i++)
 	{
-		finalColor = sky_color(rayDir);
-	}
-	else //if the map is hit, step through it
-	{
-		if(intersection.x > 0) //only increment rayPos if outside the box
-			rayPos += rayDir * (intersection.x + 0.00001);
+		vec3 updatedPos = vec3(rayPos.x + random(i) / 5, rayPos.y + random(i + 50) / 5, rayPos.z + random(i + 100) / 5);
+		bool hit = true;
 
-		finalNormal = normal_AABB(rayPos, vec3(0), MAP_SIZE);
+		hit = shadow_ray(vec3( 1,  0,  0), updatedPos) && hit;
+		hit = shadow_ray(vec3(-1,  0,  0), updatedPos) && hit;
+		hit = shadow_ray(vec3( 0,  1,  0), updatedPos) && hit;
+		hit = shadow_ray(vec3( 0, -1,  0), updatedPos) && hit;
+		hit = shadow_ray(vec3( 0,  0,  1), updatedPos) && hit;
+		hit = shadow_ray(vec3( 0,  0, -1), updatedPos) && hit;
 
-		if(step_map(rayDir, invRayDir, rayPos, finalColor, finalNormal))
+		if(hit)
 		{
-			switch(viewMode)
-			{
-			case 0: //lighting
-			{	
-				finalColor = finalColor;
-				break;
-			}
-			case 1: //depth
-			{
-				finalColor = vec3(length(camPos - rayPos) / 32);
-				break;
-			}
-			case 2: //normal
-			{
-				finalColor = abs(finalNormal);
-				break;
-			}
-			}
+			sum += get_voxel(test, localPos).color * 0.5;
 		}
 		else
 		{
-			finalColor = sky_color(rayDir);
+			sum += get_voxel(test, localPos).color;
 		}
 	}
 
-	//store final color to texture:
-	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
-	imageStore(img_output, coords, vec4(finalColor, 1.0));
+	chunks[test].voxels[localPos.x][localPos.y][localPos.z].accumColor = sum;
+	chunks[test].voxels[localPos.x][localPos.y][localPos.z].numSamples = 50;
+
+	return;
 }

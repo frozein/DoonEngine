@@ -82,12 +82,15 @@ unsigned int viewMode = 0;
 #define MAP_SIZE_Y 3
 #define MAP_SIZE_Z 3
 
-#define MAX_CHUNKS 2
+#define MAX_CHUNKS 11
 
 typedef struct Voxel
 {
 	vec3 color;
-	unsigned int material;
+	GLint material;
+
+	vec3 acumColor;
+	GLuint numSamples;
 } Voxel;
 
 typedef struct Chunk
@@ -145,6 +148,7 @@ int main()
 	//---------------------------------
 	unsigned int quadShader = shader_load("shaders/quad.vert", "shaders/quad.frag");
 	unsigned int voxelShader = compute_shader_load("shaders/voxel.comp");
+	unsigned int voxelLightingShader = compute_shader_load("shaders/voxelLighting.comp");
 
 	//generate quad buffer:
 	//---------------------------------
@@ -158,15 +162,15 @@ int main()
 
 	unsigned int mapBuffer;
 	glGenBuffers(1, &mapBuffer); //generate buffer object
-	glBindBuffer(GL_UNIFORM_BUFFER, mapBuffer); //bind
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z, NULL, GL_DYNAMIC_DRAW); //allocate
-	glBindBufferBase(GL_UNIFORM_BUFFER, 0, mapBuffer); //bind to 0th index buffer binding, also defined in the shader
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, mapBuffer); //bind to 0th index buffer binding, also defined in the shader
 
 	unsigned int chunkBuffer;
 	glGenBuffers(1, &chunkBuffer); //generate buffer object
-	glBindBuffer(GL_UNIFORM_BUFFER, chunkBuffer); //bind
-	glBufferData(GL_UNIFORM_BUFFER, sizeof(Chunk) * MAX_CHUNKS, NULL, GL_DYNAMIC_DRAW); //allocate
-	glBindBufferBase(GL_UNIFORM_BUFFER, 1, chunkBuffer); //bind to 1st index buffer binding, also defined in the shader
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Chunk) * MAX_CHUNKS, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, chunkBuffer); //bind to 1st index buffer binding, also defined in the shader
 
 	//generate voxel data:
 	//---------------------------------
@@ -176,19 +180,26 @@ int main()
 			for(int z = 0; z < CHUNK_SIZE_Z; z++)
 			{
 				//cylinder:
-				float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
-				chunks[0].voxels[x][y][z].material = (distance < 4.0f) - 1;
-				chunks[0].voxels[x][y][z].color.x = x / 8.0f;
-				chunks[0].voxels[x][y][z].color.y = y / 8.0f;
-				chunks[0].voxels[x][y][z].color.z = z / 8.0f;
+				for(int i = 0; i < 2; i++)
+				{
+					float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
+					chunks[i].voxels[x][y][z].material = (distance < 4.0f) - 1;
+					chunks[i].voxels[x][y][z].color.x = x / 8.0f;
+					chunks[i].voxels[x][y][z].color.y = y / 8.0f;
+					chunks[i].voxels[x][y][z].color.z = z / 8.0f;
+					//chunks[0].voxels[x][y][z].color = (vec3){1.0f, 1.0f, 1.0f};
+				}
 
 				//block:
-				chunks[1].voxels[x][y][z].material = 0;
-				chunks[1].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
+				for(int i = 2; i < 11; i++)
+				{
+					chunks[i].voxels[x][y][z].material = 0;
+					chunks[i].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
+				}
 			}
 
-	glBindBuffer(GL_UNIFORM_BUFFER, chunkBuffer);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(Chunk) * MAX_CHUNKS, chunks);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(Chunk) * MAX_CHUNKS, chunks);
 
 	//--------------//
 
@@ -198,15 +209,15 @@ int main()
 			for(int z = 0; z < MAP_SIZE_Z; z++)
 			{
 				if(y == 0)
-					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 1;
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 2 + x + z * 3;
 				else if(x == 1 && z == 1)
-					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = 0;
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = y - 1;
 				else
-					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = -1;//(x == y) && (z == y);
+					(GLint)map[x + MAP_SIZE_X * y + MAP_SIZE_X * MAP_SIZE_Y * z].x = -1;
 			}
 
-	glBindBuffer(GL_UNIFORM_BUFFER, mapBuffer);
-	glBufferSubData(GL_UNIFORM_BUFFER, 0, sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z, map);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z, map);
 
 	//generate texture:
 	//---------------------------------
@@ -214,6 +225,28 @@ int main()
 	texture_param_scale(tex, GL_LINEAR, GL_LINEAR);
 	texture_param_wrap(tex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glBindImageTexture(0, tex.id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+	//test:
+	//---------------------------------
+	shader_activate(voxelLightingShader);
+	shader_uniform_uint(voxelLightingShader, "test", 0);
+	shader_uniform_vec3(voxelLightingShader, "test2", (vec3){1, 1, 1});
+	glDispatchCompute(1, 1, 1);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+	shader_activate(voxelLightingShader);
+	shader_uniform_uint(voxelLightingShader, "test", 1);
+	shader_uniform_vec3(voxelLightingShader, "test2", (vec3){1, 2, 1});
+	glDispatchCompute(1, 1, 1);
+	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+	for(int x = 0; x < MAP_SIZE_X; x++)
+		for(int z = 0; z < MAP_SIZE_Z; z++)
+		{
+			shader_uniform_uint(voxelLightingShader, "test", 2 + x + z * 3);
+			shader_uniform_vec3(voxelLightingShader, "test2", (vec3){z, 0, x});
+			glDispatchCompute(1, 1, 1);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+		}
 
 	//main loop:
 	//---------------------------------
@@ -256,9 +289,8 @@ int main()
 		shader_uniform_vec3(voxelShader, "camPlaneV", camPlaneV);
 		shader_uniform_uint(voxelShader, "viewMode", viewMode);
 
-
 		glDispatchCompute(SCREEN_W / 16, SCREEN_H / 16, 1); //TODO: ALLOW FOR WINDOW RESIZING, NEED TO REGEN TEXTURE EACH TIME
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//draw final quad to screen:
 		shader_activate(quadShader);
@@ -275,8 +307,10 @@ int main()
 	texture_free(tex);
 
 	glDeleteBuffers(1, &chunkBuffer);
+	glDeleteBuffers(1, &mapBuffer);
 	free_vertex_object(quadBuffer);
 
+	shader_free(voxelLightingShader);
 	shader_free(voxelShader);
 	shader_free(quadShader);
 
