@@ -1,0 +1,2 @@
+dependencies/* linguist-vendored
+*.comp linguist-language=glsl
