@@ -52,8 +52,8 @@ GLuint quadIndices[] = {
 };
 
 //screen dimensions:
-GLuint SCREEN_W = 1280;
-GLuint SCREEN_H = 720;
+GLuint SCREEN_W = 1280 * 4;
+GLuint SCREEN_H = 720 * 4;
 GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
@@ -113,7 +113,7 @@ int main()
 	//create and init window:
 	//---------------------------------
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-	GLFWwindow* window = glfwCreateWindow(SCREEN_W, SCREEN_H, "VoxelEngine", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCREEN_W / 4, SCREEN_H / 4, "VoxelEngine", NULL, NULL);
 	if(window == NULL)
 	{
 		printf("Failed to create GLFW window\n");
@@ -132,7 +132,7 @@ int main()
 
 	//set gl viewport:
 	//---------------------------------
-	glViewport(0, 0, SCREEN_W, SCREEN_H);
+	glViewport(0, 0, SCREEN_W / 4, SCREEN_H / 4);
 
 	glEnable              ( GL_DEBUG_OUTPUT );
 	glDebugMessageCallback( MessageCallback, 0 );
@@ -146,9 +146,19 @@ int main()
 
 	//generate shader program:
 	//---------------------------------
-	unsigned int quadShader = shader_load("shaders/quad.vert", "shaders/quad.frag");
-	unsigned int voxelShader = compute_shader_load("shaders/voxel.comp");
-	unsigned int voxelLightingShader = compute_shader_load("shaders/voxelLighting.comp");
+	int quadShader = shader_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
+	int voxelShader = compute_shader_load("shaders/voxel.comp", "shaders/voxelShared.comp");
+	int voxelLightingShader = compute_shader_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
+	if(quadShader < 0 || voxelShader < 0 || voxelLightingShader < 0)
+	{
+		shader_free(voxelLightingShader);
+		shader_free(voxelShader);
+		shader_free(quadShader);
+
+		glfwTerminate();
+
+		return -1;
+	}
 
 	//generate quad buffer:
 	//---------------------------------

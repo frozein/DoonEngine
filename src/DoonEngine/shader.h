@@ -7,9 +7,9 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //Loads, compiles, and links a vertex and fragment shader into a shader program and returns a handle to it. Returns -1 on failure
-int shader_load(const char* vertexPath, const char* fragmentPath);
-//Loads, compiles, and links a compute shader into a shader program and returns a handle to it. Returns -1 on failure
-int compute_shader_load(const char* path);
+int shader_load(const char* vertexPath, const char* vertexIncludePath, const char* fragmentPath, const char* fragmentIncludePath);
+//Loads, compiles, and links a compute shader into a shader program and returns a handle to it. Will paste the code in includePath to the top of the file if it is not NULL. Returns -1 on failure
+int compute_shader_load(const char* path, const char* includePath);
 //Deletes a shader, any type
 void shader_free(unsigned int id);
 

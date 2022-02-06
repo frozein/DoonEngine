@@ -6,26 +6,36 @@
 #include <stdlib.h>
 #include <string.h>
 
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+//Adds includeSource to the beginning of baseSource and returns the total string
+static char* add_include_file(char* baseSource, const char* includePath);
+
 //Loads the all contents of a file into a buffer. Allocates but DOES NOT free memory 
 static bool load_into_buffer(const char* path, char** buffer);
 
-//Returns the total name of a struct uniform
-void get_full_name(char* dest, const char* structName, const char* name);
-
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-int shader_load(const char* vertexPath, const char* fragmentPath)
+int shader_load(const char* vertexPath, const char* vertexIncludePath, const char* fragmentPath, const char* fragmentIncludePath)
 {
 	//load from files:
 	char* vertexSource = 0;
 	if(!load_into_buffer(vertexPath, &vertexSource))
 	{
-		free(vertexSource);
 		return -1;
 	}
 
 	char* fragmentSource = 0;
 	if(!load_into_buffer(fragmentPath, &fragmentSource))
+	{
+		free(vertexSource);
+		return -1;
+	}
+
+	//add included code to original:
+	vertexSource   = add_include_file(vertexSource,   vertexIncludePath  );
+	fragmentSource = add_include_file(fragmentSource, fragmentIncludePath);
+	if(vertexSource == NULL || fragmentSource == NULL)
 	{
 		free(vertexSource);
 		free(fragmentSource);
@@ -34,7 +44,6 @@ int shader_load(const char* vertexPath, const char* fragmentPath)
 
 	unsigned int vertex, fragment;
 	int success;
-	char infoLog[512];
 
 	//compile vertex shader:
 	vertex = glCreateShader(GL_VERTEX_SHADER);
@@ -43,13 +52,9 @@ int shader_load(const char* vertexPath, const char* fragmentPath)
 	glGetShaderiv(vertex, GL_COMPILE_STATUS, &success);
 	if(!success)
 	{
-		glGetShaderInfoLog(vertex, 512, NULL, infoLog);
-
 		free(vertexSource);
 		free(fragmentSource);
-		glDeleteShader(vertex);//asdas
-
-		printf("%s - %s\n", vertexPath, infoLog);
+		glDeleteShader(vertex);
 		return -1;
 	}
 
@@ -60,14 +65,10 @@ int shader_load(const char* vertexPath, const char* fragmentPath)
 	glGetShaderiv(fragment, GL_COMPILE_STATUS, &success);
 	if(!success)
 	{
-		glGetShaderInfoLog(fragment, 512, NULL, infoLog);
-
 		free(vertexSource);
 		free(fragmentSource);
 		glDeleteShader(vertex);
 		glDeleteShader(fragment);
-
-		printf("%s - %s\n", fragmentPath, infoLog);
 		return -1;
 	}
 
@@ -79,15 +80,11 @@ int shader_load(const char* vertexPath, const char* fragmentPath)
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if(!success)
 	{
-		glGetProgramInfoLog(program, 512, NULL, infoLog);
-
 		free(vertexSource);
 		free(fragmentSource);
 		glDeleteShader(vertex);
 		glDeleteShader(fragment);
 		glDeleteProgram(program);
-
-		printf("%s\n", infoLog);
 		return -1;
 	}
 
@@ -102,19 +99,20 @@ int shader_load(const char* vertexPath, const char* fragmentPath)
 	return program;
 }
 
-int compute_shader_load(const char* path)
+int compute_shader_load(const char* path, const char* includePath)
 {
+	//load raw code into memory:
 	char* source = 0;
 	if(!load_into_buffer(path, &source))
-	{
-		free(source);
 		return -1;
-	}
+
+	//add included code to original:
+	source = add_include_file(source, includePath);
+	if(source == NULL)
+		return -1;
 
 	unsigned int compute;
 	int success;
-	char infoLog[512];
-
 	//compile:
 	compute = glCreateShader(GL_COMPUTE_SHADER);
 	glShaderSource(compute, 1, &source, NULL);
@@ -122,12 +120,8 @@ int compute_shader_load(const char* path)
 	glGetShaderiv(compute, GL_COMPILE_STATUS, &success);
 	if(!success)
 	{
-		glGetShaderInfoLog(compute, 512, NULL, infoLog);
-
 		free(source);
 		glDeleteShader(compute);
-
-		printf("%s - %s\n", path, infoLog);
 		return -1;
 	}
 
@@ -138,13 +132,9 @@ int compute_shader_load(const char* path)
 	glGetProgramiv(program, GL_LINK_STATUS, &success);
 	if(!success)
 	{
-		glGetProgramInfoLog(program, 512, NULL, infoLog);
-
 		free(source);
 		glDeleteShader(compute);
 		glDeleteProgram(program);
-
-		printf("%s\n", infoLog);
 		return -1;
 	}
 
@@ -221,6 +211,11 @@ void shader_uniform_mat4(unsigned int id, const char* name, mat4 val)
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+//Returns the total name of a struct uniform
+static void get_full_name(char* dest, const char* structName, const char* name);
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
 void shader_struct_uniform_int(unsigned int id, const char* structName, const char* name, int val)
 {
 	char fullName[256];
@@ -293,6 +288,62 @@ void shader_struct_uniform_mat4(unsigned int id, const char* structName, const c
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+void get_full_name(char* dest, const char* structName, const char* name)
+{
+	strcpy(dest, structName);
+	strcat(dest, ".");
+	strcat(dest, name);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+static char* add_include_file(char* baseSource, const char* includePath)
+{
+	if(includePath == NULL)
+		return baseSource;
+
+	char* includeSource = 0;
+	if(!load_into_buffer(includePath, &includeSource))
+	{
+		free(baseSource);
+		return NULL;
+	}
+
+	size_t baseLen    = strlen(baseSource   );
+	size_t includeLen = strlen(includeSource);
+
+	char* versionStart = strstr(baseSource, "#version");
+	if(versionStart == NULL)
+	{
+		printf("ERROR - SHADER SOURCE FILE DID NOT CONTAIN A #version");
+		free(baseSource);
+		free(includeSource);
+		return NULL;
+	}
+
+	unsigned int i = versionStart - baseSource;
+	while(baseSource[i] != '\n')
+	{
+		i++;
+		if(i >= baseLen)
+		{
+			printf("ERROR - END OF SHADER SOURCE FILE REACHED BEFORE END OF #version WAS FOUND");
+			free(baseSource);
+			free(includeSource);
+			return NULL;
+		}
+	}
+
+	char* combinedSource = malloc(sizeof(char) * (baseLen + includeLen + 1));
+	memcpy(combinedSource, baseSource, sizeof(char) * (i + 1));
+	memcpy(&combinedSource[i + 1], includeSource, sizeof(char) * includeLen);
+	memcpy(&combinedSource[i + 1 + includeLen], &baseSource[i + 1], sizeof(char) * (baseLen - i + 1));
+
+	free(baseSource);
+	free(includeSource);
+	return combinedSource;
+}
+
 bool load_into_buffer(const char* path, char** buffer)
 {
 	*buffer = 0;
@@ -324,6 +375,7 @@ bool load_into_buffer(const char* path, char** buffer)
 		else
 		{
 			printf("ERROR - COULD NOT ALLOCATE MEMORY FOR SHADER SOURCE CODE");
+			result = false;
 		}
 
 		fclose(file);
@@ -334,11 +386,4 @@ bool load_into_buffer(const char* path, char** buffer)
 		printf("ERROR - COULD NOT OPEN FILE %s\n", path);
 		return false;
 	}
-}
-
-void get_full_name(char* dest, const char* structName, const char* name)
-{
-	strcpy(dest, structName);
-	strcat(dest, ".");
-	strcat(dest, name);
 }
