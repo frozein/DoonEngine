@@ -1,9 +1,11 @@
 //----------------------------------------------------------BEGIN-SHARED----------------------------------------------------------//
 
-#define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
+#define CHUNK_SIZE uvec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
 #define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / CHUNK_SIZE, precomputed
-#define MAP_SIZE ivec3(3, 3, 3) //size of the map (number of chunks in each direction)
+
+#define MAP_SIZE uvec3(3, 3, 3) //size of the map (number of chunks in each direction)
+
 #define MAX_CHUNKS 11 //the maximum number of chunks that can be stored at once
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -128,9 +130,9 @@ void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 m
 
 bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, vec3 ignore, out Voxel voxel, inout vec3 normal, out vec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
 {
-	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
+	vec3 mapPos = floor(rayPos); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
-	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
+	vec3 rayStep = sign(rayDir); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 
 	while(in_chunk_bounds(mapPos))
@@ -154,9 +156,9 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, vec3 ignor
 
 bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, vec3 ignore, out Voxel voxel, inout vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
-	vec3 mapPos = vec3(floor(rayPos)); //the position in the voxel map
+	vec3 mapPos = floor(rayPos); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
-	vec3 rayStep = vec3(sign(rayDir)); //the direction the ray steps
+	vec3 rayStep = sign(rayDir); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 
 	if(!in_map_bounds(mapPos)) //iterate once if not in bounds to stop from exiting if the ray is *just* outside

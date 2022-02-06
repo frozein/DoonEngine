@@ -83,6 +83,7 @@ unsigned int viewMode = 0;
 #define MAP_SIZE_Z 3
 
 #define MAX_CHUNKS 11
+#define MAX_LIGHTING_REQUESTS 11
 
 typedef struct Voxel
 {
@@ -182,6 +183,12 @@ int main()
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(Chunk) * MAX_CHUNKS, NULL, GL_DYNAMIC_DRAW); //allocate
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, chunkBuffer); //bind to 1st index buffer binding, also defined in the shader
 
+	unsigned int lightingRequestBuffer;
+	glGenBuffers(1, &lightingRequestBuffer); //generate buffer object
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(vec4) * MAX_LIGHTING_REQUESTS, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, lightingRequestBuffer); //bind to 1st index buffer binding, also defined in the shader
+
 	//generate voxel data:
 	//---------------------------------
 	Chunk* chunks = malloc(sizeof(Chunk) * MAX_CHUNKS);
@@ -229,6 +236,24 @@ int main()
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * MAP_SIZE_X * MAP_SIZE_Y * MAP_SIZE_Z, map);
 
+	//--------------//
+
+	vec4* lightingRequests = malloc(sizeof(vec4) * MAX_CHUNKS);
+	lightingRequests[0]  = (vec4){0, 0, 0};
+	lightingRequests[1]  = (vec4){0, 0, 1};
+	lightingRequests[2]  = (vec4){0, 0, 2};
+	lightingRequests[3]  = (vec4){1, 0, 0};
+	lightingRequests[4]  = (vec4){1, 0, 1};
+	lightingRequests[5]  = (vec4){1, 0, 2};
+	lightingRequests[6]  = (vec4){2, 0, 0};
+	lightingRequests[7]  = (vec4){2, 0, 1};
+	lightingRequests[8]  = (vec4){2, 0, 2};
+	lightingRequests[9]  = (vec4){1, 1, 1};
+	lightingRequests[10] = (vec4){1, 2, 1};
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * MAX_LIGHTING_REQUESTS, lightingRequests);
+
 	//generate texture:
 	//---------------------------------
 	Texture tex = texture_load_raw(GL_TEXTURE_2D, SCREEN_W, SCREEN_H, GL_RGBA, NULL, false);
@@ -236,27 +261,10 @@ int main()
 	texture_param_wrap(tex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glBindImageTexture(0, tex.id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	//test:
+	//compute lighting:
 	//---------------------------------
 	shader_activate(voxelLightingShader);
-	shader_uniform_uint(voxelLightingShader, "test", 0);
-	shader_uniform_vec3(voxelLightingShader, "test2", (vec3){1, 1, 1});
-	glDispatchCompute(1, 1, 1);
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-	shader_activate(voxelLightingShader);
-	shader_uniform_uint(voxelLightingShader, "test", 1);
-	shader_uniform_vec3(voxelLightingShader, "test2", (vec3){1, 2, 1});
-	glDispatchCompute(1, 1, 1);
-	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-
-	for(int x = 0; x < MAP_SIZE_X; x++)
-		for(int z = 0; z < MAP_SIZE_Z; z++)
-		{
-			shader_uniform_uint(voxelLightingShader, "test", 2 + x + z * 3);
-			shader_uniform_vec3(voxelLightingShader, "test2", (vec3){z, 0, x});
-			glDispatchCompute(1, 1, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-		}
+	glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 
 	//main loop:
 	//---------------------------------
@@ -318,6 +326,7 @@ int main()
 
 	glDeleteBuffers(1, &chunkBuffer);
 	glDeleteBuffers(1, &mapBuffer);
+	glDeleteBuffers(1, &lightingRequestBuffer);
 	free_vertex_object(quadBuffer);
 
 	shader_free(voxelLightingShader);
@@ -326,6 +335,7 @@ int main()
 
 	free(chunks);
 	free(map);
+	free(lightingRequests);
 
 	glfwTerminate();
 
