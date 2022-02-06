@@ -147,14 +147,14 @@ int main()
 
 	//generate shader program:
 	//---------------------------------
-	int quadShader = shader_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
-	int voxelShader = compute_shader_load("shaders/voxel.comp", "shaders/voxelShared.comp");
-	int voxelLightingShader = compute_shader_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
+	int quadShader = shader_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
+	int voxelShader = compute_shader_program_load("shaders/voxel.comp", "shaders/voxelShared.comp");
+	int voxelLightingShader = compute_shader_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
 	if(quadShader < 0 || voxelShader < 0 || voxelLightingShader < 0)
 	{
-		shader_free(voxelLightingShader);
-		shader_free(voxelShader);
-		shader_free(quadShader);
+		shader_program_free(voxelLightingShader >= 0 ? voxelLightingShader : 0);
+		shader_program_free(voxelShader >= 0 ? voxelShader : 0);
+		shader_program_free(quadShader >= 0 ? quadShader : 0);
 
 		glfwTerminate();
 
@@ -169,7 +169,7 @@ int main()
 
 	//create and bind uniform buffer object
 	//---------------------------------
-	shader_activate(voxelShader);
+	shader_program_activate(voxelShader);
 
 	unsigned int mapBuffer;
 	glGenBuffers(1, &mapBuffer); //generate buffer object
@@ -263,7 +263,7 @@ int main()
 
 	//compute lighting:
 	//---------------------------------
-	shader_activate(voxelLightingShader);
+	shader_program_activate(voxelLightingShader);
 	glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 
 	//main loop:
@@ -299,7 +299,7 @@ int main()
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//draw voxels:
-		shader_activate(voxelShader);
+		shader_program_activate(voxelShader);
 
 		shader_uniform_vec3(voxelShader, "camPos", camPos);
 		shader_uniform_vec3(voxelShader, "camDir", camFront);
@@ -311,7 +311,7 @@ int main()
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//draw final quad to screen:
-		shader_activate(quadShader);
+		shader_program_activate(quadShader);
 		texture_activate(tex, 0);
 		draw_vertex_object_indices(quadBuffer, 6, 0);
 
@@ -329,9 +329,9 @@ int main()
 	glDeleteBuffers(1, &lightingRequestBuffer);
 	free_vertex_object(quadBuffer);
 
-	shader_free(voxelLightingShader);
-	shader_free(voxelShader);
-	shader_free(quadShader);
+	shader_program_free(voxelLightingShader);
+	shader_program_free(voxelShader);
+	shader_program_free(quadShader);
 
 	free(chunks);
 	free(map);

@@ -6,15 +6,19 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-//Loads, compiles, and links a vertex and fragment shader into a shader program and returns a handle to it. Returns -1 on failure
-int shader_load(const char* vertexPath, const char* vertexIncludePath, const char* fragmentPath, const char* fragmentIncludePath);
-//Loads, compiles, and links a compute shader into a shader program and returns a handle to it. Will paste the code in includePath to the top of the file if it is not NULL. Returns -1 on failure
-int compute_shader_load(const char* path, const char* includePath);
+//Loads and compiles a shader and returns a handle to it. Returns -1 on failure
+int shader_load(unsigned int type, const char* path, const char* includePath);
 //Deletes a shader, any type
 void shader_free(unsigned int id);
 
-//Activates a shader for rendering
-void shader_activate(unsigned int id);
+//Loads, compiles, and links a vertex and fragment shader into a shader program and returns a handle to it. Returns -1 on failure
+int shader_program_load(const char* vertexPath, const char* vertexIncludePath, const char* fragmentPath, const char* fragmentIncludePath);
+//Loads, compiles, and links a compute shader into a shader program and returns a handle to it. Will paste the code in includePath to the top of the file if it is not NULL. Returns -1 on failure
+int compute_shader_program_load(const char* path, const char* includePath);
+//Deletes a shader program, any type
+void shader_program_free(unsigned int id);
+//Activates a shader program for rendering
+void shader_program_activate(unsigned int id);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
