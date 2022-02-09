@@ -10,22 +10,49 @@ layout(std140, binding = 2) restrict readonly buffer lightingRequestBuffer
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool shadow_ray(uint chunkIndex, vec3 face, vec3 rayPos) //returns true if the shadow ray hit the map
+uniform float time;
+
+float rand(vec2 seed) //returns a random float between -1 and 1
+{
+    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453) * 2 - 1;
+}
+
+vec2 rand2(vec2 seed) //returns a vec2 of random floats between -1 and 1
+{
+	return vec2(rand(seed), rand(seed * 2));
+}
+
+vec3 rand3(vec2 seed) //returns a vec3 of random floats between -1 and 1
+{
+	return vec3(rand(seed), rand(seed * 2), rand(seed * 3));
+}
+
+vec3 rand_unit_sphere(vec2 seed) //returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
+{
+	while(true)
+	{
+		vec3 point = rand3(seed);
+		if(dot(point, point) >= 1)
+			continue;
+
+		return point;
+	}
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+bool shadow_ray(uint chunkIndex, vec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
 {
 	uvec3 localPos = gl_LocalInvocationID;
 
 	if(!in_chunk_bounds(localPos + face) || get_voxel(chunkIndex, localPos + face).material < 0) //only send ray if the face is open
 	{
-		vec3 sunDir = normalize(vec3(0.9, 1.0, 0.9));
-		vec3 updatedRayPos = rayPos + HALF_INV_CHUNK_SIZE * face;
+		vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(0.000001)) * face;
 
-		Voxel temp;  //stores the voxel that the shadow ray hits, not used currently
+		Voxel temp; //stores the voxel that the shadow ray hits, not used currently
 		vec3 temp2; //stores the normal of the shadow ray, not used currently
-
-		if(step_map(sunDir, 1 / sunDir, updatedRayPos, localPos, temp, temp2))
-			return true;
-		else
-			return false;
+		
+		return step_map(sunDir, 1 / sunDir, updatedRayPos, localPos, temp, temp2);
 	}
 	else
 		return true;
@@ -33,46 +60,39 @@ bool shadow_ray(uint chunkIndex, vec3 face, vec3 rayPos) //returns true if the s
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-float random (float x) { //temp rand function
-	return fract(sin(x)*100000.0);
-}
-
 void main()
 {
 	uvec3 localPos = gl_LocalInvocationID;
-	vec3 chunkPos = chunkPositions[gl_WorkGroupID.x];
+	vec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	int chunkIndex = get_map_tile(chunkPos);
-
-	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
-	vec3 sum = vec3(0);
-
 	if(get_voxel(chunkIndex, localPos).material < 0)
 		return;
+	
+	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
+	vec2 seed = vec2(chunkIndex, localPos.x + localPos.y * CHUNK_SIZE.x + localPos.z * CHUNK_SIZE.x * CHUNK_SIZE.y) + time;
+	vec3 offset = rand3(seed) / 5;
+	vec3 sunDir = normalize(vec3(1.0, 1.0, 1.0) + offset);
 
-	for(int i = 0; i < 50; i++)
+	bool hit = true;
+	hit = shadow_ray(chunkIndex, vec3( 1,  0,  0), rayPos, sunDir) && hit;
+	hit = shadow_ray(chunkIndex, vec3(-1,  0,  0), rayPos, sunDir) && hit;
+	hit = shadow_ray(chunkIndex, vec3( 0,  1,  0), rayPos, sunDir) && hit;
+	hit = shadow_ray(chunkIndex, vec3( 0, -1,  0), rayPos, sunDir) && hit;
+	hit = shadow_ray(chunkIndex, vec3( 0,  0,  1), rayPos, sunDir) && hit;
+	hit = shadow_ray(chunkIndex, vec3( 0,  0, -1), rayPos, sunDir) && hit;
+
+	vec3 color;
+	if(hit)
 	{
-		vec3 updatedPos = vec3(rayPos.x + random(i) / 5, rayPos.y + random(i + 50) / 5, rayPos.z + random(i + 100) / 5);
-		bool hit = true;
-
-		hit = shadow_ray(chunkIndex, vec3( 1,  0,  0), updatedPos) && hit;
-		hit = shadow_ray(chunkIndex, vec3(-1,  0,  0), updatedPos) && hit;
-		hit = shadow_ray(chunkIndex, vec3( 0,  1,  0), updatedPos) && hit;
-		hit = shadow_ray(chunkIndex, vec3( 0, -1,  0), updatedPos) && hit;
-		hit = shadow_ray(chunkIndex, vec3( 0,  0,  1), updatedPos) && hit;
-		hit = shadow_ray(chunkIndex, vec3( 0,  0, -1), updatedPos) && hit;
-
-		if(hit)
-		{
-			sum += get_voxel(chunkIndex, localPos).color * 0.5;
-		}
-		else
-		{
-			sum += get_voxel(chunkIndex, localPos).color;
-		}
+		color = get_voxel(chunkIndex, localPos).color * 0.5;
+	}
+	else
+	{
+		color = get_voxel(chunkIndex, localPos).color;
 	}
 
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].accumColor = sum;
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].numSamples = 50;
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].accumColor += color;
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].numSamples += 1;
 
 	return;
 }

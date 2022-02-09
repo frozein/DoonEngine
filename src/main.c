@@ -90,7 +90,7 @@ typedef struct Voxel
 	vec3 color;
 	GLint material;
 
-	vec3 acumColor;
+	vec3 accumColor;
 	GLuint numSamples;
 } Voxel;
 
@@ -157,7 +157,6 @@ int main()
 		shader_program_free(quadShader >= 0 ? quadShader : 0);
 
 		glfwTerminate();
-
 		return -1;
 	}
 
@@ -204,7 +203,8 @@ int main()
 					chunks[i].voxels[x][y][z].color.x = x / 8.0f;
 					chunks[i].voxels[x][y][z].color.y = y / 8.0f;
 					chunks[i].voxels[x][y][z].color.z = z / 8.0f;
-					//chunks[0].voxels[x][y][z].color = (vec3){1.0f, 1.0f, 1.0f};
+					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
+					chunks[i].voxels[x][y][z].numSamples = 0;
 				}
 
 				//block:
@@ -212,6 +212,8 @@ int main()
 				{
 					chunks[i].voxels[x][y][z].material = 0;
 					chunks[i].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
+					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
+					chunks[i].voxels[x][y][z].numSamples = 0;
 				}
 			}
 
@@ -261,11 +263,6 @@ int main()
 	texture_param_wrap(tex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glBindImageTexture(0, tex.id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
-	//compute lighting:
-	//---------------------------------
-	shader_program_activate(voxelLightingShader);
-	glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
-
 	//main loop:
 	//---------------------------------
 	float lastFrame = glfwGetTime();
@@ -281,11 +278,17 @@ int main()
 		cumTime += deltaTime;
 		lastFrame = currentTime;
 
-		if(cumTime >= 1.0f)
+		if(cumTime >= 0.1f)
 		{
 			printf("%f\n", 1 / (cumTime / numFrames));
 			numFrames = 0;
 			cumTime = 0.0f;
+
+			shader_program_activate(voxelLightingShader);
+
+			shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
+			glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
+			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 		}
 
 		//process keyboard input:
