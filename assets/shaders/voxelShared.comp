@@ -1,12 +1,14 @@
 //----------------------------------------------------------BEGIN-SHARED----------------------------------------------------------//
 
-#define CHUNK_SIZE uvec3(8, 8, 8) //size of each individual chunk
+#define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
 #define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / CHUNK_SIZE, precomputed
 
-#define MAP_SIZE uvec3(3, 3, 3) //size of the map (number of chunks in each direction)
+#define MAP_SIZE ivec3(3, 3, 3) //size of the map (number of chunks in each direction)
 
 #define MAX_CHUNKS 11 //the maximum number of chunks that can be stored at once
+
+#define EPSILON 0.00001 //to fix floating point error
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -16,7 +18,7 @@ struct Voxel //a single voxel
 	int material;
 
 	vec3 accumColor;
-	uint numSamples;
+	float numSamples;
 };
 
 struct Chunk //a chunk of voxels
@@ -38,28 +40,26 @@ layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contai
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool in_map_bounds(vec3 pos) //returns whether a position is in bounds in the map
+bool in_map_bounds(ivec3 pos) //returns whether a position is in bounds in the map
 {
 	return pos.x < MAP_SIZE.x && pos.y < MAP_SIZE.y && pos.z < MAP_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-bool in_chunk_bounds(vec3 pos) //returns whether a position is in bounds in a chunk
+bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a chunk
 {
 	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-int get_map_tile(vec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
+int get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
-	ivec3 ipos = ivec3(pos);
-	return map[ipos.x][ipos.y][ipos.z];
+	return map[pos.x][pos.y][pos.z];
 }
 
-Voxel get_voxel(uint chunk, vec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
+Voxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
 {
-	ivec3 ipos = ivec3(pos);
-	return chunks[chunk].voxels[ipos.x][ipos.y][ipos.z];
+	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -83,14 +83,14 @@ vec3 normal_AABB(vec3 intersectPos, vec3 boxMin, vec3 boxMax) //returns the norm
 	vec3 c = (boxMin + boxMax) * 0.5;
 	vec3 p = intersectPos - c;
 	vec3 d = (boxMax - boxMin) * 0.5;
-	const float bias = 1.00001;
+	const float bias = 1.0 + EPSILON;
 
 	return normalize(trunc(p / d * bias));
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 mapPos, out vec3 normal) //steps through one tile with the DDA algorithm
+void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos, out ivec3 normal) //steps through one tile with the DDA algorithm
 {
 	//https://www.youtube.com/watch?v=NbSee-XM7WA <- see this video for a good overview of the algorithm
 
@@ -100,13 +100,13 @@ void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 m
 		{
 			sideDist.x += deltaDist.x;
 			mapPos.x += rayStep.x;
-			normal = vec3(-rayStep.x, 0, 0);
+			normal = ivec3(-rayStep.x, 0, 0);
 		}
 		else 
 		{
 			sideDist.z += deltaDist.z;
 			mapPos.z += rayStep.z;
-			normal = vec3(0, 0, -rayStep.z);
+			normal = ivec3(0, 0, -rayStep.z);
 		}
 	}
 	else
@@ -115,24 +115,24 @@ void iterate_DDA(vec3 deltaDist, vec3 rayStep, inout vec3 sideDist, inout vec3 m
 		{
 			sideDist.y += deltaDist.y;
 			mapPos.y += rayStep.y;
-			normal = vec3(0, -rayStep.y, 0);
+			normal = ivec3(0, -rayStep.y, 0);
 		}
 		else 
 		{
 			sideDist.z += deltaDist.z;
 			mapPos.z += rayStep.z;
-			normal = vec3(0, 0, -rayStep.z);
+			normal = ivec3(0, 0, -rayStep.z);
 		}
 	}
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, vec3 ignore, out Voxel voxel, inout vec3 normal, out vec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, ivec3 ignore, out Voxel voxel, inout ivec3 normal, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
 {
-	vec3 mapPos = floor(rayPos); //the position in the voxel map
+	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
-	vec3 rayStep = sign(rayDir); //the direction the ray steps
+	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 
 	while(in_chunk_bounds(mapPos))
@@ -154,11 +154,11 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, vec3 ignor
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, vec3 ignore, out Voxel voxel, inout vec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, ivec3 ignore, out Voxel voxel, inout ivec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
-	vec3 mapPos = floor(rayPos); //the position in the voxel map
+	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
-	vec3 rayStep = sign(rayDir); //the direction the ray steps
+	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 
 	if(!in_map_bounds(mapPos)) //iterate once if not in bounds to stop from exiting if the ray is *just* outside
@@ -170,15 +170,15 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, vec3 ignore, out V
 		int res = get_map_tile(mapPos);
 		if (res >= 0)
 		{
-			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1); //find exactly where the ray intersects
+			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
-				rayPos += rayDir * (intersection.x + 0.00001); //add so that new pos is inside the chunk
+				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
-			vec3 chunkPos;
+			ivec3 chunkPos;
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignore, voxel, normal, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x - 0.00001); //subtract so that new pos isnt inside a voxel
+				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos isnt inside a voxel
 
 				return true;
 			}

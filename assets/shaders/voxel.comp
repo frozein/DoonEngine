@@ -24,19 +24,19 @@ void main()
 {
 	Voxel finalVoxel; //the final voxel that is hit
 	vec3 finalColor; //the final color that gets written to the texture
-	vec3 finalNormal; //the final normal that is hit
+	ivec3 finalNormal; //the final normal that is hit
 
 	//calculate ray position and direction:
 	vec2 screenPos;
-	screenPos.x = float(gl_GlobalInvocationID.x) / (gl_NumWorkGroups.x * 8) - 1; //(0,0) at the center of the screen
-	screenPos.y = float(gl_GlobalInvocationID.y) / (gl_NumWorkGroups.y * 8) - 1;
+	screenPos.x = gl_GlobalInvocationID.x / (gl_NumWorkGroups.x * 8.0) - 1.0; //(0,0) at the center of the screen
+	screenPos.y = gl_GlobalInvocationID.y / (gl_NumWorkGroups.y * 8.0) - 1.0;
 
 	vec3 rayDir = normalize(camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV);
-	vec3 invRayDir = 1 / rayDir;
+	vec3 invRayDir = 1.0 / rayDir;
 	vec3 rayPos = camPos;
 
 	//check if ray hits the map at all:
-	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0), MAP_SIZE);
+	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), MAP_SIZE);
 
 	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
 	{
@@ -45,11 +45,11 @@ void main()
 	else //if the map is hit, step through it
 	{
 		if(intersection.x > 0) //only increment rayPos if outside the box
-			rayPos += rayDir * (intersection.x + 0.00001);
+			rayPos += rayDir * (intersection.x + EPSILON);
 
-		finalNormal = normal_AABB(rayPos, vec3(0), MAP_SIZE);
+		finalNormal = ivec3(normal_AABB(rayPos, vec3(0.0), MAP_SIZE));
 
-		if(step_map(rayDir, invRayDir, rayPos, vec3(-1), finalVoxel, finalNormal))
+		if(step_map(rayDir, invRayDir, rayPos, ivec3(-1), finalVoxel, finalNormal))
 		{
 			switch(viewMode)
 			{
@@ -60,12 +60,12 @@ void main()
 			}
 			case 1: //depth
 			{
-				finalColor = vec3(length(camPos - rayPos) / 32);
+				finalColor = vec3(length(camPos - rayPos) / 32.0);
 				break;
 			}
 			case 2: //normal
 			{
-				finalColor = abs(finalNormal);
+				finalColor = vec3(abs(finalNormal));
 				break;
 			}
 			}

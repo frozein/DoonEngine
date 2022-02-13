@@ -91,13 +91,18 @@ typedef struct Voxel
 	GLint material;
 
 	vec3 accumColor;
-	GLuint numSamples;
+	GLfloat numSamples;
 } Voxel;
 
 typedef struct Chunk
 {
 	Voxel voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
 } Chunk;
+
+typedef struct ivec4
+{
+	GLint x, y, z, w;
+} ivec4;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -204,7 +209,7 @@ int main()
 					chunks[i].voxels[x][y][z].color.y = y / 8.0f;
 					chunks[i].voxels[x][y][z].color.z = z / 8.0f;
 					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
-					chunks[i].voxels[x][y][z].numSamples = 0;
+					chunks[i].voxels[x][y][z].numSamples = 0.0f;
 				}
 
 				//block:
@@ -213,7 +218,7 @@ int main()
 					chunks[i].voxels[x][y][z].material = 0;
 					chunks[i].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
 					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
-					chunks[i].voxels[x][y][z].numSamples = 0;
+					chunks[i].voxels[x][y][z].numSamples = 0.0f;
 				}
 			}
 
@@ -240,18 +245,18 @@ int main()
 
 	//--------------//
 
-	vec4* lightingRequests = malloc(sizeof(vec4) * MAX_CHUNKS);
-	lightingRequests[0]  = (vec4){0, 0, 0};
-	lightingRequests[1]  = (vec4){0, 0, 1};
-	lightingRequests[2]  = (vec4){0, 0, 2};
-	lightingRequests[3]  = (vec4){1, 0, 0};
-	lightingRequests[4]  = (vec4){1, 0, 1};
-	lightingRequests[5]  = (vec4){1, 0, 2};
-	lightingRequests[6]  = (vec4){2, 0, 0};
-	lightingRequests[7]  = (vec4){2, 0, 1};
-	lightingRequests[8]  = (vec4){2, 0, 2};
-	lightingRequests[9]  = (vec4){1, 1, 1};
-	lightingRequests[10] = (vec4){1, 2, 1};
+	ivec4* lightingRequests = malloc(sizeof(ivec4) * MAX_CHUNKS);
+	lightingRequests[0]  = (ivec4){0, 0, 0};
+	lightingRequests[1]  = (ivec4){0, 0, 1};
+	lightingRequests[2]  = (ivec4){0, 0, 2};
+	lightingRequests[3]  = (ivec4){1, 0, 0};
+	lightingRequests[4]  = (ivec4){1, 0, 1};
+	lightingRequests[5]  = (ivec4){1, 0, 2};
+	lightingRequests[6]  = (ivec4){2, 0, 0};
+	lightingRequests[7]  = (ivec4){2, 0, 1};
+	lightingRequests[8]  = (ivec4){2, 0, 2};
+	lightingRequests[9]  = (ivec4){1, 1, 1};
+	lightingRequests[10] = (ivec4){1, 2, 1};
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * MAX_LIGHTING_REQUESTS, lightingRequests);
