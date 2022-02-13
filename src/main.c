@@ -85,6 +85,8 @@ unsigned int viewMode = 0;
 #define MAX_CHUNKS 11
 #define MAX_LIGHTING_REQUESTS 11
 
+#define GAMMA 2.2f
+
 typedef struct Voxel
 {
 	vec3 color;
@@ -205,9 +207,10 @@ int main()
 				{
 					float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
 					chunks[i].voxels[x][y][z].material = (distance < 4.0f) - 1;
-					chunks[i].voxels[x][y][z].color.x = x / 8.0f;
-					chunks[i].voxels[x][y][z].color.y = y / 8.0f;
-					chunks[i].voxels[x][y][z].color.z = z / 8.0f;
+					chunks[i].voxels[x][y][z].color.x = pow(x / 8.0f, GAMMA);
+					chunks[i].voxels[x][y][z].color.y = pow(y / 8.0f, GAMMA);
+					chunks[i].voxels[x][y][z].color.z = pow(z / 8.0f, GAMMA);
+
 					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
 					chunks[i].voxels[x][y][z].numSamples = 0.0f;
 				}
@@ -216,7 +219,7 @@ int main()
 				for(int i = 2; i < 11; i++)
 				{
 					chunks[i].voxels[x][y][z].material = 0;
-					chunks[i].voxels[x][y][z].color = (vec3){0.8588f, 0.7922f, 0.6118f};
+					chunks[i].voxels[x][y][z].color = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
 					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
 					chunks[i].voxels[x][y][z].numSamples = 0.0f;
 				}
@@ -304,6 +307,7 @@ int main()
 		shader_program_activate(voxelLightingShader);
 
 		shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
+		shader_uniform_int(voxelLightingShader, "bounceLimit", 5);
 
 		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
