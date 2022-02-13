@@ -12,26 +12,26 @@ layout(std140, binding = 2) restrict readonly buffer lightingRequestBuffer
 
 uniform float time;
 
-float rand(vec2 seed) //returns a random float between -1 and 1
+float rand(float seed) //returns a random float between -1 and 1
 {
-    return fract(sin(dot(seed, vec2(12.9898, 78.233))) * 43758.5453) * 2 - 1;
+    return fract(sin(seed) * 43758.5453) * 2 - 1;
 }
 
-vec2 rand2(vec2 seed) //returns a vec2 of random floats between -1 and 1
+vec2 rand2(float seed) //returns a vec2 of random floats between -1 and 1
 {
 	return vec2(rand(seed), rand(seed * 2));
 }
 
-vec3 rand3(vec2 seed) //returns a vec3 of random floats between -1 and 1
+vec3 rand3(float seed) //returns a vec3 of random floats between -1 and 1
 {
 	return vec3(rand(seed), rand(seed * 2), rand(seed * 3));
 }
 
-vec3 rand_unit_sphere(vec2 seed) //returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
+vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
 {
 	while(true)
 	{
-		vec3 point = rand3(seed);
+		vec3 point = rand3(seed++);
 		if(dot(point, point) >= 1)
 			continue;
 
@@ -41,39 +41,125 @@ vec3 rand_unit_sphere(vec2 seed) //returns a vec3 of random floats between -1 an
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+bool is_open(vec3 chunkPos, vec3 localPos, vec3 face)
+{
+	uint chunkIndex = get_map_tile(chunkPos);
+	if(in_chunk_bounds(localPos + face))
+	{
+		if(get_voxel(chunkIndex, localPos + face).material >= 0)
+		{
+			return false;
+		}
+	}
+	else if(in_map_bounds(chunkPos + face))
+	{
+		int newIndex = get_map_tile(chunkPos + face);
+		if(newIndex < 0)
+			return true;
+
+		if     (face == vec3( 1,  0,  0))
+		{
+			return get_voxel(newIndex, vec3(0, localPos.yz)).material < 0;
+		}
+		else if(face == vec3(-1,  0,  0))
+		{
+			return get_voxel(newIndex, vec3(CHUNK_SIZE.x - 1, localPos.yz)).material < 0;
+		}
+		else if(face == vec3( 0,  1,  0))
+		{
+			return get_voxel(newIndex, vec3(localPos.x, 0, localPos.z)).material < 0;
+		}
+		else if(face == vec3( 0, -1,  0))
+		{
+			return get_voxel(newIndex, vec3(localPos.x, CHUNK_SIZE.y - 1, localPos.z)).material < 0;
+		}
+		else if(face == vec3( 0,  0,  1))
+		{
+			return get_voxel(newIndex, vec3(localPos.xy, 0)).material < 0;
+		}
+		else if(face == vec3( 0,  0, -1))
+		{
+			return get_voxel(newIndex, vec3(localPos.xy, CHUNK_SIZE.z - 1)).material < 0;
+		}
+	}
+
+	return true;
+}
+
 bool shadow_ray(uint chunkIndex, vec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
 {
+	vec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz; //find initial position
 	uvec3 localPos = gl_LocalInvocationID;
 
-	if(!in_chunk_bounds(localPos + face) || get_voxel(chunkIndex, localPos + face).material < 0) //only send ray if the face is open
-	{
-		vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(0.000001)) * face;
-
-		Voxel temp; //stores the voxel that the shadow ray hits, not used currently
-		vec3 temp2; //stores the normal of the shadow ray, not used currently
-		
-		return step_map(sunDir, 1 / sunDir, updatedRayPos, localPos, temp, temp2);
-	}
-	else
+	if(!is_open(chunkPos, localPos, face)) //return if the face isnt open
 		return true;
+
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(0.000001)) * face; //move ray position to the edge of the face
+
+	Voxel temp; //stores the voxel that the ray hits, not used currently
+	vec3 temp2; //stores the normal of the hit voxel, not used currently
+		
+	return step_map(sunDir, 1 / sunDir, updatedRayPos, localPos, temp, temp2); //return whether or not the map was hit
+}
+
+void diffuse_ray(uint chunkIndex, vec3 face, vec3 rayPos, float seed, inout vec3 color, inout uint numSamples) //increments color and numSamples depending on the voxel hit
+{
+	vec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz; //find initial position
+	uvec3 localPos = gl_LocalInvocationID;
+
+	if(!is_open(chunkPos, localPos, face)) //return if the face isnt open
+		return;
+
+	Voxel hitVoxel; //stores the voxel that the ray hits
+	vec3 hitNormal; //stores the normal of the hit voxel
+
+	vec3 dir = normalize(face + rand_unit_sphere(seed)); //randomize the direction, spherical sampling
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(0.000001)) * face; //move ray position to the edge of the face
+
+	bool hit = step_map(dir, 1 / dir, updatedRayPos, localPos, hitVoxel, hitNormal); //step through map
+	numSamples++;
+
+	if(hit)
+		color += get_voxel(chunkIndex, localPos).color * hitVoxel.color * 1.0; //diffuse shading (decrease the constant to increase light absorption)
+	else
+		color += get_voxel(chunkIndex, localPos).color;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 void main()
 {
+	//find positions:
 	uvec3 localPos = gl_LocalInvocationID;
 	vec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	int chunkIndex = get_map_tile(chunkPos);
+
+	//return if voxel does not exist lol:
 	if(get_voxel(chunkIndex, localPos).material < 0)
 		return;
 	
+	//find position of ray (center of the voxel):
 	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
-	vec2 seed = vec2(chunkIndex, localPos.x + localPos.y * CHUNK_SIZE.x + localPos.z * CHUNK_SIZE.x * CHUNK_SIZE.y) + time;
-	vec3 offset = rand3(seed) / 5;
-	vec3 sunDir = normalize(vec3(1.0, 1.0, 1.0) + offset);
 
-	bool hit = true;
+	//final color + number of samples:
+	vec3 sampledColor = vec3(0);
+	uint numNewSamples = 0;
+
+	//diffuse rays:
+	//---------------------------------
+	diffuse_ray(chunkIndex, vec3( 1,  0,  0), rayPos, time, sampledColor, numNewSamples);
+	diffuse_ray(chunkIndex, vec3(-1,  0,  0), rayPos, time, sampledColor, numNewSamples);
+	diffuse_ray(chunkIndex, vec3( 0,  1,  0), rayPos, time, sampledColor, numNewSamples);
+	diffuse_ray(chunkIndex, vec3( 0, -1,  0), rayPos, time, sampledColor, numNewSamples);
+	diffuse_ray(chunkIndex, vec3( 0,  0,  1), rayPos, time, sampledColor, numNewSamples);
+	diffuse_ray(chunkIndex, vec3( 0,  0, -1), rayPos, time, sampledColor, numNewSamples);
+
+	//shadow rays:
+	//---------------------------------
+	vec3 sunOffset = rand3(time) / 5;
+	vec3 sunDir = normalize(vec3(1.0, 1.0, 1.0) + sunOffset);
+
+	bool hit = true; //if any face reaches the sun, keep full illumnation
 	hit = shadow_ray(chunkIndex, vec3( 1,  0,  0), rayPos, sunDir) && hit;
 	hit = shadow_ray(chunkIndex, vec3(-1,  0,  0), rayPos, sunDir) && hit;
 	hit = shadow_ray(chunkIndex, vec3( 0,  1,  0), rayPos, sunDir) && hit;
@@ -81,17 +167,16 @@ void main()
 	hit = shadow_ray(chunkIndex, vec3( 0,  0,  1), rayPos, sunDir) && hit;
 	hit = shadow_ray(chunkIndex, vec3( 0,  0, -1), rayPos, sunDir) && hit;
 
-	vec3 color;
 	if(hit)
-	{
-		color = get_voxel(chunkIndex, localPos).color * 0.5;
-	}
+		sampledColor += get_voxel(chunkIndex, localPos).color * 0.5 * numNewSamples;
 	else
-	{
-		color = get_voxel(chunkIndex, localPos).color;
-	}
+		sampledColor += get_voxel(chunkIndex, localPos).color * numNewSamples;
 
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].accumColor += color;
+	numNewSamples *= 2; //really not sure if this is the correct way to add shadow lighting, but it looks good so whatever
+
+	//increase final accumulated color and number of samples
+	//---------------------------------
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].accumColor += sampledColor / numNewSamples;
 	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].numSamples += 1;
 
 	return;

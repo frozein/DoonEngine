@@ -278,17 +278,11 @@ int main()
 		cumTime += deltaTime;
 		lastFrame = currentTime;
 
-		if(cumTime >= 0.1f)
+		if(cumTime >= 1.0f)
 		{
 			printf("%f\n", 1 / (cumTime / numFrames));
 			numFrames = 0;
 			cumTime = 0.0f;
-
-			shader_program_activate(voxelLightingShader);
-
-			shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
-			glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
-			glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 		}
 
 		//process keyboard input:
@@ -301,7 +295,15 @@ int main()
 		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
-		//draw voxels:
+		//update lighting:
+		shader_program_activate(voxelLightingShader);
+
+		shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
+
+		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+		//draw:
 		shader_program_activate(voxelShader);
 
 		shader_uniform_vec3(voxelShader, "camPos", camPos);
