@@ -128,7 +128,7 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, ivec3 ignore, out Voxel voxel, inout ivec3 normal, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, inout ivec3 normal, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
 {
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -139,7 +139,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, ivec3 igno
 	{
 		//check if a solid voxel has been hit:
 		Voxel res = get_voxel(chunk, mapPos);
-		if (res.material >= 0 && mapPos != ignore)
+		if (res.material >= 0 && !ignoreFirst)
 		{
 			voxel = res;
 			chunkPos = mapPos;
@@ -149,12 +149,13 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, ivec3 igno
 
 		//iterate the dda algorithm:
 		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
+		ignoreFirst = false;
 	}
 
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, ivec3 ignore, out Voxel voxel, inout ivec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel, inout ivec3 normal) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -175,10 +176,10 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, ivec3 ignore, out 
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
 			ivec3 chunkPos;
-			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignore, voxel, normal, chunkPos))
+			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, normal, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos isnt inside a voxel
+				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside a voxel
 
 				return true;
 			}
@@ -186,6 +187,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, ivec3 ignore, out 
 
 		//iterate the dda algorithm:
 		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
+		ignoreFirst = false;
 	}
 
 	return false;

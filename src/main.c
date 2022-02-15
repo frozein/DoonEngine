@@ -307,7 +307,13 @@ int main()
 		shader_program_activate(voxelLightingShader);
 
 		shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
+
+		shader_uniform_vec3(voxelLightingShader, "sunDir", (vec3){-1.0f, 1.0f, -1.0f});
+		shader_uniform_float(voxelLightingShader, "sunStrength", 0.6f);
+		shader_uniform_float(voxelLightingShader, "ambientStrength", 0.1f);
+
 		shader_uniform_int(voxelLightingShader, "bounceLimit", 5);
+		shader_uniform_float(voxelLightingShader, "bounceStrength", 1.0f);
 
 		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

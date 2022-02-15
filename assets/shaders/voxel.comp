@@ -50,7 +50,7 @@ void main()
 
 		finalNormal = ivec3(normal_AABB(rayPos, vec3(0.0), MAP_SIZE));
 
-		if(step_map(rayDir, invRayDir, rayPos, ivec3(-1), finalVoxel, finalNormal))
+		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, finalNormal))
 		{
 			switch(viewMode)
 			{
