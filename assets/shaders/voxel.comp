@@ -56,7 +56,22 @@ void main()
 			{
 			case 0: //lighting
 			{	
-				finalColor = pow(finalVoxel.accumColor / finalVoxel.numSamples, vec3(INV_GAMMA));
+				if(finalVoxel.material == 1)
+				{
+					vec3 newDir = reflect(rayDir, finalNormal);
+
+					Voxel temp;
+					ivec3 temp2;
+					if(step_map(newDir, 1 / newDir, rayPos, true, temp, temp2))
+						finalColor = temp.color;
+					else
+						finalColor = sky_color(newDir);
+
+					finalColor = pow(finalVoxel.accumColor / finalVoxel.numSamples + 0.1 * finalColor * finalVoxel.color, vec3(INV_GAMMA));
+				}
+				else
+					finalColor = pow(finalVoxel.accumColor / finalVoxel.numSamples, vec3(INV_GAMMA));
+
 				break;
 			}
 			case 1: //depth

@@ -218,7 +218,7 @@ int main()
 				//block:
 				for(int i = 2; i < 11; i++)
 				{
-					chunks[i].voxels[x][y][z].material = 0;
+					chunks[i].voxels[x][y][z].material = 1;
 					chunks[i].voxels[x][y][z].color = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
 					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
 					chunks[i].voxels[x][y][z].numSamples = 0.0f;

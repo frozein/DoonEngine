@@ -116,6 +116,8 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout 
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+const ivec3 cubeFaces[6] = {ivec3(1, 0, 0), ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, -1, 0), ivec3(0, 0, 1), ivec3(0, 0, -1)};
+
 void main()
 {
 	//find positions:
@@ -135,12 +137,8 @@ void main()
 	vec3 indirectLight = vec3(0.0);
 	float indirectSamples = 0.0;
 
-	diffuse_ray(chunkPos, localPos, ivec3( 1,  0,  0), rayPos, indirectLight, indirectSamples);
-	diffuse_ray(chunkPos, localPos, ivec3(-1,  0,  0), rayPos, indirectLight, indirectSamples);
-	diffuse_ray(chunkPos, localPos, ivec3( 0,  1,  0), rayPos, indirectLight, indirectSamples);
-	diffuse_ray(chunkPos, localPos, ivec3( 0, -1,  0), rayPos, indirectLight, indirectSamples);
-	diffuse_ray(chunkPos, localPos, ivec3( 0,  0,  1), rayPos, indirectLight, indirectSamples);
-	diffuse_ray(chunkPos, localPos, ivec3( 0,  0, -1), rayPos, indirectLight, indirectSamples);
+	for(int i = 0; i < 6; i++)
+		diffuse_ray(chunkPos, localPos, cubeFaces[i], rayPos, indirectLight, indirectSamples);
 
 	indirectLight /= indirectSamples;
 
@@ -149,16 +147,12 @@ void main()
 	vec3 directLight = vec3(0.0);
 	vec3 updatedSunDir = normalize(sunDir + rand3(time) / 5);
 
-	bool hit = true; //if any face reaches the sun, keep full illumnation
-	hit = shadow_ray(chunkPos, localPos, ivec3( 1,  0,  0), rayPos, updatedSunDir) && hit;
-	hit = shadow_ray(chunkPos, localPos, ivec3(-1,  0,  0), rayPos, updatedSunDir) && hit;
-	hit = shadow_ray(chunkPos, localPos, ivec3( 0,  1,  0), rayPos, updatedSunDir) && hit;
-	hit = shadow_ray(chunkPos, localPos, ivec3( 0, -1,  0), rayPos, updatedSunDir) && hit;
-	hit = shadow_ray(chunkPos, localPos, ivec3( 0,  0,  1), rayPos, updatedSunDir) && hit;
-	hit = shadow_ray(chunkPos, localPos, ivec3( 0,  0, -1), rayPos, updatedSunDir) && hit;
-
-	if(!hit)
-		directLight += sunStrength;
+	for(int i = 0; i < 6; i++)
+		if(!shadow_ray(chunkPos, localPos, cubeFaces[i], rayPos, updatedSunDir))
+		{
+			directLight += sunStrength;
+			break;
+		}
 
 	//increase final accumulated color and number of samples
 	//---------------------------------
