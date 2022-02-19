@@ -35,7 +35,7 @@ int shader_load(unsigned int type, const char* path, const char* includePath)
 	glCompileShader(shader);
 
 	free(source);
-	
+
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if(!success)
 	{
@@ -291,9 +291,9 @@ static char* add_include_file(char* baseSource, const char* includePath)
 	}
 
 	char* combinedSource = malloc(sizeof(char) * (baseLen + includeLen + 1));
-	memcpy(combinedSource, baseSource, sizeof(char) * (i + 1));
-	memcpy(&combinedSource[i + 1], includeSource, sizeof(char) * includeLen);
-	memcpy(&combinedSource[i + 1 + includeLen], &baseSource[i + 1], sizeof(char) * (baseLen - i + 1));
+	memcpy(combinedSource, baseSource, sizeof(char) * i);
+	memcpy(&combinedSource[i], includeSource, sizeof(char) * includeLen);
+	memcpy(&combinedSource[i + includeLen], &baseSource[i + 1], sizeof(char) * (baseLen - i + 1));
 
 	free(baseSource);
 	free(includeSource);
@@ -313,12 +313,13 @@ bool load_into_buffer(const char* path, char** buffer)
 		fseek(file, 0, SEEK_END);
 		length = ftell(file);
 		fseek(file, 0, SEEK_SET);
-		*buffer = calloc(1, length + 1);
+		*buffer = malloc(length + 1);
 
 		if(*buffer)
 		{
 			if(fread(*buffer, length, 1, file) == 1)
 			{
+				(*buffer)[length] = '\0';
 				result = true;
 			}
 			else
