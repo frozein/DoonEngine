@@ -13,6 +13,10 @@ uniform vec3 sunDir; //must be normalized
 uniform float sunStrength;
 uniform float shadowSoftness;
 
+uniform vec3 camPos;
+
+const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.329304, 0.894737, 0.301670), vec3(0.053661, 0.789474, -0.611434), vec3(0.443725, 0.684211, 0.578761), vec3(-0.802901, 0.578947, -0.142022), vec3(0.743091, 0.473684, -0.472693), vec3(-0.241344, 0.368421, 0.897786), vec3(-0.444660, 0.263158, -0.856169), vec3(0.927538, 0.157895, 0.338737), vec3(-0.923065, 0.052632, 0.381026), vec3(0.423260, -0.052632, -0.904478), vec3(0.295528, -0.157895, 0.942196), vec3(-0.834714, -0.263158, -0.483736), vec3(0.907976, -0.368421, -0.199614), vec3(-0.506515, -0.473684, 0.720462), vec3(-0.104781, -0.578947, -0.808604), vec3(0.557646, -0.684211, 0.469987), vec3(-0.613260, -0.789474, 0.025359), vec3(0.316560, -0.894737, -0.315017), vec3(-0.000000, -1.000000, 0.000000)};
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
@@ -28,10 +32,35 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 su
 	return step_map(sunDir, 1 / sunDir, updatedRayPos, true, temp, temp2); //return whether or not the map was hit
 }
 
+void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples)
+{
+	if(!is_open(chunkPos, localPos, face)) //TODO dont run this twice for every face
+		return;
+
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
+
+	if(dot(updatedRayPos - camPos, vec3(face)) > 0.0)
+		return;
+
+	vec3 reflected = reflect(normalize(updatedRayPos - camPos), vec3(face));
+
+	Voxel hitVoxel;
+	ivec3 hitNormal;
+
+	for(int i = 0; i < 20; i++)
+	{
+		numSamples++;
+		vec3 updated = normalize(reflected * 10 + spherePoints[i]);
+		vec3 tempPos = updatedRayPos;
+
+		if(step_map(updated, 1 / updated, tempPos, true, hitVoxel, hitNormal))
+			color += hitVoxel.color;
+	}
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 const ivec3 cubeFaces[6] = {ivec3(1, 0, 0), ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, -1, 0), ivec3(0, 0, 1), ivec3(0, 0, -1)};
-const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.329304, 0.894737, 0.301670), vec3(0.053661, 0.789474, -0.611434), vec3(0.443725, 0.684211, 0.578761), vec3(-0.802901, 0.578947, -0.142022), vec3(0.743091, 0.473684, -0.472693), vec3(-0.241344, 0.368421, 0.897786), vec3(-0.444660, 0.263158, -0.856169), vec3(0.927538, 0.157895, 0.338737), vec3(-0.923065, 0.052632, 0.381026), vec3(0.423260, -0.052632, -0.904478), vec3(0.295528, -0.157895, 0.942196), vec3(-0.834714, -0.263158, -0.483736), vec3(0.907976, -0.368421, -0.199614), vec3(-0.506515, -0.473684, 0.720462), vec3(-0.104781, -0.578947, -0.808604), vec3(0.557646, -0.684211, 0.469987), vec3(-0.613260, -0.789474, 0.025359), vec3(0.316560, -0.894737, -0.315017), vec3(-0.000000, -1.000000, 0.000000)};
 
 void main()
 {
@@ -39,9 +68,10 @@ void main()
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	int chunkIndex = get_map_tile(chunkPos);
+	Voxel thisVoxel = get_voxel(chunkIndex, localPos);
 
 	//return if voxel does not exist lol:
-	if(get_voxel(chunkIndex, localPos).material < 0)
+	if(thisVoxel.material < 0)
 		return;
 	
 	//find position of ray (center of the voxel):
@@ -63,9 +93,22 @@ void main()
 
 	directLight /= 20;
 
+	//specular rays:
+	//---------------------------------
+	vec3 specLight = vec3(0.0);
+	if(thisVoxel.material > 0)
+	{
+	float specSamples = 0.0;
+	for(int i = 0; i < 6; i++)
+		specular_ray(chunkPos, localPos, cubeFaces[i], rayPos, specLight, specSamples);
+
+	specLight /= specSamples;
+	specLight *= 0.5;
+	}
+
 	//update the final color
 	//---------------------------------
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight = directLight * get_voxel(chunkIndex, localPos).color; 
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight = (directLight + specLight) * thisVoxel.color; 
 
 	return;
 }

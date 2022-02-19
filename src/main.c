@@ -334,6 +334,7 @@ int main()
 		shader_uniform_vec3(voxelDirectLightShader, "sunDir", vec3_normalize((vec3){-1.0f, 1.0f, -1.0f}));
 		shader_uniform_float(voxelDirectLightShader, "sunStrength", 0.6f);
 		shader_uniform_float(voxelDirectLightShader, "shadowSoftness", 10.0f);
+		shader_uniform_vec3(voxelDirectLightShader, "camPos", camPos);
 
 		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
