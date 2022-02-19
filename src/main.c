@@ -94,6 +94,9 @@ typedef struct Voxel
 
 	vec3 accumColor;
 	GLfloat numSamples;
+
+	vec3 directLight;
+	GLfloat fill;
 } Voxel;
 
 typedef struct Chunk
@@ -154,12 +157,15 @@ int main()
 
 	//generate shader program:
 	//---------------------------------
-	int quadShader = shader_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
-	int voxelShader = compute_shader_program_load("shaders/voxel.comp", "shaders/voxelShared.comp");
-	int voxelLightingShader = compute_shader_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
-	if(quadShader < 0 || voxelShader < 0 || voxelLightingShader < 0)
+	int quadShader             = shader_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
+	int voxelShader            = compute_shader_program_load("shaders/voxelFinal.comp", "shaders/voxelShared.comp");
+	int voxelGlobalLightShader = compute_shader_program_load("shaders/voxelGlobalLight.comp", "shaders/voxelShared.comp");
+	int voxelDirectLightShader = compute_shader_program_load("shaders/voxelDirectLight.comp", "shaders/voxelShared.comp");
+	
+	if(quadShader < 0 || voxelShader < 0 || voxelGlobalLightShader < 0 || voxelDirectLightShader < 0)
 	{
-		shader_program_free(voxelLightingShader >= 0 ? voxelLightingShader : 0);
+		shader_program_free(voxelDirectLightShader >= 0 ? voxelDirectLightShader : 0);
+		shader_program_free(voxelGlobalLightShader >= 0 ? voxelGlobalLightShader : 0);
 		shader_program_free(voxelShader >= 0 ? voxelShader : 0);
 		shader_program_free(quadShader >= 0 ? quadShader : 0);
 
@@ -271,6 +277,25 @@ int main()
 	texture_param_wrap(tex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 	glBindImageTexture(0, tex.id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
+	//calculate indirect lighting:
+	//---------------------------------
+	shader_program_activate(voxelGlobalLightShader);
+
+	shader_uniform_vec3(voxelGlobalLightShader, "sunDir", vec3_normalize((vec3){-1.0f, 1.0f, -1.0f}));
+	shader_uniform_float(voxelGlobalLightShader, "sunStrength", 0.6f);
+	shader_uniform_float(voxelGlobalLightShader, "ambientStrength", 0.1f);
+
+	shader_uniform_int(voxelGlobalLightShader, "bounceLimit", 5);
+	shader_uniform_float(voxelGlobalLightShader, "bounceStrength", 1.0f);
+
+	for(int i = 0; i < 300; i++)
+	{
+		shader_uniform_float(voxelGlobalLightShader, "time", glfwGetTime());
+
+		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+
 	//main loop:
 	//---------------------------------
 	float lastFrame = glfwGetTime();
@@ -304,16 +329,11 @@ int main()
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//update lighting:
-		shader_program_activate(voxelLightingShader);
+		shader_program_activate(voxelDirectLightShader);
 
-		shader_uniform_float(voxelLightingShader, "time", glfwGetTime());
-
-		shader_uniform_vec3(voxelLightingShader, "sunDir", (vec3){-1.0f, 1.0f, -1.0f});
-		shader_uniform_float(voxelLightingShader, "sunStrength", 0.6f);
-		shader_uniform_float(voxelLightingShader, "ambientStrength", 0.1f);
-
-		shader_uniform_int(voxelLightingShader, "bounceLimit", 5);
-		shader_uniform_float(voxelLightingShader, "bounceStrength", 1.0f);
+		shader_uniform_vec3(voxelDirectLightShader, "sunDir", vec3_normalize((vec3){-1.0f, 1.0f, -1.0f}));
+		shader_uniform_float(voxelDirectLightShader, "sunStrength", 0.6f);
+		shader_uniform_float(voxelDirectLightShader, "shadowSoftness", 10.0f);
 
 		glDispatchCompute(MAX_LIGHTING_REQUESTS, 1, 1);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
@@ -332,7 +352,9 @@ int main()
 
 		//draw final quad to screen:
 		shader_program_activate(quadShader);
+
 		texture_activate(tex, 0);
+
 		draw_vertex_object_indices(quadBuffer, 6, 0);
 
 		//finish rendering and swap:
@@ -349,7 +371,8 @@ int main()
 	glDeleteBuffers(1, &lightingRequestBuffer);
 	free_vertex_object(quadBuffer);
 
-	shader_program_free(voxelLightingShader);
+	shader_program_free(voxelGlobalLightShader);
+	shader_program_free(voxelDirectLightShader);
 	shader_program_free(voxelShader);
 	shader_program_free(quadShader);
 
@@ -411,6 +434,12 @@ void process_input(GLFWwindow *window)
 		viewMode = 1;
 	if(glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
 		viewMode = 2;
+	if(glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
+		viewMode = 3;
+	if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
+		viewMode = 4;
+	if(glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
+		viewMode = 5;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((vec3){camFront.x, 0.0f, camFront.z}), camSpeed));

@@ -17,8 +17,10 @@ struct Voxel //a single voxel
 	vec3 color;
 	int material;
 
-	vec3 accumColor;
-	float numSamples;
+	vec3 indirectLight;
+	float indirectSamples;
+
+	vec3 directLight;
 };
 
 struct Chunk //a chunk of voxels
@@ -50,8 +52,6 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-//--------------------------------------------------------------------------------------------------------------------------------//
-
 int get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
 	return map[pos.x][pos.y][pos.z];
@@ -60,6 +60,29 @@ int get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT 
 Voxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
 {
 	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
+}
+
+bool is_open(ivec3 chunkPos, ivec3 localPos, ivec3 face)
+{
+	uint chunkIndex = get_map_tile(chunkPos);
+	if(in_chunk_bounds(localPos + face))
+	{
+		if(get_voxel(chunkIndex, localPos + face).material >= 0)
+		{
+			return false;
+		}
+	}
+	else if(in_map_bounds(chunkPos + face))
+	{
+		int newIndex = get_map_tile(chunkPos + face);
+		if(newIndex < 0)
+			return true;
+
+		ivec3 newPos = ivec3(mod(localPos + face + CHUNK_SIZE, CHUNK_SIZE));
+		return get_voxel(newIndex, newPos).material < 0;
+	}
+
+	return true;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -179,7 +202,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, normal, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside a voxel
+				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos is outside voxel
 
 				return true;
 			}

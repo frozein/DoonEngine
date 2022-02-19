@@ -1,0 +1,71 @@
+//INCLUDES "voxelShared.comp"
+#version 460
+
+layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
+
+layout(std140, binding = 2) restrict readonly buffer lightingRequestBuffer
+{
+	ivec3 chunkPositions[];
+};
+
+//global sun params:
+uniform vec3 sunDir; //must be normalized
+uniform float sunStrength;
+uniform float shadowSoftness;
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
+{
+	if(!is_open(chunkPos, localPos, face)) //return if the face isnt open
+		return true;
+
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
+
+	Voxel temp; //stores the voxel that the ray hits, not used currently
+	ivec3 temp2; //stores the normal of the hit voxel, not used currently
+		
+	return step_map(sunDir, 1 / sunDir, updatedRayPos, true, temp, temp2); //return whether or not the map was hit
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+const ivec3 cubeFaces[6] = {ivec3(1, 0, 0), ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, -1, 0), ivec3(0, 0, 1), ivec3(0, 0, -1)};
+const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.329304, 0.894737, 0.301670), vec3(0.053661, 0.789474, -0.611434), vec3(0.443725, 0.684211, 0.578761), vec3(-0.802901, 0.578947, -0.142022), vec3(0.743091, 0.473684, -0.472693), vec3(-0.241344, 0.368421, 0.897786), vec3(-0.444660, 0.263158, -0.856169), vec3(0.927538, 0.157895, 0.338737), vec3(-0.923065, 0.052632, 0.381026), vec3(0.423260, -0.052632, -0.904478), vec3(0.295528, -0.157895, 0.942196), vec3(-0.834714, -0.263158, -0.483736), vec3(0.907976, -0.368421, -0.199614), vec3(-0.506515, -0.473684, 0.720462), vec3(-0.104781, -0.578947, -0.808604), vec3(0.557646, -0.684211, 0.469987), vec3(-0.613260, -0.789474, 0.025359), vec3(0.316560, -0.894737, -0.315017), vec3(-0.000000, -1.000000, 0.000000)};
+
+void main()
+{
+	//find positions:
+	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
+	ivec3 localPos = ivec3(gl_LocalInvocationID);
+	int chunkIndex = get_map_tile(chunkPos);
+
+	//return if voxel does not exist lol:
+	if(get_voxel(chunkIndex, localPos).material < 0)
+		return;
+	
+	//find position of ray (center of the voxel):
+	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
+
+	//shadow rays:
+	//---------------------------------
+	vec3 directLight = vec3(0.0);
+	for(int i = 0; i < 20; i++)
+	{
+		vec3 updatedSunDir = normalize(sunDir * shadowSoftness + spherePoints[i]);
+		for(int i = 0; i < 6; i++)
+			if(!shadow_ray(chunkPos, localPos, cubeFaces[i], rayPos, updatedSunDir))
+			{
+				directLight += sunStrength;
+				break;
+			}
+	}
+
+	directLight /= 20;
+
+	//update the final color
+	//---------------------------------
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight = directLight * get_voxel(chunkIndex, localPos).color; 
+
+	return;
+}
