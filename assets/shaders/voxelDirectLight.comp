@@ -21,7 +21,7 @@ const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.32930
 
 bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
 {
-	if(!is_open(chunkPos, localPos, face)) //return if the face isnt open
+	if(!is_face_open(chunkPos, localPos, face)) //return if the face isnt open
 		return true;
 
 	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
@@ -34,7 +34,7 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 su
 
 void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples)
 {
-	if(!is_open(chunkPos, localPos, face)) //TODO dont run this twice for every face
+	if(!is_face_open(chunkPos, localPos, face)) //TODO dont run this twice for every face
 		return;
 
 	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
@@ -54,7 +54,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout
 		vec3 tempPos = updatedRayPos;
 
 		if(step_map(updated, 1 / updated, tempPos, true, hitVoxel, hitNormal))
-			color += hitVoxel.color;
+			color += hitVoxel.directLight + hitVoxel.indirectLight;
 	}
 }
 
@@ -68,10 +68,10 @@ void main()
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	int chunkIndex = get_map_tile(chunkPos);
-	Voxel thisVoxel = get_voxel(chunkIndex, localPos);
+	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos));
 
 	//return if voxel does not exist lol:
-	if(thisVoxel.material < 0)
+	if(thisVoxel.material == 255)
 		return;
 	
 	//find position of ray (center of the voxel):
@@ -96,19 +96,20 @@ void main()
 	//specular rays:
 	//---------------------------------
 	vec3 specLight = vec3(0.0);
-	if(thisVoxel.material > 0)
+	if(thisVoxel.material == 1)
 	{
-	float specSamples = 0.0;
-	for(int i = 0; i < 6; i++)
-		specular_ray(chunkPos, localPos, cubeFaces[i], rayPos, specLight, specSamples);
+		float specSamples = 0.0;
+		for(int i = 0; i < 6; i++)
+			specular_ray(chunkPos, localPos, cubeFaces[i], rayPos, specLight, specSamples);
 
-	specLight /= specSamples;
-	specLight *= 0.5;
+		specLight /= specSamples;
+		specLight *= 0.5;
 	}
 
 	//update the final color
 	//---------------------------------
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight = (directLight + specLight) * thisVoxel.color; 
+	vec3 finalColor = (directLight + specLight) * thisVoxel.albedo;
+	atomicExchange(chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight, encode_uint_RGBA(uvec4(round(finalColor * 255), 0)));
 
 	return;
 }

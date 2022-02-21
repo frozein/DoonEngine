@@ -64,7 +64,7 @@ void main()
 					Voxel reflectedVoxel;
 					ivec3 reflectedNormal;
 					if(step_map(newDir, 1 / newDir, rayPos, true, reflectedVoxel, reflectedNormal))
-						specColor = reflectedVoxel.color;
+						specColor = reflectedVoxel.albedo;
 					else
 						specColor = sky_color(newDir);
 
@@ -77,7 +77,7 @@ void main()
 			}
 			case 1: //albedo
 			{
-				finalColor = pow(finalVoxel.color, vec3(INV_GAMMA));
+				finalColor = pow(finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 2: //direct light

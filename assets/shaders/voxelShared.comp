@@ -2,7 +2,7 @@
 
 #define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
-#define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / CHUNK_SIZE, precomputed
+#define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / 2 * CHUNK_SIZE, precomputed
 
 #define MAP_SIZE ivec3(3, 3, 3) //size of the map (number of chunks in each direction)
 
@@ -14,8 +14,8 @@
 
 struct Voxel //a single voxel
 {
-	vec3 color;
-	int material;
+	vec3 albedo;
+	uint material;
 
 	vec3 indirectLight;
 	float indirectSamples;
@@ -23,9 +23,19 @@ struct Voxel //a single voxel
 	vec3 directLight;
 };
 
+struct CompressedVoxel //a compressed voxel
+{
+	uint albedo; //TODO: find something to do with the extra 2 floats of space thats lost to alignment
+	
+	uint directLight;
+
+	vec3 indirectLight; //sadly must be a vec3 for precision
+	float indirectSamples;
+};
+
 struct Chunk //a chunk of voxels
 {
-	Voxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
+	CompressedVoxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -39,6 +49,24 @@ layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contai
 {
 	Chunk chunks[MAX_CHUNKS];
 };
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+uvec4 decode_uint_RGBA(uint val)
+{
+	uvec4 res;
+	res.x = val >> 24;
+	res.y = val >> 16;
+	res.z = val >> 8;
+	res.w = val;
+	return res & 0xFF;
+}
+
+uint encode_uint_RGBA(uvec4 val)
+{
+	val = val & 0xFF;
+	return val.x << 24 | val.y << 16 | val.z << 8 | val.w;
+}
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -57,20 +85,44 @@ int get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT 
 	return map[pos.x][pos.y][pos.z];
 }
 
-Voxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
+CompressedVoxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
 {
 	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
 }
 
-bool is_open(ivec3 chunkPos, ivec3 localPos, ivec3 face)
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+Voxel decompress_voxel(CompressedVoxel compressed)
+{
+	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
+	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
+
+	Voxel res;
+	res.albedo = albedo.xyz * 0.00392156862;
+	res.material = albedo.w;
+	res.indirectLight = compressed.indirectLight;
+	res.indirectSamples = compressed.indirectSamples;
+	res.directLight = directLight.xyz * 0.00392156862;
+
+	return res;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+bool is_voxel_open(uint chunk, ivec3 localPos)
+{
+	CompressedVoxel voxel = get_voxel(chunk, localPos);
+	uint material = voxel.albedo & 0xFF;
+	return material < 255;
+}
+
+bool is_face_open(ivec3 chunkPos, ivec3 localPos, ivec3 face)
 {
 	uint chunkIndex = get_map_tile(chunkPos);
 	if(in_chunk_bounds(localPos + face))
 	{
-		if(get_voxel(chunkIndex, localPos + face).material >= 0)
-		{
+		if(is_voxel_open(chunkIndex, localPos + face))
 			return false;
-		}
 	}
 	else if(in_map_bounds(chunkPos + face))
 	{
@@ -79,7 +131,7 @@ bool is_open(ivec3 chunkPos, ivec3 localPos, ivec3 face)
 			return true;
 
 		ivec3 newPos = ivec3(mod(localPos + face + CHUNK_SIZE, CHUNK_SIZE));
-		return get_voxel(newIndex, newPos).material < 0;
+		return !is_voxel_open(newIndex, newPos);
 	}
 
 	return true;
@@ -161,10 +213,9 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 	while(in_chunk_bounds(mapPos))
 	{
 		//check if a solid voxel has been hit:
-		Voxel res = get_voxel(chunk, mapPos);
-		if (res.material >= 0 && !ignoreFirst)
+		if (is_voxel_open(chunk, mapPos) && !ignoreFirst)
 		{
-			voxel = res;
+			voxel = decompress_voxel(get_voxel(chunk, mapPos));
 			chunkPos = mapPos;
 
 			return true;

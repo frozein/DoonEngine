@@ -53,7 +53,7 @@ vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 a
 
 void diffuse_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples) //increments color and numSamples depending on the voxel hit
 {
-	if(!is_open(chunkPos, localPos, face)) //return if the face isnt open
+	if(!is_face_open(chunkPos, localPos, face)) //return if the face isnt open
 		return;
 
 	numSamples++;
@@ -69,7 +69,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout 
 		bool hit = step_map(dir, 1 / dir, updatedRayPos, (i == 0), hitVoxel, hitNormal);  //step through map
 
 		if(hit)
-			newColor *= hitVoxel.color * bounceStrength;
+			newColor *= hitVoxel.albedo * bounceStrength;
 		else
 		{
 			color += newColor * max(dot(dir, sunDir), ambientStrength) * sunStrength;
@@ -88,10 +88,10 @@ void main()
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	int chunkIndex = get_map_tile(chunkPos);
-	Voxel thisVoxel = get_voxel(chunkIndex, localPos);
+	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos));
 
 	//return if voxel does not exist lol:
-	if(thisVoxel.material < 0)
+	if(thisVoxel.material == 255)
 		return;
 	
 	//find position of ray (center of the voxel):
@@ -107,9 +107,11 @@ void main()
 
 	indirectLight /= indirectSamples;
 
-	//update final lighting and increase number of samples 
+	//update final lighting and increase number of samples
 	//---------------------------------
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight   += (indirectLight * thisVoxel.color - thisVoxel.indirectLight) / (thisVoxel.indirectSamples + 1.0); 
+	vec3 finalColor = (thisVoxel.indirectLight * thisVoxel.indirectSamples + indirectLight * thisVoxel.albedo) / (thisVoxel.indirectSamples + 1.0);
+
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight = finalColor;
 	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectSamples += 1.0;
 
 	return;

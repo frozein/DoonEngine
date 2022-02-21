@@ -89,7 +89,7 @@ unsigned int viewMode = 0;
 
 typedef struct Voxel
 {
-	vec3 color;
+	vec3 albedo;
 	GLint material;
 
 	vec3 accumColor;
@@ -99,15 +99,66 @@ typedef struct Voxel
 	GLfloat fill;
 } Voxel;
 
+typedef struct CompressedVoxel
+{
+	GLuint albedo;
+	GLuint directLight;
+	GLfloat indirectSamples;
+
+	vec3 indirectLight;
+	GLfloat fill;
+	GLfloat fill2;
+} CompressedVoxel;
+
 typedef struct Chunk
 {
-	Voxel voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
+	CompressedVoxel voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
 } Chunk;
 
 typedef struct ivec4
 {
 	GLint x, y, z, w;
 } ivec4;
+
+typedef struct uvec4
+{
+	GLuint x, y, z, w;
+} uvec4;
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+uvec4 decode_uint_RGBA(GLuint val)
+{
+	uvec4 res;
+	res.x = (val >> 24) & 0xFF;
+	res.y = (val >> 16) & 0xFF;
+	res.z = (val >> 8) & 0xFF;
+	res.w = (val) & 0xFF;
+	return res;
+}
+
+GLuint encode_uint_RGBA(uvec4 val)
+{
+	val.x = val.x & 0xFF;
+	val.y = val.y & 0xFF;
+	val.z = val.z & 0xFF;
+	val.w = val.w & 0xFF;
+	return val.x << 24 | val.y << 16 | val.z << 8 | val.w;
+}
+
+CompressedVoxel compress_voxel(Voxel voxel)
+{
+	CompressedVoxel res;
+	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
+	uvec4 directLight = {0, 0, 0, 0};
+
+	res.albedo = encode_uint_RGBA(albedo);
+	res.indirectLight = (vec3){0, 0, 0};
+	res.directLight = encode_uint_RGBA(directLight);
+	res.indirectSamples = 0.0;
+
+	return res;
+}
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -211,23 +262,31 @@ int main()
 				//cylinder:
 				for(int i = 0; i < 2; i++)
 				{
-					float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
-					chunks[i].voxels[x][y][z].material = (distance < 4.0f) - 1;
-					chunks[i].voxels[x][y][z].color.x = pow(x / 8.0f, GAMMA);
-					chunks[i].voxels[x][y][z].color.y = pow(y / 8.0f, GAMMA);
-					chunks[i].voxels[x][y][z].color.z = pow(z / 8.0f, GAMMA);
+					Voxel vox;
 
-					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
-					chunks[i].voxels[x][y][z].numSamples = 0.0f;
+					float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
+					vox.material = (distance < 4.0f) ? 0 : 255;
+					vox.albedo.x = pow(x / 8.0f, GAMMA);
+					vox.albedo.y = pow(y / 8.0f, GAMMA);
+					vox.albedo.z = pow(z / 8.0f, GAMMA);
+
+					vox.accumColor = (vec3){0.0f, 0.0f, 0.0f};
+					vox.numSamples = 0.0f;
+
+					chunks[i].voxels[x][y][z] = compress_voxel(vox);
 				}
 
 				//block:
 				for(int i = 2; i < 11; i++)
 				{
-					chunks[i].voxels[x][y][z].material = 1;
-					chunks[i].voxels[x][y][z].color = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
-					chunks[i].voxels[x][y][z].accumColor = (vec3){0.0f, 0.0f, 0.0f};
-					chunks[i].voxels[x][y][z].numSamples = 0.0f;
+					Voxel vox;
+
+					vox.material = 1;
+					vox.albedo = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
+					vox.accumColor = (vec3){0.0f, 0.0f, 0.0f};
+					vox.numSamples = 0.0f;
+
+					chunks[i].voxels[x][y][z] = compress_voxel(vox);
 				}
 			}
 
@@ -286,7 +345,7 @@ int main()
 	shader_uniform_float(voxelGlobalLightShader, "ambientStrength", 0.1f);
 
 	shader_uniform_int(voxelGlobalLightShader, "bounceLimit", 5);
-	shader_uniform_float(voxelGlobalLightShader, "bounceStrength", 1.0f);
+	shader_uniform_float(voxelGlobalLightShader, "bounceStrength", 0.7f);
 
 	for(int i = 0; i < 300; i++)
 	{
