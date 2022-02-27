@@ -21,6 +21,48 @@ typedef struct vec4 {
 } vec4;
 
 //-----------------------------//
+//NOTE: no math functions exist for integer vectors
+
+//A 2-dimensional integer vector
+typedef struct ivec2
+{
+	GLint x, y;
+} ivec2;
+
+//A 3-dimensional integer vector
+typedef struct ivec3
+{
+	GLint x, y, z;
+} ivec3;
+
+//A 4-dimensional integer vector
+typedef struct ivec4
+{
+	GLint x, y, z, w;
+} ivec4;
+
+//-----------------------------//
+//NOTE: no math functions exist for integer vectors
+
+//A 2-dimensional integer vector
+typedef struct uvec2
+{
+	GLuint x, y;
+} uvec2;
+
+//A 3-dimensional integer vector
+typedef struct uvec3
+{
+	GLuint x, y, z;
+} uvec3;
+
+//A 4-dimensional integer vector
+typedef struct uvec4
+{
+	GLuint x, y, z, w;
+} uvec4;
+
+//-----------------------------//
 
 //A 2x2 matrix
 typedef struct mat2 {
