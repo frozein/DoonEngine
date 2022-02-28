@@ -27,11 +27,7 @@ typedef struct VoxelGPU
 	GLuint albedo; //compressed
 	GLuint directLight; //compressed
 
-	vec3 indirectLight; //cannot be compressed due to a need for precision
-	GLfloat indirectSamples;
-
-	GLfloat fill; //needed to maintain alignment on the GPU
-	GLfloat fill2;
+	vec2 fill; //needed to maintain alignment on the GPU
 } VoxelGPU;
 
 //a chunk of voxels, as stored on the GPU

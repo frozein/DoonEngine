@@ -233,6 +233,8 @@ int main()
 	voxelLightingRequests[9]  = (ivec4){1, 1, 1};
 	voxelLightingRequests[10] = (ivec4){1, 2, 1};
 
+	//send data to GPU (TEMPORARY):
+	//---------------------------------
 	send_all_data_temp();
 
 	//calculate indirect lighting:

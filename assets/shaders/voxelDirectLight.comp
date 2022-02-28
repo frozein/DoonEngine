@@ -54,7 +54,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout
 		vec3 tempPos = updatedRayPos;
 
 		if(step_map(updated, 1 / updated, tempPos, true, hitVoxel, hitNormal))
-			color += hitVoxel.directLight + hitVoxel.indirectLight;
+			color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo;
 	}
 }
 
@@ -68,7 +68,7 @@ void main()
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	int chunkIndex = get_map_tile(chunkPos);
-	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos));
+	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
 
 	//return if voxel does not exist lol:
 	if(thisVoxel.material == 255)
@@ -108,7 +108,7 @@ void main()
 
 	//update the final color
 	//---------------------------------
-	vec3 finalColor = (directLight + specLight) * thisVoxel.albedo;
+	vec3 finalColor = directLight + specLight;
 	atomicExchange(chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight, encode_uint_RGBA(uvec4(round(finalColor * 255), 0)));
 
 	return;

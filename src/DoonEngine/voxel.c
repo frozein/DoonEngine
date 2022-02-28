@@ -103,7 +103,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		return false;
 	}
 
-	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * maxChunksGPU, 1))
+	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * 2 * maxChunksGPU, 1))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER");
 		texture_free(finalTex);
@@ -113,6 +113,8 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		glDeleteBuffers(1, &mapBuffer);
 		return false;
 	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
 
 	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 2))
 	{
@@ -228,7 +230,10 @@ void send_all_data_temp()
 			}
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * maxChunksGPU, voxelChunks);
+	for(int i = 0; i < maxChunksGPU; i++)
+	{
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * 2 * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[i]);
+	}
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, tempMap);
@@ -318,9 +323,7 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 	uvec4 directLight = {0, 0, 0, 0};
 
 	res.albedo = encode_uint_RGBA(albedo);
-	res.indirectLight = (vec3){0, 0, 0};
 	res.directLight = encode_uint_RGBA(directLight);
-	res.indirectSamples = 0.0;
 
 	return res;
 }

@@ -71,7 +71,7 @@ void main()
 					finalColor = pow(finalVoxel.directLight + finalVoxel.indirectLight + 0.1 * specColor * (finalVoxel.directLight + finalVoxel.indirectLight), vec3(INV_GAMMA));
 				}
 				else
-					finalColor = pow(finalVoxel.directLight + finalVoxel.indirectLight, vec3(INV_GAMMA));
+					finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo, vec3(INV_GAMMA));
 
 				break;
 			}
@@ -82,12 +82,12 @@ void main()
 			}
 			case 2: //direct light
 			{
-				finalColor = pow(finalVoxel.directLight, vec3(INV_GAMMA));
+				finalColor = pow(finalVoxel.directLight * finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 3: //indirect light
 			{
-				finalColor = pow(finalVoxel.indirectLight, vec3(INV_GAMMA));
+				finalColor = pow(finalVoxel.indirectLight * finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 4: //depth

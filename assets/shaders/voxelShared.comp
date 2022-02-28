@@ -26,16 +26,13 @@ struct Voxel //a single voxel
 struct CompressedVoxel //a compressed voxel
 {
 	uint albedo; //TODO: find something to do with the extra 2 floats of space thats lost to alignment
-	
 	uint directLight;
-
-	vec3 indirectLight; //sadly must be a vec3 for precision
-	float indirectSamples;
 };
 
 struct Chunk //a chunk of voxels
 {
 	CompressedVoxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
+	vec4 indirectLight[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -90,9 +87,14 @@ CompressedVoxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk 
 	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
 }
 
+vec4 get_indirect_light(uint chunk, ivec3 pos)
+{
+	return chunks[chunk].indirectLight[pos.x][pos.y][pos.z];
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-Voxel decompress_voxel(CompressedVoxel compressed)
+Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
 {
 	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
 	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
@@ -100,8 +102,8 @@ Voxel decompress_voxel(CompressedVoxel compressed)
 	Voxel res;
 	res.albedo = albedo.xyz * 0.00392156862;
 	res.material = albedo.w;
-	res.indirectLight = compressed.indirectLight;
-	res.indirectSamples = compressed.indirectSamples;
+	res.indirectLight = indirectLight.xyz;
+	res.indirectSamples = indirectLight.w;
 	res.directLight = directLight.xyz * 0.00392156862;
 
 	return res;
@@ -215,7 +217,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 		//check if a solid voxel has been hit:
 		if (is_voxel_open(chunk, mapPos) && !ignoreFirst)
 		{
-			voxel = decompress_voxel(get_voxel(chunk, mapPos));
+			voxel = decompress_voxel(get_voxel(chunk, mapPos), get_indirect_light(chunk, mapPos));
 			chunkPos = mapPos;
 
 			return true;
