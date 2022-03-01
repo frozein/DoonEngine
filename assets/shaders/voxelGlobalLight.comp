@@ -60,13 +60,14 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout 
 
 	Voxel hitVoxel; //stores the voxel that the ray hits
 	ivec3 hitNormal = face; //stores the normal of the hit voxel
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * hitNormal; //move ray position to the edge of the face
+	uint numSteps;
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * hitNormal; //move ray position to the edge of the face
 
 	vec3 newColor = vec3(1.0);
 	for(int i = 0; i < bounceLimit; i++)
 	{
 		vec3 dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
-		bool hit = step_map(dir, 1 / dir, updatedRayPos, (i == 0), hitVoxel, hitNormal);  //step through map
+		bool hit = step_map(dir, 1 / dir, updatedRayPos, hitVoxel, hitNormal, numSteps);  //step through map
 
 		if(hit)
 			newColor *= hitVoxel.albedo * bounceStrength;

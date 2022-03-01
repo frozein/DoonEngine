@@ -26,6 +26,7 @@ void main()
 	Voxel finalVoxel; //the final voxel that is hit
 	vec3 finalColor; //the final color that gets written to the texture
 	ivec3 finalNormal; //the final normal that is hit
+	uint finalNumSteps;
 
 	//calculate ray position and direction:
 	vec2 screenPos;
@@ -50,7 +51,7 @@ void main()
 
 		finalNormal = ivec3(normal_AABB(rayPos, vec3(0.0), MAP_SIZE));
 
-		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, finalNormal))
+		if(step_map(rayDir, invRayDir, rayPos, finalVoxel, finalNormal, finalNumSteps))
 		{
 			switch(viewMode)
 			{
@@ -63,7 +64,8 @@ void main()
 
 					Voxel reflectedVoxel;
 					ivec3 reflectedNormal;
-					if(step_map(newDir, 1 / newDir, rayPos, true, reflectedVoxel, reflectedNormal))
+					uint reflectedNumSteps;
+					if(step_map(newDir, 1 / newDir, rayPos, reflectedVoxel, reflectedNormal, reflectedNumSteps))
 						specColor = reflectedVoxel.albedo;
 					else
 						specColor = sky_color(newDir);

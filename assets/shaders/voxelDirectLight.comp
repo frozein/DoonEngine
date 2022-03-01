@@ -24,12 +24,13 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 su
 	if(!is_face_open(chunkPos, localPos, face)) //return if the face isnt open
 		return true;
 
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * face; //move ray position to the edge of the face
 
 	Voxel temp; //stores the voxel that the ray hits, not used currently
 	ivec3 temp2; //stores the normal of the hit voxel, not used currently
-		
-	return step_map(sunDir, 1 / sunDir, updatedRayPos, true, temp, temp2); //return whether or not the map was hit
+	uint numSteps;
+
+	return step_map(sunDir, 1 / sunDir, updatedRayPos, temp, temp2, numSteps); //return whether or not the map was hit
 }
 
 void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples)
@@ -37,7 +38,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout
 	if(!is_face_open(chunkPos, localPos, face)) //TODO dont run this twice for every face
 		return;
 
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * face; //move ray position to the edge of the face
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * face; //move ray position to the edge of the face
 
 	if(dot(updatedRayPos - camPos, vec3(face)) > 0.0)
 		return;
@@ -46,6 +47,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout
 
 	Voxel hitVoxel;
 	ivec3 hitNormal;
+	uint numSteps;
 
 	for(int i = 0; i < 20; i++)
 	{
@@ -53,7 +55,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout
 		vec3 updated = normalize(reflected * 10 + spherePoints[i]);
 		vec3 tempPos = updatedRayPos;
 
-		if(step_map(updated, 1 / updated, tempPos, true, hitVoxel, hitNormal))
+		if(step_map(updated, 1 / updated, tempPos, hitVoxel, hitNormal, numSteps) && numSteps > 0)
 			color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo;
 	}
 }

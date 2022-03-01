@@ -67,7 +67,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	voxelMap = malloc(sizeof(int) * mapSize.x * mapSize.y * mapSize.z);
 	if(!voxelMap)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MAP");
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MAP\n");
 		texture_free(finalTex);
 		return false;
 	}
@@ -75,7 +75,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	voxelChunks = malloc(sizeof(VoxelChunk) * maxChunks);
 	if(!voxelChunks)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL CHUNKS");
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL CHUNKS\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		return false;
@@ -84,7 +84,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	voxelLightingRequests = malloc(sizeof(ivec4) * maxLightingRequests);
 	if(!voxelLightingRequests)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL LIGHTING REQUESTS");
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL LIGHTING REQUESTS\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
@@ -95,7 +95,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	//---------------------------------
 	if(!gen_shader_storage_buffer(&mapBuffer, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER");
+		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
@@ -105,7 +105,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * 2 * maxChunksGPU, 1))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER");
+		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
@@ -118,7 +118,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 2))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER");
+		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
@@ -136,7 +136,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	if(direct < 0 || indirect < 0 || final < 0)
 	{
-		ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS");
+		ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);

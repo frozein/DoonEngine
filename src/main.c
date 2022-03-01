@@ -171,7 +171,11 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){3, 3, 3}, 11, (uvec3){3, 3, 3}, 11, 11);
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){3, 3, 3}, 11, (uvec3){3, 3, 3}, 11, 11))
+	{
+		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
+		return -1;
+	}
 
 	//generate voxel data:
 	//---------------------------------
