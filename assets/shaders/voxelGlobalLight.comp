@@ -51,23 +51,18 @@ vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 a
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void diffuse_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples) //increments color and numSamples depending on the voxel hit
+void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, inout vec3 color) //increments color and numSamples depending on the voxel hit
 {
-	if(!is_face_open(chunkPos, localPos, face)) //return if the face isnt open
-		return;
-
-	numSamples++;
-
 	Voxel hitVoxel; //stores the voxel that the ray hits
-	ivec3 hitNormal = face; //stores the normal of the hit voxel
-	uint numSteps;
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * hitNormal; //move ray position to the edge of the face
+	vec3 hitNormal = normal; //stores the normal of the hit voxel
+	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * hitNormal; //move ray position to the edge of the face
 
 	vec3 newColor = vec3(1.0);
 	for(int i = 0; i < bounceLimit; i++)
 	{
 		vec3 dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
-		bool hit = step_map(dir, 1 / dir, updatedRayPos, hitVoxel, hitNormal, numSteps);  //step through map
+		bool hit = step_map(dir, 1 / dir, updatedRayPos, true, hitVoxel);  //step through map
+		hitNormal = hitVoxel.normal;
 
 		if(hit)
 			newColor *= hitVoxel.albedo * bounceStrength;
@@ -101,12 +96,7 @@ void main()
 	//send diffuse rays:
 	//---------------------------------
 	vec3 indirectLight = vec3(0.0);
-	float indirectSamples = 0.0;
-
-	for(int i = 0; i < 6; i++)
-		diffuse_ray(chunkPos, localPos, cubeFaces[i], rayPos, indirectLight, indirectSamples);
-
-	indirectLight /= indirectSamples;
+	diffuse_ray(chunkPos, localPos, thisVoxel.normal, rayPos, indirectLight);
 
 	//update final lighting and increase number of samples
 	//---------------------------------

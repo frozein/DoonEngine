@@ -19,50 +19,23 @@ const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.32930
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool shadow_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
+bool shadow_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 sunDir) //returns true if the shadow ray hit the map
 {
-	if(!is_face_open(chunkPos, localPos, face)) //return if the face isnt open
-		return true;
+	Voxel hitVoxel;
 
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * face; //move ray position to the edge of the face
-
-	Voxel temp; //stores the voxel that the ray hits, not used currently
-	ivec3 temp2; //stores the normal of the hit voxel, not used currently
-	uint numSteps;
-
-	return step_map(sunDir, 1 / sunDir, updatedRayPos, temp, temp2, numSteps); //return whether or not the map was hit
+	return step_map(sunDir, 1 / sunDir, rayPos, true, hitVoxel); //return whether or not the map was hit
 }
 
-void specular_ray(ivec3 chunkPos, ivec3 localPos, ivec3 face, vec3 rayPos, inout vec3 color, inout float numSamples)
+void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, inout vec3 color)
 {
-	if(!is_face_open(chunkPos, localPos, face)) //TODO dont run this twice for every face
-		return;
-
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE + vec3(EPSILON)) * face; //move ray position to the edge of the face
-
-	if(dot(updatedRayPos - camPos, vec3(face)) > 0.0)
-		return;
-
-	vec3 reflected = reflect(normalize(updatedRayPos - camPos), vec3(face));
-
 	Voxel hitVoxel;
-	ivec3 hitNormal;
-	uint numSteps;
+	vec3 tempPos = rayPos;
 
-	for(int i = 0; i < 20; i++)
-	{
-		numSamples++;
-		vec3 updated = normalize(reflected * 10 + spherePoints[i]);
-		vec3 tempPos = updatedRayPos;
-
-		if(step_map(updated, 1 / updated, tempPos, hitVoxel, hitNormal, numSteps) && numSteps > 0)
-			color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo;
-	}
+	if(step_map(rayDir, 1 / rayDir, tempPos, true, hitVoxel) && dot(abs(tempPos - rayPos), abs(tempPos - rayPos)) > dot(INV_CHUNK_SIZE - EPSILON, INV_CHUNK_SIZE - EPSILON))
+		color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-
-const ivec3 cubeFaces[6] = {ivec3(1, 0, 0), ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, -1, 0), ivec3(0, 0, 1), ivec3(0, 0, -1)};
 
 void main()
 {
@@ -78,6 +51,7 @@ void main()
 	
 	//find position of ray (center of the voxel):
 	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
+	rayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * thisVoxel.normal;
 
 	//shadow rays:
 	//---------------------------------
@@ -85,26 +59,28 @@ void main()
 	for(int i = 0; i < 20; i++)
 	{
 		vec3 updatedSunDir = normalize(sunDir * shadowSoftness + spherePoints[i]);
-		for(int i = 0; i < 6; i++)
-			if(!shadow_ray(chunkPos, localPos, cubeFaces[i], rayPos, updatedSunDir))
-			{
-				directLight += sunStrength;
-				break;
-			}
+
+		if(!shadow_ray(chunkPos, localPos, thisVoxel.normal, rayPos, updatedSunDir))
+			directLight += sunStrength;
 	}
 
-	directLight /= 20;
+	directLight /= 20.0;
 
 	//specular rays:
 	//---------------------------------
 	vec3 specLight = vec3(0.0);
-	if(thisVoxel.material == 1)
+	vec3 viewDir = rayPos - camPos;
+	if(thisVoxel.material == 1 && dot(viewDir, thisVoxel.normal) < 0.0)
 	{
-		float specSamples = 0.0;
-		for(int i = 0; i < 6; i++)
-			specular_ray(chunkPos, localPos, cubeFaces[i], rayPos, specLight, specSamples);
+		vec3 reflected = reflect(normalize(viewDir), thisVoxel.normal);
 
-		specLight /= specSamples;
+		for(int i = 0; i < 20; i++)
+		{
+			vec3 specDir = normalize(reflected * 10 + spherePoints[i]);
+			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, specLight);
+		}
+
+		specLight /= 20.0;
 		specLight *= 0.5;
 	}
 

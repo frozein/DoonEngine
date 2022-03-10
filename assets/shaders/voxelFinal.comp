@@ -25,8 +25,6 @@ void main()
 {
 	Voxel finalVoxel; //the final voxel that is hit
 	vec3 finalColor; //the final color that gets written to the texture
-	ivec3 finalNormal; //the final normal that is hit
-	uint finalNumSteps;
 
 	//calculate ray position and direction:
 	vec2 screenPos;
@@ -49,32 +47,13 @@ void main()
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
 
-		finalNormal = ivec3(normal_AABB(rayPos, vec3(0.0), MAP_SIZE));
-
-		if(step_map(rayDir, invRayDir, rayPos, finalVoxel, finalNormal, finalNumSteps))
+		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel))
 		{
 			switch(viewMode)
 			{
 			case 0: //total lighting
 			{	
-				if(finalVoxel.material == -1) //add reflections (for perfect reflectors only) //TODO: replace with check if voxel is a perfect mirror
-				{
-					vec3 specColor;
-					vec3 newDir = normalize(reflect(rayDir, finalNormal));
-
-					Voxel reflectedVoxel;
-					ivec3 reflectedNormal;
-					uint reflectedNumSteps;
-					if(step_map(newDir, 1 / newDir, rayPos, reflectedVoxel, reflectedNormal, reflectedNumSteps))
-						specColor = reflectedVoxel.albedo;
-					else
-						specColor = sky_color(newDir);
-
-					finalColor = pow(finalVoxel.directLight + finalVoxel.indirectLight + 0.1 * specColor * (finalVoxel.directLight + finalVoxel.indirectLight), vec3(INV_GAMMA));
-				}
-				else
-					finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo, vec3(INV_GAMMA));
-
+				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 1: //albedo
@@ -84,12 +63,12 @@ void main()
 			}
 			case 2: //direct light
 			{
-				finalColor = pow(finalVoxel.directLight * finalVoxel.albedo, vec3(INV_GAMMA));
+				finalColor = pow(finalVoxel.directLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 3: //indirect light
 			{
-				finalColor = pow(finalVoxel.indirectLight * finalVoxel.albedo, vec3(INV_GAMMA));
+				finalColor = pow(finalVoxel.indirectLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 4: //depth
@@ -99,7 +78,7 @@ void main()
 			}
 			case 5: //normal
 			{
-				finalColor = vec3(abs(finalNormal));
+				finalColor = vec3(abs(finalVoxel.normal));
 				break;
 			}
 			}

@@ -18,6 +18,7 @@
 typedef struct Voxel
 {
 	vec3 albedo; //the color
+	vec3 normal; //the normal
 	GLuint material; //the material index
 } Voxel;
 
@@ -25,9 +26,10 @@ typedef struct Voxel
 typedef struct VoxelGPU
 {
 	GLuint albedo; //compressed
+	GLuint normal; //compressed
 	GLuint directLight; //compressed
 
-	vec2 fill; //needed to maintain alignment on the GPU
+	GLfloat fill; //needed to maintain alignment on the GPU
 } VoxelGPU;
 
 //a chunk of voxels, as stored on the GPU

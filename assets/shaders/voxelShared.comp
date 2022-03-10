@@ -15,6 +15,7 @@
 struct Voxel //a single voxel
 {
 	vec3 albedo;
+	vec3 normal;
 	uint material;
 
 	vec3 indirectLight;
@@ -26,6 +27,7 @@ struct Voxel //a single voxel
 struct CompressedVoxel //a compressed voxel
 {
 	uint albedo; //TODO: find something to do with the extra 2 floats of space thats lost to alignment
+	uint normal;
 	uint directLight;
 };
 
@@ -92,25 +94,6 @@ vec4 get_indirect_light(uint chunk, ivec3 pos)
 	return chunks[chunk].indirectLight[pos.x][pos.y][pos.z];
 }
 
-//--------------------------------------------------------------------------------------------------------------------------------//
-
-Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
-{
-	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
-	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
-
-	Voxel res;
-	res.albedo = albedo.xyz * 0.00392156862;
-	res.material = albedo.w;
-	res.indirectLight = indirectLight.xyz;
-	res.indirectSamples = indirectLight.w;
-	res.directLight = directLight.xyz * 0.00392156862;
-
-	return res;
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-
 bool is_voxel_open(uint chunk, ivec3 localPos)
 {
 	CompressedVoxel voxel = get_voxel(chunk, localPos);
@@ -118,25 +101,23 @@ bool is_voxel_open(uint chunk, ivec3 localPos)
 	return material < 255;
 }
 
-bool is_face_open(ivec3 chunkPos, ivec3 localPos, ivec3 face)
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
 {
-	uint chunkIndex = get_map_tile(chunkPos);
-	if(in_chunk_bounds(localPos + face))
-	{
-		if(is_voxel_open(chunkIndex, localPos + face))
-			return false;
-	}
-	else if(in_map_bounds(chunkPos + face))
-	{
-		int newIndex = get_map_tile(chunkPos + face);
-		if(newIndex < 0)
-			return true;
+	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
+	uvec4 normal 		= decode_uint_RGBA(compressed.normal);
+	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
 
-		ivec3 newPos = ivec3(mod(localPos + face + CHUNK_SIZE, CHUNK_SIZE));
-		return !is_voxel_open(newIndex, newPos);
-	}
+	Voxel res;
+	res.albedo = albedo.xyz * 0.00392156862;
+	res.normal = (normal.xyz * 0.00392156862 - 0.5) * 2.0;
+	res.material = albedo.w;
+	res.indirectLight = indirectLight.xyz;
+	res.indirectSamples = indirectLight.w;
+	res.directLight = directLight.xyz * 0.00392156862;
 
-	return true;
+	return res;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -155,19 +136,9 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
     return vec2(tNear, tFar);
 }
 
-vec3 normal_AABB(vec3 intersectPos, vec3 boxMin, vec3 boxMax) //returns the normal of an AABB at a point
-{
-	vec3 c = (boxMin + boxMax) * 0.5;
-	vec3 p = intersectPos - c;
-	vec3 d = (boxMax - boxMin) * 0.5;
-	const float bias = 1.0 + EPSILON;
-
-	return normalize(trunc(p / d * bias));
-}
-
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos, out ivec3 normal) //steps through one tile with the DDA algorithm
+void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos) //steps through one tile with the DDA algorithm
 {
 	//https://www.youtube.com/watch?v=NbSee-XM7WA <- see this video for a good overview of the algorithm
 
@@ -177,13 +148,11 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 		{
 			sideDist.x += deltaDist.x;
 			mapPos.x += rayStep.x;
-			normal = ivec3(-rayStep.x, 0, 0);
 		}
 		else 
 		{
 			sideDist.z += deltaDist.z;
 			mapPos.z += rayStep.z;
-			normal = ivec3(0, 0, -rayStep.z);
 		}
 	}
 	else
@@ -192,20 +161,18 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 		{
 			sideDist.y += deltaDist.y;
 			mapPos.y += rayStep.y;
-			normal = ivec3(0, -rayStep.y, 0);
 		}
 		else 
 		{
 			sideDist.z += deltaDist.z;
 			mapPos.z += rayStep.z;
-			normal = ivec3(0, 0, -rayStep.z);
 		}
 	}
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out Voxel voxel, inout ivec3 normal, inout uint numSteps, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
 {
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -215,7 +182,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out Voxel 
 	while(in_chunk_bounds(mapPos))
 	{
 		//check if a solid voxel has been hit:
-		if (is_voxel_open(chunk, mapPos))
+		if (is_voxel_open(chunk, mapPos) && !ignoreFirst)
 		{
 			voxel = decompress_voxel(get_voxel(chunk, mapPos), get_indirect_light(chunk, mapPos));
 			chunkPos = mapPos;
@@ -224,23 +191,22 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, out Voxel 
 		}
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
-		numSteps++;
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+		ignoreFirst = false;
 	}
 
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out Voxel voxel, inout ivec3 normal, out uint numSteps) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
-	numSteps = 0;
 
 	if(!in_map_bounds(mapPos)) //iterate once if not in bounds to stop from exiting if the ray is *just* outside
-		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
 
 	while(in_map_bounds(mapPos))
 	{
@@ -253,18 +219,18 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, out Voxel voxel, i
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
 			ivec3 chunkPos;
-			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, voxel, normal, numSteps, chunkPos))
+			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos is outside voxel
+				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside voxel
 
 				return true;
 			}
 		}
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, mapPos, normal);
-		numSteps++;
+		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+		ignoreFirst = false;
 	}
 
 	return false;

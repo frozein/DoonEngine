@@ -188,11 +188,12 @@ int main()
 				{
 					Voxel vox;
 
-					float distance = vec2_distance((vec2){4, 4}, (vec2){x, z});
+					float distance = vec3_distance((vec3){4, 4, 4}, (vec3){x, y, z});
 					vox.material = (distance < 4.0f) ? 0 : 255;
 					vox.albedo.x = pow(x / 8.0f, GAMMA);
 					vox.albedo.y = pow(y / 8.0f, GAMMA);
 					vox.albedo.z = pow(z / 8.0f, GAMMA);
+					vox.normal = vec3_normalize((vec3){x - 4, y - 4, z - 4});
 
 					voxelChunks[i].voxels[x][y][z] = voxel_to_voxelGPU(vox);
 				}
@@ -202,8 +203,9 @@ int main()
 				{
 					Voxel vox;
 
-					vox.material = 1;
+					vox.material = y >= 6 ? 1 : 255;
 					vox.albedo = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
+					vox.normal = y == 7 ? (vec3){0.0, 1.0, 0.0} : (vec3){0.0, -1.0, 0.0};
 
 					voxelChunks[i].voxels[x][y][z] = voxel_to_voxelGPU(vox);
 				}

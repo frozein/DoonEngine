@@ -320,9 +320,11 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 {
 	VoxelGPU res;
 	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
+	uvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
 	uvec4 directLight = {0, 0, 0, 0};
 
 	res.albedo = encode_uint_RGBA(albedo);
+	res.normal = encode_uint_RGBA(normal);
 	res.directLight = encode_uint_RGBA(directLight);
 
 	return res;
@@ -332,9 +334,12 @@ Voxel voxelGPU_to_voxel(VoxelGPU voxel)
 {
 	Voxel res;
 	uvec4 albedo = decode_uint_RGBA(voxel.albedo);
+	uvec4 normal = decode_uint_RGBA(voxel.normal);
 	uvec4 directLight = decode_uint_RGBA(voxel.directLight);
 
 	res.albedo = vec3_scale((vec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
+	vec3 scaledNormal = vec3_scale((vec3){normal.x, normal.y, normal.z}, 0.00392156862);
+	res.normal = (vec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
 	res.material = albedo.w;
 
 	return res;
