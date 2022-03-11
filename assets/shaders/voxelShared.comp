@@ -22,6 +22,7 @@ struct Voxel //a single voxel
 	float indirectSamples;
 
 	vec3 directLight;
+	vec3 specLight;
 };
 
 struct CompressedVoxel //a compressed voxel
@@ -29,12 +30,20 @@ struct CompressedVoxel //a compressed voxel
 	uint albedo; //TODO: find something to do with the extra 2 floats of space thats lost to alignment
 	uint normal;
 	uint directLight;
+	uint specLight;
 };
 
 struct Chunk //a chunk of voxels
 {
 	CompressedVoxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
 	vec4 indirectLight[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
+};
+
+struct Material
+{
+	float specular; //what percentage of rays are specular, the other percent are diffuse
+	float opacity; //the opacity of the voxel
+	float refraction; //the ratio of angles of refraction indices
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -47,6 +56,11 @@ layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains
 layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
 {
 	Chunk chunks[MAX_CHUNKS];
+};
+
+layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer that contains all of the materials
+{
+	Material materials[256];
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -108,6 +122,7 @@ Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
 	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
 	uvec4 normal 		= decode_uint_RGBA(compressed.normal);
 	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
+	uvec4 specLight 	= decode_uint_RGBA(compressed.specLight);
 
 	Voxel res;
 	res.albedo = albedo.xyz * 0.00392156862;
@@ -116,6 +131,7 @@ Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
 	res.indirectLight = indirectLight.xyz;
 	res.indirectSamples = indirectLight.w;
 	res.directLight = directLight.xyz * 0.00392156862;
+	res.specLight = specLight.xyz * 0.00392156862;
 
 	return res;
 }
@@ -222,7 +238,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside voxel
+				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos is outside voxel
 
 				return true;
 			}

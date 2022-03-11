@@ -3,7 +3,7 @@
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
 
-layout(std140, binding = 2) restrict readonly buffer lightingRequestBuffer
+layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer
 {
 	ivec3 chunkPositions[];
 };
@@ -55,13 +55,12 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, inout
 {
 	Voxel hitVoxel; //stores the voxel that the ray hits
 	vec3 hitNormal = normal; //stores the normal of the hit voxel
-	vec3 updatedRayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * hitNormal; //move ray position to the edge of the face
 
 	vec3 newColor = vec3(1.0);
 	for(int i = 0; i < bounceLimit; i++)
 	{
 		vec3 dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
-		bool hit = step_map(dir, 1 / dir, updatedRayPos, true, hitVoxel);  //step through map
+		bool hit = step_map(dir, 1 / dir, rayPos, (i == 0), hitVoxel);  //step through map
 		hitNormal = hitVoxel.normal;
 
 		if(hit)
@@ -92,6 +91,7 @@ void main()
 	
 	//find position of ray (center of the voxel):
 	vec3 rayPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
+	rayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * thisVoxel.normal;
 
 	//send diffuse rays:
 	//---------------------------------

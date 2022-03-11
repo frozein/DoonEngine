@@ -14,6 +14,7 @@ unsigned int finalShader = 0;
 //buffer handles:
 unsigned int mapBuffer = 0;
 unsigned int chunkBuffer = 0;
+unsigned int materialBuffer = 0;
 unsigned int lightingRequestBuffer = 0;
 
 Texture finalTex = {0, GL_TEXTURE_2D};
@@ -31,6 +32,7 @@ unsigned int maxLightingRequests = 0;
 //cpu-side memory:
 int* voxelMap = 0;
 VoxelChunk* voxelChunks = 0;
+VoxelMaterial* voxelMaterials = 0;
 ivec4* voxelLightingRequests = 0;
 
 //lighting parameters:
@@ -81,6 +83,16 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		return false;
 	}
 
+	voxelMaterials = malloc(sizeof(VoxelMaterial) * MAX_MATERIALS);
+	if(!voxelMaterials)
+	{
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MATERIALS\n");
+		texture_free(finalTex);
+		free(voxelMap);
+		free(voxelChunks);
+		return false;
+	}
+
 	voxelLightingRequests = malloc(sizeof(ivec4) * maxLightingRequests);
 	if(!voxelLightingRequests)
 	{
@@ -88,6 +100,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
+		free(voxelMaterials);
 		return false;
 	}
 
@@ -99,6 +112,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
+		free(voxelMaterials);
 		free(voxelLightingRequests);
 		return false;
 	}
@@ -109,6 +123,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
+		free(voxelMaterials);
 		free(voxelLightingRequests);
 		glDeleteBuffers(1, &mapBuffer);
 		return false;
@@ -116,15 +131,30 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
 
-	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 2))
+	if(!gen_shader_storage_buffer(&materialBuffer, sizeof(VoxelMaterial) * MAX_MATERIALS, 2))
+	{
+		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
+		texture_free(finalTex);
+		free(voxelMap);
+		free(voxelChunks);
+		free(voxelMaterials);
+		free(voxelLightingRequests);
+		glDeleteBuffers(1, &mapBuffer);
+		glDeleteBuffers(1, &chunkBuffer);
+		return false;
+	}
+
+	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 3))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
+		free(voxelMaterials);
 		free(voxelLightingRequests);
 		glDeleteBuffers(1, &mapBuffer);
 		glDeleteBuffers(1, &chunkBuffer);
+		glDeleteBuffers(1, &materialBuffer);
 		return false;
 	}
 
@@ -140,9 +170,11 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		texture_free(finalTex);
 		free(voxelMap);
 		free(voxelChunks);
+		free(voxelMaterials);
 		free(voxelLightingRequests);
 		glDeleteBuffers(1, &mapBuffer);
 		glDeleteBuffers(1, &chunkBuffer);
+		glDeleteBuffers(1, &materialBuffer);
 		glDeleteBuffers(1, &lightingRequestBuffer);
 		shader_program_free(direct   >= 0 ? direct : 0);
 		shader_program_free(indirect >= 0 ? indirect : 0);
@@ -168,10 +200,12 @@ void deinit_voxel_pipeline()
 
 	glDeleteBuffers(1, &mapBuffer);
 	glDeleteBuffers(1, &chunkBuffer);
+	glDeleteBuffers(1, &materialBuffer);
 	glDeleteBuffers(1, &lightingRequestBuffer);
 
 	free(voxelMap);
 	free(voxelChunks);
+	free(voxelMaterials);
 	free(voxelLightingRequests);
 
 	texture_free(finalTex);
@@ -237,6 +271,9 @@ void send_all_data_temp()
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, tempMap);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelMaterial) * MAX_MATERIALS, voxelMaterials);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * maxLightingRequests, voxelLightingRequests);
@@ -321,11 +358,12 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 	VoxelGPU res;
 	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
 	uvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
-	uvec4 directLight = {0, 0, 0, 0};
+	uvec4 nullVec = {0, 0, 0, 0};
 
 	res.albedo = encode_uint_RGBA(albedo);
 	res.normal = encode_uint_RGBA(normal);
-	res.directLight = encode_uint_RGBA(directLight);
+	res.directLight = encode_uint_RGBA(nullVec);
+	res.specLight = encode_uint_RGBA(nullVec);
 
 	return res;
 }
@@ -335,7 +373,6 @@ Voxel voxelGPU_to_voxel(VoxelGPU voxel)
 	Voxel res;
 	uvec4 albedo = decode_uint_RGBA(voxel.albedo);
 	uvec4 normal = decode_uint_RGBA(voxel.normal);
-	uvec4 directLight = decode_uint_RGBA(voxel.directLight);
 
 	res.albedo = vec3_scale((vec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
 	vec3 scaledNormal = vec3_scale((vec3){normal.x, normal.y, normal.z}, 0.00392156862);

@@ -227,6 +227,12 @@ int main()
 
 	//--------------//
 
+	VoxelMaterial testMat;
+	testMat.opacity = 0.0f;
+	voxelMaterials[0] = testMat;
+
+	//--------------//
+
 	voxelLightingRequests[0]  = (ivec4){0, 0, 0};
 	voxelLightingRequests[1]  = (ivec4){0, 0, 1};
 	voxelLightingRequests[2]  = (ivec4){0, 0, 2};

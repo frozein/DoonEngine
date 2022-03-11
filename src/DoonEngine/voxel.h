@@ -12,6 +12,9 @@
 #define CHUNK_SIZE_Y 8
 #define CHUNK_SIZE_Z 8
 
+//the maximum material index that can be used:
+#define MAX_MATERIALS 256
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //a single voxel
@@ -28,8 +31,7 @@ typedef struct VoxelGPU
 	GLuint albedo; //compressed
 	GLuint normal; //compressed
 	GLuint directLight; //compressed
-
-	GLfloat fill; //needed to maintain alignment on the GPU
+	GLuint specLight; //compressed
 } VoxelGPU;
 
 //a chunk of voxels, as stored on the GPU
@@ -38,11 +40,21 @@ typedef struct VoxelChunk
 	VoxelGPU voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
 } VoxelChunk;
 
+typedef struct VoxelMaterial
+{
+	GLfloat specular;
+	GLfloat opacity;
+	GLfloat refraction;
+
+	GLfloat fill;
+} VoxelMaterial;
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //NOTE: this memory may differ from that on the GPU, what gets sent to the GPU is determined automatically
 
 extern int* voxelMap; //The x component maps each map position to a chunk in voxelChunks
 extern VoxelChunk* voxelChunks; //Every currently loaded chunk
+extern VoxelMaterial* voxelMaterials; //Every currently active material
 extern ivec4* voxelLightingRequests; //Every chunk requested to have its lighting updated
 
 extern vec3 sunDir;

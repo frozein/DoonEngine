@@ -53,7 +53,7 @@ void main()
 			{
 			case 0: //total lighting
 			{	
-				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo, vec3(INV_GAMMA));
+				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo + finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 1: //albedo
@@ -71,9 +71,9 @@ void main()
 				finalColor = pow(finalVoxel.indirectLight, vec3(INV_GAMMA));
 				break;
 			}
-			case 4: //depth
+			case 4: //specular light
 			{
-				finalColor = vec3(length(camPos - rayPos) / 32.0);
+				finalColor = pow(finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 5: //normal

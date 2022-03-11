@@ -3,7 +3,7 @@
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
 
-layout(std140, binding = 2) restrict readonly buffer lightingRequestBuffer
+layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer
 {
 	ivec3 chunkPositions[];
 };
@@ -26,13 +26,15 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 s
 	return step_map(sunDir, 1 / sunDir, rayPos, true, hitVoxel); //return whether or not the map was hit
 }
 
-void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, inout vec3 color)
+void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, inout vec3 color)
 {
 	Voxel hitVoxel;
 	vec3 tempPos = rayPos;
 
 	if(step_map(rayDir, 1 / rayDir, tempPos, true, hitVoxel) && dot(abs(tempPos - rayPos), abs(tempPos - rayPos)) > dot(INV_CHUNK_SIZE - EPSILON, INV_CHUNK_SIZE - EPSILON))
-		color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo;
+		color += (hitVoxel.directLight + hitVoxel.indirectLight) * hitVoxel.albedo * albedo;
+	else if(dot(rayDir, sunDir) > 0.99)
+		color += sunStrength;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -77,7 +79,7 @@ void main()
 		for(int i = 0; i < 20; i++)
 		{
 			vec3 specDir = normalize(reflected * 10 + spherePoints[i]);
-			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, specLight);
+			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, thisVoxel.albedo, specLight);
 		}
 
 		specLight /= 20.0;
@@ -86,8 +88,8 @@ void main()
 
 	//update the final color
 	//---------------------------------
-	vec3 finalColor = directLight + specLight;
-	atomicExchange(chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight, encode_uint_RGBA(uvec4(round(finalColor * 255), 0)));
+	atomicExchange(chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].directLight, encode_uint_RGBA(uvec4(round(directLight * 255), 0)));
+	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].specLight = encode_uint_RGBA(uvec4(round(specLight * 255), 0));
 
 	return;
 }
