@@ -27,6 +27,8 @@ void main()
 {
 	Voxel finalVoxel; //the final voxel that is hit
 	Material finalMaterial;
+	vec3 finalColorAdd;
+	float finalColorMult;
 	vec3 finalColor; //the final color that gets written to the texture
 
 	//calculate ray position and direction:
@@ -50,7 +52,7 @@ void main()
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
 
-		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel))
+		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, finalColorAdd, finalColorMult))
 		{
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight *= finalMaterial.specular;
@@ -60,7 +62,8 @@ void main()
 			{
 			case 0: //total lighting
 			{	
-				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight, vec3(INV_GAMMA));
+				vec3 solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight;
+				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
 				break;
 			}
 			case 1: //albedo
@@ -93,6 +96,9 @@ void main()
 		else
 		{
 			finalColor = sky_color(rayDir);
+
+			if(viewMode == 0)
+				finalColor = finalColor * finalColorMult + finalColorAdd;
 		}
 	}
 

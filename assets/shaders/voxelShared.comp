@@ -190,7 +190,7 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
 {
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
@@ -203,9 +203,18 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 		if (is_voxel_open(chunk, mapPos) && !ignoreFirst)
 		{
 			voxel = decompress_voxel(get_voxel(chunk, mapPos), get_indirect_light(chunk, mapPos));
-			chunkPos = mapPos;
+			Material material = materials[voxel.material];
 
-			return true;
+			if(material.opacity < 1.0)
+			{
+				colorAdd += colorMult * material.opacity * voxel.albedo;
+				colorMult *= 1 - material.opacity;
+			}
+			else
+			{
+				chunkPos = mapPos;
+				return true;
+			}
 		}
 
 		//iterate the dda algorithm:
@@ -216,8 +225,11 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
+	colorAdd = vec3(0.0);
+	colorMult = 1.0;
+
 	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
 	vec3 deltaDist = abs(invRayDir);   //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
@@ -237,7 +249,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
 			ivec3 chunkPos;
-			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos))
+			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos, colorAdd, colorMult))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos is outside voxel

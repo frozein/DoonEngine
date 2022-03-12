@@ -63,11 +63,13 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 	{
 		vec3 dir;
 		if(i > 0 && (rand(time + bounceLimit + i) + 1) * 0.5 < materials[hitVoxel.material].specular)
-			dir = reflect(lastDir, hitNormal); //TODO: check if this actually works i cant tell with my current example scene
+			dir = normalize(reflect(lastDir, hitNormal) * 10 + rand_unit_sphere(time + i)); //TODO: check if this actually works i cant tell with my current example scene
 		else
 			dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
 		
-		bool hit = step_map(dir, 1 / dir, rayPos, (i == 0), hitVoxel);  //step through map
+		vec3 colorAdd;
+		float colorMult;
+		bool hit = step_map(dir, 1 / dir, rayPos, (i == 0), hitVoxel, colorAdd, colorMult);  //step through map
 		hitNormal = hitVoxel.normal;
 
 		if(hit)
@@ -80,7 +82,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 		}
 		else
 		{
-			color += newColor * max(dot(dir, sunDir), 0.0) * sunStrength;
+			color += (newColor * max(dot(dir, sunDir), 0.0) * sunStrength * colorMult + colorAdd) * colorMult;
 			return;
 		}
 
