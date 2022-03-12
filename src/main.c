@@ -227,9 +227,8 @@ int main()
 
 	//--------------//
 
-	VoxelMaterial testMat;
-	testMat.opacity = 0.0f;
-	voxelMaterials[0] = testMat;
+	voxelMaterials[0].specular = 0.0f;
+	voxelMaterials[1].specular = 0.7f;
 
 	//--------------//
 

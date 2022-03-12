@@ -38,7 +38,7 @@ ivec4* voxelLightingRequests = 0;
 //lighting parameters:
 vec3 sunDir = {-1.0f, 1.0f, -1.0f};
 float sunStrength = 0.6f;
-float ambientStrength = 0.1f;
+float ambientStrength = 0.01f;
 unsigned int bounceLimit = 5;
 float bounceStrength = 1.0f;
 float shadowSoftness = 10.0f;
@@ -217,7 +217,6 @@ void update_voxel_indirect_lighting(unsigned int numChunks, float time)
 
 	shader_uniform_vec3(indirectLightingShader, "sunDir", vec3_normalize(sunDir));
 	shader_uniform_float(indirectLightingShader, "sunStrength", sunStrength);
-	shader_uniform_float(indirectLightingShader, "ambientStrength", ambientStrength);
 
 	shader_uniform_int(indirectLightingShader, "bounceLimit", bounceLimit);
 	shader_uniform_float(indirectLightingShader, "bounceStrength", bounceStrength);
@@ -231,10 +230,11 @@ void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos)
 {
 	shader_program_activate(directLightingShader);
 
-	shader_uniform_vec3(directLightingShader, "sunDir", vec3_normalize(sunDir));
+	shader_uniform_vec3 (directLightingShader, "sunDir", vec3_normalize(sunDir));
 	shader_uniform_float(directLightingShader, "sunStrength", sunStrength);
 	shader_uniform_float(directLightingShader, "shadowSoftness", shadowSoftness);
-	shader_uniform_vec3(directLightingShader, "camPos", camPos);
+	shader_uniform_float(directLightingShader, "ambientStrength", ambientStrength);
+	shader_uniform_vec3 (directLightingShader, "camPos", camPos);
 
 	glDispatchCompute(maxLightingRequests, 1, 1);
 }
@@ -243,11 +243,12 @@ void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
 {
 	shader_program_activate(finalShader);
 
-	shader_uniform_vec3(finalShader, "camPos", camPos);
-	shader_uniform_vec3(finalShader, "camDir", camFront);
-	shader_uniform_vec3(finalShader, "camPlaneU", camPlaneU);
-	shader_uniform_vec3(finalShader, "camPlaneV", camPlaneV);
-	shader_uniform_uint(finalShader, "viewMode", viewMode);
+	shader_uniform_vec3 (finalShader, "camPos", camPos);
+	shader_uniform_vec3 (finalShader, "camDir", camFront);
+	shader_uniform_vec3 (finalShader, "camPlaneU", camPlaneU);
+	shader_uniform_vec3 (finalShader, "camPlaneV", camPlaneV);
+	shader_uniform_uint (finalShader, "viewMode", viewMode);
+	shader_uniform_float(finalShader, "ambientStrength", ambientStrength);
 
 	glDispatchCompute(textureSize.x / 16, textureSize.y / 16, 1);
 }

@@ -18,7 +18,6 @@ uniform float bounceStrength;
 //global sun params:
 uniform vec3 sunDir; //must be normalized
 uniform float sunStrength;
-uniform float ambientStrength;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -51,31 +50,45 @@ vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 a
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, inout vec3 color) //increments color and numSamples depending on the voxel hit
+void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel initialVoxel, inout vec3 color) //increments color and numSamples depending on the voxel hit
 {
-	Voxel hitVoxel; //stores the voxel that the ray hits
+	Voxel hitVoxel = initialVoxel; //stores the voxel that the ray hits
 	vec3 hitNormal = normal; //stores the normal of the hit voxel
 
 	vec3 newColor = vec3(1.0);
+
+	vec3 lastPos = rayPos;
+	vec3 lastDir;
 	for(int i = 0; i < bounceLimit; i++)
 	{
-		vec3 dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
+		vec3 dir;
+		if(i > 0 && (rand(time + bounceLimit + i) + 1) * 0.5 < materials[hitVoxel.material].specular)
+			dir = reflect(lastDir, hitNormal); //TODO: check if this actually works i cant tell with my current example scene
+		else
+			dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling
+		
 		bool hit = step_map(dir, 1 / dir, rayPos, (i == 0), hitVoxel);  //step through map
 		hitNormal = hitVoxel.normal;
 
 		if(hit)
+		{
+			vec3 dist = abs(floor(lastPos * CHUNK_SIZE) - floor(rayPos * CHUNK_SIZE)); //return if you hit an adjacent voxel (occluded)
+			if(dot(dist, dist) < 1)
+				return;
+
 			newColor *= hitVoxel.albedo * bounceStrength;
+		}
 		else
 		{
-			color += newColor * max(dot(dir, sunDir), ambientStrength) * sunStrength;
+			color += newColor * max(dot(dir, sunDir), 0.0) * sunStrength;
 			return;
 		}
+
+		lastDir = dir;
 	}
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-
-const ivec3 cubeFaces[6] = {ivec3(1, 0, 0), ivec3(-1, 0, 0), ivec3(0, 1, 0), ivec3(0, -1, 0), ivec3(0, 0, 1), ivec3(0, 0, -1)};
 
 void main()
 {
@@ -96,7 +109,7 @@ void main()
 	//send diffuse rays:
 	//---------------------------------
 	vec3 indirectLight = vec3(0.0);
-	diffuse_ray(chunkPos, localPos, thisVoxel.normal, rayPos, indirectLight);
+	diffuse_ray(chunkPos, localPos, thisVoxel.normal, rayPos, thisVoxel, indirectLight);
 
 	//update final lighting and increase number of samples
 	//---------------------------------

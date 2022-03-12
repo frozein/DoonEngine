@@ -41,6 +41,8 @@ struct Chunk //a chunk of voxels
 
 struct Material
 {
+	//TODO: PARAMETERS FOR SPECULAR SHININESS AND ROUGHNESS
+
 	float specular; //what percentage of rays are specular, the other percent are diffuse
 	float opacity; //the opacity of the voxel
 	float refraction; //the ratio of angles of refraction indices

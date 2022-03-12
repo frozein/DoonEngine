@@ -12,6 +12,8 @@ uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
 
 uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
 
+uniform float ambientStrength; //the minimum light that every voxel receives
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 vec3 sky_color(vec3 rayDir)
@@ -24,6 +26,7 @@ vec3 sky_color(vec3 rayDir)
 void main()
 {
 	Voxel finalVoxel; //the final voxel that is hit
+	Material finalMaterial;
 	vec3 finalColor; //the final color that gets written to the texture
 
 	//calculate ray position and direction:
@@ -49,11 +52,15 @@ void main()
 
 		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel))
 		{
+			finalMaterial = materials[finalVoxel.material];
+			finalVoxel.specLight *= finalMaterial.specular;
+			finalVoxel.indirectLight *= 1.0 - finalMaterial.specular;
+
 			switch(viewMode)
 			{
 			case 0: //total lighting
 			{	
-				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight) * finalVoxel.albedo + finalVoxel.specLight, vec3(INV_GAMMA));
+				finalColor = pow((finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 1: //albedo
