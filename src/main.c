@@ -227,9 +227,11 @@ int main()
 
 	//--------------//
 
-	voxelMaterials[0].specular = 0.2f;
-	voxelMaterials[0].opacity = 0.8f;
-	voxelMaterials[1].specular = 0.7f;
+	voxelMaterials[0].emissive = true;
+	voxelMaterials[0].specular = 0.0f;
+	voxelMaterials[0].opacity = 1.0f;
+	voxelMaterials[1].emissive = false;
+	voxelMaterials[1].specular = 0.0f;
 	voxelMaterials[1].opacity = 1.0f;
 
 	//--------------//
@@ -252,7 +254,9 @@ int main()
 
 	//calculate indirect lighting:
 	//---------------------------------
-	for(int i = 0; i < 300; i++)
+	sunStrength = 0.0f;
+	bounceStrength = 1.0f;
+	for(int i = 0; i < 3000; i++)
 	{
 		update_voxel_indirect_lighting(11, glfwGetTime());
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);

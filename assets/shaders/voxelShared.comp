@@ -42,7 +42,7 @@ struct Chunk //a chunk of voxels
 struct Material
 {
 	//TODO: PARAMETERS FOR SPECULAR SHININESS AND ROUGHNESS
-
+	uint emissive;
 	float specular; //what percentage of rays are specular, the other percent are diffuse
 	float opacity; //the opacity of the voxel
 	float refraction; //the ratio of angles of refraction indices
@@ -215,7 +215,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 					colorAdd += colorMult * material.opacity * voxel.albedo;
 					colorMult *= 1 - material.opacity;
 					if(addSpec)
-						colorAdd += voxel.specLight;
+						colorAdd += voxel.specLight * material.specular;
 				}
 			}
 			else

@@ -42,11 +42,10 @@ typedef struct VoxelChunk
 
 typedef struct VoxelMaterial
 {
+	GLuint emissive;
 	GLfloat specular;
 	GLfloat opacity;
 	GLfloat refraction;
-
-	GLfloat fill;
 } VoxelMaterial;
 
 //--------------------------------------------------------------------------------------------------------------------------------//

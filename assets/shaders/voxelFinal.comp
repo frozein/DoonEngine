@@ -18,7 +18,8 @@ uniform float ambientStrength; //the minimum light that every voxel receives
 
 vec3 sky_color(vec3 rayDir)
 {
-	return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1);
+	return mix(vec3(0.09, 0.25, 0.45), vec3(0.00, 0.04, 0.18), rayDir.y * 0.5 + 1); //night
+	//return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1); //day
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -62,7 +63,12 @@ void main()
 			{
 			case 0: //total lighting
 			{	
-				vec3 solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight;
+				vec3 solidColor;
+				if(finalMaterial.emissive)
+					solidColor = finalVoxel.albedo;
+				else
+					solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight;
+
 				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
 				break;
 			}
@@ -73,17 +79,17 @@ void main()
 			}
 			case 2: //direct light
 			{
-				finalColor = pow(finalVoxel.directLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.directLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 3: //indirect light
 			{
-				finalColor = pow(finalVoxel.indirectLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.indirectLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 4: //specular light
 			{
-				finalColor = pow(finalVoxel.specLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 5: //normal
