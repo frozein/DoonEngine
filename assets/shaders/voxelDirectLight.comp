@@ -24,7 +24,7 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 s
 {
 	Voxel hitVoxel;
 
-	return step_map(sunDir, 1 / sunDir, rayPos, true, hitVoxel, colorAdd, colorMult); //return whether or not the map was hit
+	return step_map(sunDir, 1 / sunDir, rayPos, true, false, hitVoxel, colorAdd, colorMult); //return whether or not the map was hit
 }
 
 void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, inout vec3 color)
@@ -34,7 +34,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 
 	vec3 colorAdd;
 	float colorMult;
-	if(step_map(rayDir, 1 / rayDir, tempPos, true, hitVoxel, colorAdd, colorMult))
+	if(step_map(rayDir, 1 / rayDir, tempPos, true, false, hitVoxel, colorAdd, colorMult))
 	{
 		vec3 dist = abs(floor(tempPos * CHUNK_SIZE) - floor(rayPos * CHUNK_SIZE));
 		if(dot(dist, dist) > 1)

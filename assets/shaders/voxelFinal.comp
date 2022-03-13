@@ -52,7 +52,7 @@ void main()
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
 
-		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, finalColorAdd, finalColorMult))
+		if(step_map(rayDir, invRayDir, rayPos, false, true, finalVoxel, finalColorAdd, finalColorMult))
 		{
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight *= finalMaterial.specular;

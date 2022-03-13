@@ -227,8 +227,8 @@ int main()
 
 	//--------------//
 
-	voxelMaterials[0].specular = 0.0f;
-	voxelMaterials[0].opacity = 0.2f;
+	voxelMaterials[0].specular = 0.2f;
+	voxelMaterials[0].opacity = 0.8f;
 	voxelMaterials[1].specular = 0.7f;
 	voxelMaterials[1].opacity = 1.0f;
 
