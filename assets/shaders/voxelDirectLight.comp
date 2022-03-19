@@ -27,21 +27,22 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 s
 	return step_map(sunDir, 1 / sunDir, rayPos, true, false, hitVoxel, colorAdd, colorMult); //return whether or not the map was hit
 }
 
-void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflections, inout vec3 color)
+void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflectSky, inout vec3 color)
 {
 	Voxel hitVoxel;
 	vec3 tempPos = rayPos;
 
 	vec3 colorAdd;
 	float colorMult;
-	if(step_map(rayDir, 1 / rayDir, tempPos, true, false, hitVoxel, colorAdd, colorMult))
+	if(step_map(rayDir, 1 / rayDir, tempPos, true, false, hitVoxel, colorAdd, colorMult)) //TODO: ALLOW FOR MULTIPLE BOUNCES OF SPECULAR LIGHT
 	{
 		vec3 dist = abs(floor(tempPos * CHUNK_SIZE) - floor(rayPos * CHUNK_SIZE));
-		if(reflections == 1 && dot(dist, dist) > 1)
+		if(dot(dist, dist) > 1)
 		{
 			Material hitMaterial = materials[hitVoxel.material];
 			hitVoxel.specLight *= hitMaterial.specular;
 			hitVoxel.indirectLight *= 1.0 - hitMaterial.specular;
+			hitVoxel.directLight *= 1.0 - hitMaterial.specular;
 
 			vec3 hitColor;
 			if(hitMaterial.emissive)
@@ -54,8 +55,10 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 	}
 	else if(dot(rayDir, sunDir) > 0.99)
 		color += sunStrength * colorMult + colorAdd;
+	else if(reflectSky == 1)
+		color += sky_color(rayDir) * colorMult + colorAdd;
 	else
-		color += (sunStrength * colorMult + colorAdd) * max(dot(rayDir, sunDir), 0.1) * albedo * 0.5;
+		color += (sunStrength * colorMult + colorAdd) * max(dot(rayDir, sunDir), 0.1) * albedo;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -102,8 +105,8 @@ void main()
 
 		for(int i = 0; i < 15; i++)
 		{
-			vec3 specDir = normalize(reflected * 10 + spherePoints[i]);
-			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, thisVoxel.albedo, thisMaterial.reflections, specLight);
+			vec3 specDir = normalize(reflected * thisMaterial.shininess + spherePoints[i]);
+			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, thisVoxel.albedo, thisMaterial.reflectSky, specLight);
 		}
 
 		specLight /= 15.0;

@@ -40,7 +40,6 @@ vec3 sunDir = {-1.0f, 1.0f, -1.0f};
 vec3 sunStrength = {0.6f, 0.6f, 0.6f};
 float ambientStrength = 0.01f;
 unsigned int bounceLimit = 5;
-float bounceStrength = 1.0f;
 float shadowSoftness = 10.0f;
 unsigned int viewMode = 0;
 
@@ -219,7 +218,6 @@ void update_voxel_indirect_lighting(unsigned int numChunks, float time)
 	shader_uniform_vec3(indirectLightingShader, "sunStrength", sunStrength);
 
 	shader_uniform_int(indirectLightingShader, "bounceLimit", bounceLimit);
-	shader_uniform_float(indirectLightingShader, "bounceStrength", bounceStrength);
 
 	shader_uniform_float(indirectLightingShader, "time", time);
 

@@ -64,6 +64,8 @@ float deltaTime = 0.0f;
 
 int main()
 {
+	int error;
+
 	//init GLFW:
 	//---------------------------------
 	glfwInit();
@@ -80,6 +82,7 @@ int main()
 	{
 		printf("Failed to create GLFW window\n");
 		glfwTerminate();
+		scanf("%d", &error);
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
@@ -89,6 +92,7 @@ int main()
 	if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		printf("Failed to initialize GLAD\n");
+		scanf("%d", &error);
 		return -1;
 	}
 
@@ -113,6 +117,7 @@ int main()
 	{
 		shader_program_free(quadShader);
 		glfwTerminate();
+		scanf("%d", &error);
 
 		return -1;
 	}
@@ -145,6 +150,7 @@ int main()
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
+		scanf("%d", &error);
 		return -1;
 	}
 
@@ -154,6 +160,7 @@ int main()
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
+		scanf("%d", &error);
 		return -1;
 	}
 
@@ -174,6 +181,7 @@ int main()
 	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){10, 3, 10}, 10 * 10 * 3, (uvec3){10, 3, 10}, 10 * 10 * 3, 10 * 10 * 3))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
+		scanf("%d", &error);
 		return -1;
 	}
 
@@ -205,13 +213,13 @@ int main()
 				{
 					vox.material = 1;
 					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
-					vox.normal = x == 79 ? (vec3){1.0, 0.0, 0.0} : (vec3){-1.0, 0.0, 0.0};
+					vox.normal = (vec3){-1.0, 0.0, 0.0};
 				}
 				else if(z >= 78 && y > 7)
 				{
 					vox.material = 1;
 					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
-					vox.normal = z == 79 ? (vec3){0.0, 0.0, 1.0} : (vec3){0.0, 0.0, -1.0};
+					vox.normal = (vec3){0.0, 0.0, -1.0};
 				}
 				else
 					vox.material = 255;
@@ -220,7 +228,7 @@ int main()
 			}
 
 	uvec3 spherePositions[8] = {(uvec3){10, 14, 12}, (uvec3){11, 14, 35}, (uvec3){32, 14, 17}, (uvec3){55, 14, 13}, (uvec3){53, 14, 34}, (uvec3){28, 14, 45}, (uvec3){20, 14, 65}, (uvec3){55, 14, 60}};
-	vec3 sphereColors[8] = {(vec3){0.0f, 0.0f, 0.0f}, (vec3){0.125f, 0.384f, 0.859f}, (vec3){0.224f, 0.831f, 0.718f}, (vec3){1.0f, 1.0f, 1.0f}, (vec3){0.569f, 0.224f, 0.831f}, (vec3){0.839f, 0.235f, 0.255f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.306f, 0.831f, 0.224f}};
+	vec3 sphereColors[8] = {(vec3){0.0f, 0.0f, 0.0f}, (vec3){0.1f, 0.1f, 1.0f}, (vec3){0.224f, 0.831f, 0.718f}, (vec3){1.0f, 1.0f, 1.0f}, (vec3){0.569f, 0.224f, 0.831f}, (vec3){0.839f, 0.235f, 0.255f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.306f, 0.831f, 0.224f}};
 	unsigned int sphereMaterials[8] = {0, 3, 2, 2, 4, 4, 2, 0};
 
 	for(int i = 0; i < 8; i++)
@@ -236,7 +244,16 @@ int main()
 
 					float distance = vec3_distance((vec3){pos.x, pos.y, pos.z}, (vec3){x, y, z});
 					vox.material = (distance < 7.0f) ? sphereMaterials[i] : 255;
-					vox.normal = vec3_normalize((vec3){x - (int)pos.x, y - (int)pos.y, z - (int)pos.z});
+					vox.normal = (vec3){x - (int)pos.x, y - (int)pos.y, z - (int)pos.z};
+
+					float maxNormal = abs(vox.normal.x);
+					if(abs(vox.normal.y) > maxNormal)
+						maxNormal = abs(vox.normal.y);
+					if(abs(vox.normal.z) > maxNormal)
+						maxNormal = abs(vox.normal.z);
+
+					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
+
 					if(sphereColors[i].x == 0.0f)
 					{
 						vox.albedo = (vec3){pow(x / (pos.x + 6.0f), GAMMA), pow(y / (pos.y + 6.0f), GAMMA), pow(z / (pos.z + 6.0f), GAMMA)};
@@ -255,27 +272,26 @@ int main()
 	voxelMaterials[0].emissive = false;
 	voxelMaterials[0].specular = 0.0f;
 	voxelMaterials[0].opacity = 1.0f;
-	voxelMaterials[0].reflections = false;
 
 	voxelMaterials[1].emissive = false;
 	voxelMaterials[1].specular = 1.0f;
 	voxelMaterials[1].opacity = 1.0f;
-	voxelMaterials[1].reflections = true;
+	voxelMaterials[1].reflectSky = true;
+	voxelMaterials[1].shininess = 100;
 
 	voxelMaterials[2].emissive = true;
 	voxelMaterials[2].specular = 0.0f;
 	voxelMaterials[2].opacity = 1.0f;
-	voxelMaterials[2].reflections = false;
 
 	voxelMaterials[3].emissive = false;
 	voxelMaterials[3].specular = 0.7f;
 	voxelMaterials[3].opacity = 1.0f;
-	voxelMaterials[3].reflections = false;
+	voxelMaterials[3].reflectSky = false;
+	voxelMaterials[3].shininess = 3;
 
 	voxelMaterials[4].emissive = false;
 	voxelMaterials[4].specular = 0.0f;
 	voxelMaterials[4].opacity = 0.5f;
-	voxelMaterials[4].reflections = false;
 
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
@@ -283,8 +299,7 @@ int main()
 
 	//calculate indirect lighting:
 	//---------------------------------
-	//sunStrength = (vec3){0.01f, 0.01f, 0.01f};
-	bounceStrength = 1.0f;
+	//sunStrength = (vec3){0.01f, 0.01f, 0.01f}; //for night:
 	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
 	for(int i = 0; i < 3000; i++)
 	{
@@ -319,8 +334,6 @@ int main()
 
 		//update cam direction:
 		mat3 rotate = mat4_to_mat3(mat4_rotate_euler(MAT4_IDENTITY, (vec3){pitch, yaw, 0.0f}));
-		//rotate = mat4_to_mat3(mat4_lookat(camPos, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.0f, 1.0f, 0.0f}));
-		//mat3_print(rotate);
 
 		camFront       = mat3_mult_vec3(rotate, (vec3){ 0.0f, 0.0f, fov });
 		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
@@ -350,6 +363,7 @@ int main()
 	shader_program_free(quadShader);
 	glfwTerminate();
 
+	scanf("%d", &error);
 	return 0;
 }
 

@@ -39,6 +39,11 @@ int shader_load(unsigned int type, const char* path, const char* includePath)
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
 	if(!success)
 	{
+		GLsizei logLength;
+		char message[1024];
+		glGetShaderInfoLog(shader, 1024, &logLength, message);
+		printf("\n\nINFO LOG - %s%s\n\n\n", message, path);
+
 		glDeleteShader(shader);
 		return -1;
 	}

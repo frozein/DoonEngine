@@ -41,11 +41,13 @@ struct Chunk //a chunk of voxels
 
 struct Material
 {
-	//TODO: PARAMETERS FOR SPECULAR SHININESS AND ROUGHNESS
-	uint emissive;
-	float specular; //what percentage of rays are specular, the other percent are diffuse
-	float opacity; //the opacity of the voxel
-	uint reflections;
+	uint emissive;   //whether or not the voxel emits light
+
+	float opacity;   //the opacity of the voxel
+
+	float specular;  //what percentage of rays are specular, the other percent are diffuse
+	uint reflectSky; //only applies to specular voxels. whether or not they will reflect the sky color
+	uint shininess;  //the greater the number, the closer the specular rays are to perfect reflection
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -154,6 +156,14 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
     float tFar  = min(min(t2.x, t2.y), t2.z);
 
     return vec2(tNear, tFar);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+vec3 sky_color(vec3 rayDir)
+{
+	//return mix(vec3(0.09, 0.25, 0.45), vec3(0.00, 0.04, 0.18), rayDir.y * 0.5 + 1); //night
+	return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1); //day
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -267,7 +277,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, addSpec, voxel, chunkPos, colorAdd, colorMult))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x - EPSILON); //subtract so that new pos is outside voxel
+				rayPos += rayDir * (intersection.x + EPSILON); //subtract so that new pos is outside voxel
 
 				return true;
 			}

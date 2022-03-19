@@ -13,7 +13,6 @@ uniform float time;
 
 //diffuse (indirect) params:
 uniform int bounceLimit;
-uniform float bounceStrength;
 
 //global sun params:
 uniform vec3 sunDir; //must be normalized
@@ -68,7 +67,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 		
 		vec3 colorAdd;
 		float colorMult;
-		bool hit = step_map(dir, 1 / dir, rayPos, (i == 0), false, hitVoxel, colorAdd, colorMult);  //step through map
+		bool hit = step_map(dir, 1 / dir, rayPos, true, false, hitVoxel, colorAdd, colorMult);  //step through map
 		hitNormal = hitVoxel.normal;
 
 		if(hit)
@@ -83,7 +82,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 				return;
 			}
 			else
-				newColor *= hitVoxel.albedo * bounceStrength;
+				newColor *= hitVoxel.albedo;
 		}
 		else
 		{

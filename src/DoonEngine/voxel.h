@@ -43,9 +43,14 @@ typedef struct VoxelChunk
 typedef struct VoxelMaterial
 {
 	GLuint emissive;
-	GLfloat specular;
+
 	GLfloat opacity;
-	GLuint reflections;
+
+	GLfloat specular;
+	GLuint reflectSky;
+	GLuint shininess;
+
+	vec3 fill; //needed for alignment
 } VoxelMaterial;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -60,7 +65,6 @@ extern vec3 sunDir;
 extern vec3 sunStrength;
 extern float ambientStrength;
 extern unsigned int bounceLimit;
-extern float bounceStrength;
 extern float shadowSoftness;
 extern unsigned int viewMode;
 

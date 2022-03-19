@@ -16,14 +16,6 @@ uniform float ambientStrength; //the minimum light that every voxel receives
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-vec3 sky_color(vec3 rayDir)
-{
-	//return mix(vec3(0.09, 0.25, 0.45), vec3(0.00, 0.04, 0.18), rayDir.y * 0.5 + 1); //night
-	return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1); //day
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-
 void main()
 {
 	Voxel finalVoxel; //the final voxel that is hit
@@ -58,6 +50,7 @@ void main()
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight *= finalMaterial.specular;
 			finalVoxel.indirectLight *= 1.0 - finalMaterial.specular;
+			finalVoxel.directLight *= 1.0 - finalMaterial.specular;
 
 			switch(viewMode)
 			{
