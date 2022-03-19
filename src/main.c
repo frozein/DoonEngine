@@ -41,8 +41,8 @@ MessageCallback( GLenum source,
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //screen dimensions:
-GLuint SCREEN_W = 1280 * 4;
-GLuint SCREEN_H = 720 * 4;
+GLuint SCREEN_W = 1920;
+GLuint SCREEN_H = 1080;
 GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
@@ -75,7 +75,7 @@ int main()
 	//create and init window:
 	//---------------------------------
 	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
-	GLFWwindow* window = glfwCreateWindow(SCREEN_W / 4, SCREEN_H / 4, "VoxelEngine", NULL, NULL);
+	GLFWwindow* window = glfwCreateWindow(SCREEN_W, SCREEN_H, "VoxelEngine", NULL, NULL);
 	if(window == NULL)
 	{
 		printf("Failed to create GLFW window\n");
@@ -94,7 +94,7 @@ int main()
 
 	//set gl viewport:
 	//---------------------------------
-	glViewport(0, 0, SCREEN_W / 4, SCREEN_H / 4);
+	glViewport(0, 0, SCREEN_W, SCREEN_H);
 
 	glEnable              ( GL_DEBUG_OUTPUT );
 	glDebugMessageCallback( MessageCallback, 0 );
@@ -171,7 +171,7 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){3, 3, 3}, 11, (uvec3){3, 3, 3}, 11, 11))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){10, 3, 10}, 10 * 10 * 3, (uvec3){10, 3, 10}, 10 * 10 * 3, 10 * 10 * 3))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		return -1;
@@ -179,74 +179,103 @@ int main()
 
 	//generate voxel data:
 	//---------------------------------
-	for(int x = 0; x < CHUNK_SIZE_X; x++)
-		for(int y = 0; y < CHUNK_SIZE_Y; y++)
-			for(int z = 0; z < CHUNK_SIZE_Z; z++)
+	for(int x = 0; x < 10; x++)
+		for(int y = 0; y < 3; y++)
+			for(int z = 0; z < 10; z++)
 			{
-				//cylinder:
-				for(int i = 0; i < 2; i++)
+				int index = x + map_size().x * y + map_size().x * map_size().y * z;
+				voxelMap[index] = index;
+				voxelLightingRequests[index] = (ivec4){x, y, z};
+			}
+
+	for(int x = 0; x < CHUNK_SIZE_X * 10; x++)
+		for(int y = 0; y < CHUNK_SIZE_Y * 3; y++)
+			for(int z = 0; z < CHUNK_SIZE_Z *  10; z++)
+			{
+				Voxel vox;
+				int index = (z / 8) + map_size().x * (y / 8) + map_size().x * map_size().y * (x / 8);
+
+				if(y == 6 || y == 7)
 				{
-					Voxel vox;
-
-					float distance = vec3_distance((vec3){4, 4, 4}, (vec3){x, y, z});
-					vox.material = (distance < 4.0f) ? 0 : 255;
-					vox.albedo.x = pow(x / 8.0f, GAMMA);
-					vox.albedo.y = pow(y / 8.0f, GAMMA);
-					vox.albedo.z = pow(z / 8.0f, GAMMA);
-					vox.normal = vec3_normalize((vec3){x - 4, y - 4, z - 4});
-
-					voxelChunks[i].voxels[x][y][z] = voxel_to_voxelGPU(vox);
-				}
-
-				//block:
-				for(int i = 2; i < 11; i++)
-				{
-					Voxel vox;
-
-					vox.material = y >= 6 ? 1 : 255;
+					vox.material = 0;
 					vox.albedo = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
 					vox.normal = y == 7 ? (vec3){0.0, 1.0, 0.0} : (vec3){0.0, -1.0, 0.0};
-
-					voxelChunks[i].voxels[x][y][z] = voxel_to_voxelGPU(vox);
 				}
-			}
-
-	//--------------//
-
-	for(int x = 0; x < map_size().x; x++)
-		for(int y = 0; y < map_size().y; y++)
-			for(int z = 0; z < map_size().z; z++)
-			{
-				if(y == 0)
-					voxelMap[x + map_size().x * y + map_size().x * map_size().y * z] = 2 + x + z * 3;
-				else if(x == 1 && z == 1)
-					voxelMap[x + map_size().x * y + map_size().x * map_size().y * z] = y - 1;
+				else if(x >= 78 && y > 7)
+				{
+					vox.material = 1;
+					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
+					vox.normal = x == 79 ? (vec3){1.0, 0.0, 0.0} : (vec3){-1.0, 0.0, 0.0};
+				}
+				else if(z >= 78 && y > 7)
+				{
+					vox.material = 1;
+					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
+					vox.normal = z == 79 ? (vec3){0.0, 0.0, 1.0} : (vec3){0.0, 0.0, -1.0};
+				}
 				else
-					voxelMap[x + map_size().x * y + map_size().x * map_size().y * z] = -1;
+					vox.material = 255;
+
+				voxelChunks[index].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 			}
+
+	uvec3 spherePositions[8] = {(uvec3){10, 14, 12}, (uvec3){11, 14, 35}, (uvec3){32, 14, 17}, (uvec3){55, 14, 13}, (uvec3){53, 14, 34}, (uvec3){28, 14, 45}, (uvec3){20, 14, 65}, (uvec3){55, 14, 60}};
+	vec3 sphereColors[8] = {(vec3){0.0f, 0.0f, 0.0f}, (vec3){0.125f, 0.384f, 0.859f}, (vec3){0.224f, 0.831f, 0.718f}, (vec3){1.0f, 1.0f, 1.0f}, (vec3){0.569f, 0.224f, 0.831f}, (vec3){0.839f, 0.235f, 0.255f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.306f, 0.831f, 0.224f}};
+	unsigned int sphereMaterials[8] = {0, 3, 2, 2, 4, 4, 2, 0};
+
+	for(int i = 0; i < 8; i++)
+	{
+		uvec3 pos = spherePositions[i];
+
+		for(int x = pos.x - 6; x <= pos.x + 6; x++)
+			for(int y = pos.y - 6; y <= pos.y + 6; y++)
+				for(int z = pos.z - 6; z <= pos.z + 6; z++)
+				{
+					Voxel vox;
+					int index = (z / 8) + map_size().x * (y / 8) + map_size().x * map_size().y * (x / 8);
+
+					float distance = vec3_distance((vec3){pos.x, pos.y, pos.z}, (vec3){x, y, z});
+					vox.material = (distance < 7.0f) ? sphereMaterials[i] : 255;
+					vox.normal = vec3_normalize((vec3){x - (int)pos.x, y - (int)pos.y, z - (int)pos.z});
+					if(sphereColors[i].x == 0.0f)
+					{
+						vox.albedo = (vec3){pow(x / (pos.x + 6.0f), GAMMA), pow(y / (pos.y + 6.0f), GAMMA), pow(z / (pos.z + 6.0f), GAMMA)};
+					}
+					else
+					{
+						vox.albedo = (vec3){pow(sphereColors[i].x, GAMMA), pow(sphereColors[i].y, GAMMA), pow(sphereColors[i].z, GAMMA)};
+					}
+
+					voxelChunks[index].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
+				}
+	}
 
 	//--------------//
 
-	voxelMaterials[0].emissive = true;
+	voxelMaterials[0].emissive = false;
 	voxelMaterials[0].specular = 0.0f;
 	voxelMaterials[0].opacity = 1.0f;
+	voxelMaterials[0].reflections = false;
+
 	voxelMaterials[1].emissive = false;
-	voxelMaterials[1].specular = 0.0f;
+	voxelMaterials[1].specular = 1.0f;
 	voxelMaterials[1].opacity = 1.0f;
+	voxelMaterials[1].reflections = true;
 
-	//--------------//
+	voxelMaterials[2].emissive = true;
+	voxelMaterials[2].specular = 0.0f;
+	voxelMaterials[2].opacity = 1.0f;
+	voxelMaterials[2].reflections = false;
 
-	voxelLightingRequests[0]  = (ivec4){0, 0, 0};
-	voxelLightingRequests[1]  = (ivec4){0, 0, 1};
-	voxelLightingRequests[2]  = (ivec4){0, 0, 2};
-	voxelLightingRequests[3]  = (ivec4){1, 0, 0};
-	voxelLightingRequests[4]  = (ivec4){1, 0, 1};
-	voxelLightingRequests[5]  = (ivec4){1, 0, 2};
-	voxelLightingRequests[6]  = (ivec4){2, 0, 0};
-	voxelLightingRequests[7]  = (ivec4){2, 0, 1};
-	voxelLightingRequests[8]  = (ivec4){2, 0, 2};
-	voxelLightingRequests[9]  = (ivec4){1, 1, 1};
-	voxelLightingRequests[10] = (ivec4){1, 2, 1};
+	voxelMaterials[3].emissive = false;
+	voxelMaterials[3].specular = 0.7f;
+	voxelMaterials[3].opacity = 1.0f;
+	voxelMaterials[3].reflections = false;
+
+	voxelMaterials[4].emissive = false;
+	voxelMaterials[4].specular = 0.0f;
+	voxelMaterials[4].opacity = 0.5f;
+	voxelMaterials[4].reflections = false;
 
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
@@ -254,11 +283,12 @@ int main()
 
 	//calculate indirect lighting:
 	//---------------------------------
-	sunStrength = 0.0f;
+	//sunStrength = (vec3){0.01f, 0.01f, 0.01f};
 	bounceStrength = 1.0f;
+	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
 	for(int i = 0; i < 3000; i++)
 	{
-		update_voxel_indirect_lighting(11, glfwGetTime());
+		update_voxel_indirect_lighting(10 * 3 * 10, glfwGetTime());
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
@@ -289,13 +319,15 @@ int main()
 
 		//update cam direction:
 		mat3 rotate = mat4_to_mat3(mat4_rotate_euler(MAT4_IDENTITY, (vec3){pitch, yaw, 0.0f}));
+		//rotate = mat4_to_mat3(mat4_lookat(camPos, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.0f, 1.0f, 0.0f}));
+		//mat3_print(rotate);
 
 		camFront       = mat3_mult_vec3(rotate, (vec3){ 0.0f, 0.0f, fov });
 		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//render voxels:
-		update_voxel_direct_lighting(11, camPos);
+		update_voxel_direct_lighting(10 * 3 * 10, camPos);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV);
 

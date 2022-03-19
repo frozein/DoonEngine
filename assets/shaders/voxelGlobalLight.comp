@@ -17,7 +17,6 @@ uniform float bounceStrength;
 
 //global sun params:
 uniform vec3 sunDir; //must be normalized
-uniform float sunStrength;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 

@@ -45,7 +45,7 @@ typedef struct VoxelMaterial
 	GLuint emissive;
 	GLfloat specular;
 	GLfloat opacity;
-	GLfloat refraction;
+	GLuint reflections;
 } VoxelMaterial;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -57,7 +57,7 @@ extern VoxelMaterial* voxelMaterials; //Every currently active material
 extern ivec4* voxelLightingRequests; //Every chunk requested to have its lighting updated
 
 extern vec3 sunDir;
-extern float sunStrength;
+extern vec3 sunStrength;
 extern float ambientStrength;
 extern unsigned int bounceLimit;
 extern float bounceStrength;

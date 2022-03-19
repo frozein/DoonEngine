@@ -4,11 +4,11 @@
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
 #define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / 2 * CHUNK_SIZE, precomputed
 
-#define MAP_SIZE ivec3(3, 3, 3) //size of the map (number of chunks in each direction)
+#define MAP_SIZE ivec3(10, 3, 10) //size of the map (number of chunks in each direction)
 
-#define MAX_CHUNKS 11 //the maximum number of chunks that can be stored at once
+#define MAX_CHUNKS 300 //the maximum number of chunks that can be stored at once
 
-#define EPSILON 0.00001 //to fix floating point error
+#define EPSILON 0.0001 //to fix floating point error
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -45,7 +45,7 @@ struct Material
 	uint emissive;
 	float specular; //what percentage of rays are specular, the other percent are diffuse
 	float opacity; //the opacity of the voxel
-	float refraction; //the ratio of angles of refraction indices
+	uint reflections;
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -64,6 +64,8 @@ layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer
 {
 	Material materials[256];
 };
+
+uniform vec3 sunStrength;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -212,6 +214,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 			{
 				if(lastVox != compressed.albedo)
 				{
+					voxel.albedo *= sunStrength;
 					colorAdd += colorMult * material.opacity * voxel.albedo;
 					colorMult *= 1 - material.opacity;
 					if(addSpec)

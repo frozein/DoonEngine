@@ -10,13 +10,13 @@ layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer
 
 //global sun params:
 uniform vec3 sunDir; //must be normalized
-uniform float sunStrength;
 uniform float shadowSoftness;
 uniform float ambientStrength;
 
 uniform vec3 camPos;
 
-const vec3 spherePoints[20] = {vec3(0.000000, 1.000000, 0.000000), vec3(-0.329304, 0.894737, 0.301670), vec3(0.053661, 0.789474, -0.611434), vec3(0.443725, 0.684211, 0.578761), vec3(-0.802901, 0.578947, -0.142022), vec3(0.743091, 0.473684, -0.472693), vec3(-0.241344, 0.368421, 0.897786), vec3(-0.444660, 0.263158, -0.856169), vec3(0.927538, 0.157895, 0.338737), vec3(-0.923065, 0.052632, 0.381026), vec3(0.423260, -0.052632, -0.904478), vec3(0.295528, -0.157895, 0.942196), vec3(-0.834714, -0.263158, -0.483736), vec3(0.907976, -0.368421, -0.199614), vec3(-0.506515, -0.473684, 0.720462), vec3(-0.104781, -0.578947, -0.808604), vec3(0.557646, -0.684211, 0.469987), vec3(-0.613260, -0.789474, 0.025359), vec3(0.316560, -0.894737, -0.315017), vec3(-0.000000, -1.000000, 0.000000)};
+const vec3 spherePoints[15] = { vec3(0.000000, 1.000000, 0.000000), vec3(-0.379803, 0.857143, 0.347931), vec3(0.061185, 0.714286, -0.697174), vec3(0.499316, 0.571429, 0.651270), vec3(-0.889696, 0.428571, -0.157375), vec3(0.808584, 0.285714, -0.514354), vec3(-0.256942, 0.142857, 0.955810), vec3(-0.460906, 0.000000, -0.887449), vec3(0.929687, -0.142857, 0.339521), vec3(-0.885815, -0.285714, 0.365650), vec3(0.382949, -0.428571, -0.818338), vec3(0.245607, -0.571429, 0.783037), vec3(-0.605521, -0.714286, -0.350913), vec3(0.503065, -0.857143, -0.110596), vec3(-0.000000, -1.000000, 0.000000) };
+//TODO: ALLOW MULTIPLE QUALITY OPTIONS FOR THE SPHERE POINTS
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -27,7 +27,7 @@ bool shadow_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 s
 	return step_map(sunDir, 1 / sunDir, rayPos, true, false, hitVoxel, colorAdd, colorMult); //return whether or not the map was hit
 }
 
-void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, inout vec3 color)
+void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflections, inout vec3 color)
 {
 	Voxel hitVoxel;
 	vec3 tempPos = rayPos;
@@ -37,10 +37,14 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 	if(step_map(rayDir, 1 / rayDir, tempPos, true, false, hitVoxel, colorAdd, colorMult))
 	{
 		vec3 dist = abs(floor(tempPos * CHUNK_SIZE) - floor(rayPos * CHUNK_SIZE));
-		if(dot(dist, dist) > 1)
+		if(reflections == 1 && dot(dist, dist) > 1)
 		{
+			Material hitMaterial = materials[hitVoxel.material];
+			hitVoxel.specLight *= hitMaterial.specular;
+			hitVoxel.indirectLight *= 1.0 - hitMaterial.specular;
+
 			vec3 hitColor;
-			if(materials[hitVoxel.material].emissive)
+			if(hitMaterial.emissive)
 				hitColor = hitVoxel.albedo;
 			else
 				hitColor = (hitVoxel.directLight + hitVoxel.indirectLight + ambientStrength) * hitVoxel.albedo;
@@ -51,7 +55,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 	else if(dot(rayDir, sunDir) > 0.99)
 		color += sunStrength * colorMult + colorAdd;
 	else
-		color += (max(dot(rayDir, sunDir), 0.1) * sunStrength * colorMult + colorAdd) * albedo * 0.5;
+		color += (sunStrength * colorMult + colorAdd) * max(dot(rayDir, sunDir), 0.1) * albedo * 0.5;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -63,6 +67,7 @@ void main()
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	int chunkIndex = get_map_tile(chunkPos);
 	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
+	Material thisMaterial = materials[thisVoxel.material];
 
 	//return if voxel does not exist lol:
 	if(thisVoxel.material == 255)
@@ -75,7 +80,7 @@ void main()
 	//shadow rays:
 	//---------------------------------
 	vec3 directLight = vec3(0.0);
-	for(int i = 0; i < 20; i++)
+	for(int i = 0; i < 15; i++)
 	{
 		vec3 updatedSunDir = normalize(sunDir * shadowSoftness + spherePoints[i]);
 
@@ -85,23 +90,23 @@ void main()
 			directLight += (sunStrength * colorMult + colorAdd) * colorMult; //TODO: maybe find a better way to do this
 	}
 
-	directLight /= 20.0;
+	directLight /= 15.0;
 
 	//specular rays:
 	//---------------------------------
 	vec3 specLight = vec3(0.0);
 	vec3 viewDir = rayPos - camPos;
-	if(materials[thisVoxel.material].specular > 0.0 && dot(viewDir, thisVoxel.normal) < 0.0)
+	if(thisMaterial.specular > 0.0 && dot(viewDir, thisVoxel.normal) < 0.0)
 	{
 		vec3 reflected = reflect(normalize(viewDir), thisVoxel.normal);
 
-		for(int i = 0; i < 20; i++)
+		for(int i = 0; i < 15; i++)
 		{
 			vec3 specDir = normalize(reflected * 10 + spherePoints[i]);
-			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, thisVoxel.albedo, specLight);
+			specular_ray(chunkPos, localPos, thisVoxel.normal, rayPos, specDir, thisVoxel.albedo, thisMaterial.reflections, specLight);
 		}
 
-		specLight /= 20.0;
+		specLight /= 15.0;
 	}
 
 	//update the final color
