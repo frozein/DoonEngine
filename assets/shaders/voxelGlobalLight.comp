@@ -1,5 +1,5 @@
 //INCLUDES "voxelShared.comp"
-#version 460
+#version 430 core
 
 layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
 

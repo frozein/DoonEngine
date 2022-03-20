@@ -1,5 +1,5 @@
 //INCLUDES "voxelShared.comp"
-#version 460
+#version 430 core
 #define INV_GAMMA 0.4545 //for gamma correction (1 / 2.2)
 
 layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size

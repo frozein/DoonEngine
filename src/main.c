@@ -70,7 +70,7 @@ int main()
 	//---------------------------------
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
@@ -212,13 +212,13 @@ int main()
 				else if(x >= 78 && y > 7)
 				{
 					vox.material = 1;
-					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
+					vox.albedo = (vec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
 					vox.normal = (vec3){-1.0, 0.0, 0.0};
 				}
 				else if(z >= 78 && y > 7)
 				{
 					vox.material = 1;
-					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(1.0f, GAMMA)};
+					vox.albedo = (vec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
 					vox.normal = (vec3){0.0, 0.0, -1.0};
 				}
 				else
@@ -324,7 +324,7 @@ int main()
 
 		if(cumTime >= 1.0f)
 		{
-			printf("%f\n", 1 / (cumTime / numFrames));
+			printf("AVG. FPS: %f\n", 1 / (cumTime / numFrames));
 			numFrames = 0;
 			cumTime = 0.0f;
 		}

@@ -23,6 +23,8 @@ struct Voxel //a single voxel
 
 	vec3 directLight;
 	vec3 specLight;
+
+	uint visible;
 };
 
 struct CompressedVoxel //a compressed voxel
@@ -138,6 +140,7 @@ Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight)
 	res.indirectSamples = indirectLight.w;
 	res.directLight = directLight.xyz * 0.00392156862;
 	res.specLight = specLight.xyz * 0.00392156862;
+	res.visible = directLight.w;
 
 	return res;
 }
@@ -234,6 +237,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 			else
 			{
 				chunkPos = mapPos;
+				atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				return true;
 			}
 
