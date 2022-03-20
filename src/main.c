@@ -290,8 +290,10 @@ int main()
 	voxelMaterials[3].shininess = 3;
 
 	voxelMaterials[4].emissive = false;
-	voxelMaterials[4].specular = 0.0f;
+	voxelMaterials[4].specular = 0.7f;
 	voxelMaterials[4].opacity = 0.5f;
+	voxelMaterials[4].reflectSky = false;
+	voxelMaterials[4].shininess = 10;
 
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
@@ -299,8 +301,8 @@ int main()
 
 	//calculate indirect lighting:
 	//---------------------------------
-	//sunStrength = (vec3){0.01f, 0.01f, 0.01f}; //for night:
-	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
+	sunStrength = (vec3){0.01f, 0.01f, 0.01f}; //for night:
+	sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
 	for(int i = 0; i < 3000; i++)
 	{
 		update_voxel_indirect_lighting(10 * 3 * 10, glfwGetTime());

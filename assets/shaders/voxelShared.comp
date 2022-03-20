@@ -165,8 +165,8 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
 
 vec3 sky_color(vec3 rayDir)
 {
-	//return mix(vec3(0.09, 0.25, 0.45), vec3(0.00, 0.04, 0.18), rayDir.y * 0.5 + 1); //night
-	return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1); //day
+	return mix(vec3(0.09, 0.25, 0.45), vec3(0.00, 0.04, 0.18), rayDir.y * 0.5 + 1); //night
+	//return mix(vec3(0.71, 0.85, 0.90), vec3(0.00, 0.45, 0.74), rayDir.y * 0.5 + 1); //day
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -228,10 +228,12 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 				if(lastVox != compressed.albedo)
 				{
 					voxel.albedo *= sunStrength;
-					colorAdd += colorMult * material.opacity * voxel.albedo;
+					colorAdd += colorMult * material.opacity * voxel.albedo; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1 - material.opacity;
 					if(addSpec)
 						colorAdd += voxel.specLight * material.specular;
+					
+					atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				}
 			}
 			else
@@ -281,7 +283,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 			if(step_chunk(res, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, addSpec, voxel, chunkPos, colorAdd, colorMult))
 			{
 				intersection = intersect_AABB(invRayDir, rayPos, mapPos + chunkPos * INV_CHUNK_SIZE, mapPos + chunkPos * INV_CHUNK_SIZE + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x + EPSILON); //subtract so that new pos is outside voxel
+				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside voxel
 
 				return true;
 			}
