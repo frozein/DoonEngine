@@ -301,8 +301,10 @@ int main()
 
 	//calculate indirect lighting:
 	//---------------------------------
-	sunStrength = (vec3){0.01f, 0.01f, 0.01f}; //for night:
-	sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
+	//sunStrength = (vec3){0.0f, 0.0f, 0.0f}; //for night:
+	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
+	//sunStrength = (vec3){0.5f, 0.3f, 0.15f}; //for sunset:
+	//sunDir = vec3_normalize((vec3){-1.0f, 0.7f, -1.0f});
 	for(int i = 0; i < 3000; i++)
 	{
 		update_voxel_indirect_lighting(10 * 3 * 10, glfwGetTime());
@@ -335,6 +337,13 @@ int main()
 		process_input(window);
 
 		//update cam direction:
+		/*camPos.x = sin(glfwGetTime() / 3.0f) * 7.0f + 5.0f;
+		camPos.y = 5.0f;
+		camPos.z = cos(glfwGetTime() / 3.0f) * 7.0f + 5.0f;
+
+		yaw = glfwGetTime() / 3.0f * RAD_TO_DEG + 180.0f;
+		pitch = 35.0f;*/
+
 		mat3 rotate = mat4_to_mat3(mat4_rotate_euler(MAT4_IDENTITY, (vec3){pitch, yaw, 0.0f}));
 
 		camFront       = mat3_mult_vec3(rotate, (vec3){ 0.0f, 0.0f, fov });
