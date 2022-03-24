@@ -34,11 +34,11 @@ void main()
 	vec3 rayPos = camPos;
 
 	//check if ray hits the map at all:
-	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), MAP_SIZE);
+	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), mapSize);
 
 	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
 	{
-		finalColor = sky_color(rayDir);
+		finalColor = sky_color(normalize(rayDir));
 	}
 	else //if the map is hit, step through it
 	{
@@ -94,7 +94,7 @@ void main()
 		}
 		else
 		{
-			finalColor = sky_color(rayDir);
+			finalColor = sky_color(normalize(rayDir));
 
 			if(viewMode == 0)
 				finalColor = finalColor * finalColorMult + finalColorAdd;

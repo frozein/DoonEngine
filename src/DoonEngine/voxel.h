@@ -84,41 +84,42 @@ void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
 
 //TEMPORARY
 void send_all_data_temp();
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //Returns the current texture size. Returns true on success, false on failure
-uvec2 texture_size();
+uvec2 voxel_texture_size();
 //Sets the current texture size. Returns true on success, false on failure
-bool set_texture_size(uvec2 size);
+bool set_voxel_texture_size(uvec2 size);
 
 //Returns the current map size (in chunks)
-uvec3 map_size();
+uvec3 voxel_map_size();
 //Sets the current map size (in chunks). Returns true on success, false on failure
-bool set_map_size(uvec3 size);
+bool set_voxel_map_size(uvec3 size);
 
 //Returns the current maximum number of chunks
-unsigned int max_chunks();
+unsigned int max_voxel_chunks();
 //Returns the current number of chunks in use
-unsigned int current_chunks();
+unsigned int current_voxel_chunks();
 //Sets the current maximum number of chunks. Returns true on success, false on failure
-bool set_max_chunks(unsigned int num);
+bool set_max_voxel_chunks(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //Returns the current map size on the GPU (in chunks)
-uvec3 gpu_map_size();
+uvec3 voxel_map_size_gpu();
 //Sets the current map size on the GPU (in chunks). Returns true on success, false on failure
-bool set_gpu_map_size(uvec3 size);
+bool set_voxel_map_size_gpu(uvec3 size);
 
 //Returns the current maximum number of chunks the GPU can store at once
-unsigned int max_gpu_chunks();
+unsigned int max_voxel_chunks_gpu();
 //Sets the current maximum number of chunks the GPU can store at once. Returns true on success, false on failure
-bool set_max_gpu_chunks(unsigned int num);
+bool set_max_voxel_chunks_gpu(unsigned int num);
 
 //Returns the current maximum number of lighting updates the GPU can process at once (in chunks)
-unsigned int max_lighting_requests();
+unsigned int max_voxel_lighting_requests();
 //Sets the current maximum number of lighting updates the GPU can process at once (in chunks). Returns true on success, false on failure
-bool set_max_lighting_requests(unsigned int num);
+bool set_max_voxel_lighting_requests(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 

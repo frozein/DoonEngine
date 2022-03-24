@@ -6,9 +6,7 @@
 
 #define EPSILON 0.0001 //to fix floating point error
 
-#define MAP_SIZE ivec3(10, 3, 10) //size of the map (number of chunks in each direction)
-
-#define MAX_CHUNKS 300 //the maximum number of chunks that can be stored at once
+uniform uvec3 mapSize;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -56,12 +54,12 @@ struct Material
 
 layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains the chunk map
 {
-	int map[MAP_SIZE.x][MAP_SIZE.y][MAP_SIZE.z];
+	int map[];
 };
 
 layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
 {
-	Chunk chunks[MAX_CHUNKS];
+	Chunk chunks[];
 };
 
 layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer that contains all of the materials
@@ -93,7 +91,7 @@ uint encode_uint_RGBA(uvec4 val) //compresses 4 1-byte values into a 4-byte valu
 
 bool in_map_bounds(ivec3 pos) //returns whether a position is in bounds in the map
 {
-	return pos.x < MAP_SIZE.x && pos.y < MAP_SIZE.y && pos.z < MAP_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+	return pos.x < mapSize.x && pos.y < mapSize.y && pos.z < mapSize.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
 bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a chunk
@@ -103,7 +101,8 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 
 int get_map_tile(ivec3 pos) //returns the value of the map at a position
 {
-	return map[pos.x][pos.y][pos.z];
+	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
+	return map[index];
 }
 
 CompressedVoxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position

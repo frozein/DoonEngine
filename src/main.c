@@ -178,7 +178,7 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){10, 3, 10}, 10 * 10 * 3, (uvec3){10, 3, 10}, 10 * 10 * 3, 10 * 10 * 3))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){10, 3, 10}, 300, (uvec3){10, 3, 10}, 300, 300))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		scanf("%d", &error);
@@ -191,7 +191,8 @@ int main()
 		for(int y = 0; y < 3; y++)
 			for(int z = 0; z < 10; z++)
 			{
-				int index = x + map_size().x * y + map_size().x * map_size().y * z;
+				int index = FLATTEN_INDEX(x, y, z, voxel_map_size());
+
 				voxelMap[index] = index;
 				voxelLightingRequests[index] = (ivec4){x, y, z};
 			}
@@ -201,7 +202,7 @@ int main()
 			for(int z = 0; z < CHUNK_SIZE_Z *  10; z++)
 			{
 				Voxel vox;
-				int index = (z / 8) + map_size().x * (y / 8) + map_size().x * map_size().y * (x / 8);
+				int index = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
 
 				if(y == 6 || y == 7)
 				{
@@ -224,7 +225,8 @@ int main()
 				else
 					vox.material = 255;
 
-				voxelChunks[index].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
+
+				voxelChunks[voxelMap[index]].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 			}
 
 	uvec3 spherePositions[8] = {(uvec3){10, 14, 12}, (uvec3){11, 14, 35}, (uvec3){32, 14, 17}, (uvec3){55, 14, 13}, (uvec3){53, 14, 34}, (uvec3){28, 14, 45}, (uvec3){20, 14, 65}, (uvec3){55, 14, 60}};
@@ -240,7 +242,7 @@ int main()
 				for(int z = pos.z - 6; z <= pos.z + 6; z++)
 				{
 					Voxel vox;
-					int index = (z / 8) + map_size().x * (y / 8) + map_size().x * map_size().y * (x / 8);
+					int index = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
 
 					float distance = vec3_distance((vec3){pos.x, pos.y, pos.z}, (vec3){x, y, z});
 					vox.material = (distance < 7.0f) ? sphereMaterials[i] : 255;
@@ -263,7 +265,7 @@ int main()
 						vox.albedo = (vec3){pow(sphereColors[i].x, GAMMA), pow(sphereColors[i].y, GAMMA), pow(sphereColors[i].z, GAMMA)};
 					}
 
-					voxelChunks[index].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
+					voxelChunks[voxelMap[index]].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 				}
 	}
 

@@ -3,5 +3,6 @@
 #include <stdio.h>
 
 #define ERROR_LOG(...) fprintf(stderr, __VA_ARGS__)
+#define FLATTEN_INDEX(xp, yp, zp, size) (xp) + (size.x) * ((yp) + (zp) * (size.y))
 
 #endif

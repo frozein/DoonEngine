@@ -2,6 +2,7 @@
 #include "shader.h"
 #include "texture.h"
 #include "globals.h"
+#include <stdlib.h>
 #include <malloc.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -216,10 +217,9 @@ void update_voxel_indirect_lighting(unsigned int numChunks, float time)
 
 	shader_uniform_vec3(indirectLightingShader, "sunDir", vec3_normalize(sunDir));
 	shader_uniform_vec3(indirectLightingShader, "sunStrength", sunStrength);
-
 	shader_uniform_int(indirectLightingShader, "bounceLimit", bounceLimit);
-
 	shader_uniform_float(indirectLightingShader, "time", time);
+	glUniform3uiv(glGetUniformLocation(indirectLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glDispatchCompute(numChunks, 1, 1);
 }
@@ -233,6 +233,7 @@ void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos)
 	shader_uniform_float(directLightingShader, "shadowSoftness", shadowSoftness);
 	shader_uniform_float(directLightingShader, "ambientStrength", ambientStrength);
 	shader_uniform_vec3 (directLightingShader, "camPos", camPos);
+	glUniform3uiv(glGetUniformLocation(directLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glDispatchCompute(maxLightingRequests, 1, 1);
 }
@@ -248,6 +249,7 @@ void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
 	shader_uniform_uint (finalShader, "viewMode", viewMode);
 	shader_uniform_float(finalShader, "ambientStrength", ambientStrength);
 	shader_uniform_vec3(finalShader, "sunStrength", sunStrength);
+	glUniform3uiv(glGetUniformLocation(finalShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glDispatchCompute(textureSize.x / 16, textureSize.y / 16, 1);
 }
@@ -260,11 +262,13 @@ void send_all_data_temp()
 		for(int y = 0; y < mapSize.y; y++)
 			for(int z = 0; z < mapSize.z; z++)
 			{
-				tempMap[x + mapSize.x * y + mapSize.x * mapSize.y * z].x = voxelMap[x + mapSize.x * y + mapSize.x * mapSize.y * z];
+				int index = x + mapSize.x * y + mapSize.x * mapSize.y * z;
+				tempMap[index].x = voxelMap[index] < maxChunksGPU ? voxelMap[index] : -1;
 			}
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
-	for(int i = 0; i < maxChunksGPU; i++)
+	int min = min(maxChunks, maxChunksGPU);
+	for(int i = 0; i < min; i++)
 	{
 		glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * 2 * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[i]);
 	}
@@ -281,71 +285,134 @@ void send_all_data_temp()
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uvec2 texture_size()
+uvec2 voxel_texture_size()
 {
 	return textureSize;
 }
 
-bool set_texture_size(uvec2 size)
+bool set_voxel_texture_size(uvec2 size)
 {
 	return true; //TODO implement
 }
 
-uvec3 map_size()
+uvec3 voxel_map_size()
 {
 	return mapSize;
 }
 
-bool set_map_size(uvec3 size)
+bool set_voxel_map_size(uvec3 size)
 {
-	return true; //TODO implement
+	int* newMap = malloc(sizeof(int) * size.x * size.y * size.z);
+	if(!newMap)
+	{
+		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
+		return false;
+	}	
+
+	int oldMaxIndex = mapSize.x * mapSize.y * mapSize.z;
+	for(int z = 0; z < size.z; z++)
+		for(int y = 0; y < size.y; y++)
+			for(int x = 0; x < size.x; x++)
+			{
+				int oldIndex = x + mapSize.x * (y + z * mapSize.y);
+				int newIndex = x + size.x * (y + z * size.y);
+
+				newMap[newIndex] = oldIndex < oldMaxIndex ? voxelMap[oldIndex] : -1;
+			}
+
+	free(voxelMap);
+	voxelMap = newMap;
+	mapSize = size;
+	return true;
 }
 
-unsigned int max_chunks()
+unsigned int max_voxel_chunks()
 {
 	return maxChunks;
 }
 
-unsigned int current_chunks()
+unsigned int current_voxel_chunks()
 {
 	return 0; //TODO implement
 }
 
-bool set_max_chunks(unsigned int num)
+bool set_max_voxel_chunks(unsigned int num)
 {
-	return true; //TODO implement
+	voxelChunks = realloc(voxelChunks, sizeof(VoxelChunk) * num);
+	if(!voxelChunks)
+	{
+		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL CHUNKS\n");
+		return false;
+	}
+
+	maxChunks = num;
+	return true;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uvec3 gpu_map_size()
+uvec3 voxel_map_size_gpu()
 {
 	return mapSizeGPU;
 }
 
-bool set_gpu_map_size(uvec3 size)
+bool set_voxel_map_size_gpu(uvec3 size)
 {
-	return true; //TODO implement
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ivec4) * size.x * size.y * size.x, NULL, GL_DYNAMIC_DRAW); //allocate
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{	
+		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL MAP BUFFER\n");
+		return false;
+	}
+
+	mapSizeGPU = size;
+	return true;
 }
 
-unsigned int max_gpu_chunks()
+unsigned int max_voxel_chunks_gpu()
 {
 	return maxChunksGPU;
 }
 
-bool set_max_gpu_chunks(unsigned int num)
+bool set_max_voxel_chunks_gpu(unsigned int num)
 {
-	return true; //TODO implement
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, 2 * sizeof(VoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{	
+		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
+		return false;
+	}
+
+	maxChunksGPU = num;
+	return true;
 }
 
-unsigned int max_lighting_requests()
+unsigned int max_voxel_lighting_requests()
 {
 	return maxLightingRequests;
 }
 
-bool set_max_lighting_requests(unsigned int num)
+bool set_max_voxel_lighting_requests(unsigned int num)
 {
-	return true; //TODO implement
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ivec4) * num, NULL, GL_DYNAMIC_DRAW); //allocate
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{	
+		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL LIGHTING REQUEST BUFFER\n");
+		return false;
+	}
+
+	voxelLightingRequests = realloc(voxelLightingRequests, sizeof(ivec4) * num);
+	if(!voxelLightingRequests)
+	{
+		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL LIGHTING REQUESTS\n");
+		return false;
+	}
+
+	maxLightingRequests = num;
+	return true;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
