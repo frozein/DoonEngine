@@ -268,6 +268,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 	vec3 deltaDist = abs(invRayDir);     //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
 	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+	vec3 updatedRayDir = (abs(rayDir) + EPSILON) * sign(rayDir); //to reduce noise
 
 	while(in_map_bounds(mapPos))
 	{
@@ -277,7 +278,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 		{
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
-				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
+				rayPos += updatedRayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
 			//step through the chunk:
 			ivec3 chunkPos;

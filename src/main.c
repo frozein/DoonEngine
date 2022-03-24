@@ -178,75 +178,32 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){10, 3, 10}, 300, (uvec3){10, 3, 10}, 300, 300))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 30 * 30 * 30, 30 * 30 * 30))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		scanf("%d", &error);
 		return -1;
 	}
 
-	//generate voxel data:
-	//---------------------------------
-	for(int x = 0; x < 10; x++)
-		for(int y = 0; y < 3; y++)
-			for(int z = 0; z < 10; z++)
+	int lightingCount = 0;
+
+	vec3 colors[3][2] = {{(vec3){1.00, 0.25, 0.00}, (vec3){1.00, 0.70, 0.00}}, {(vec3){0.35, 0.00, 0.73}, (vec3){0.00, 0.55, 0.94}}, {(vec3){0.00, 1.00, 0.28}, (vec3){0.64, 0.82, 0.00}}};
+	for(int i = 0; i < 3; i++)
+		for(int j = 0; j < 2; j++)
+			colors[i][j] = (vec3){pow(colors[i][j].x, GAMMA), pow(colors[i][j].y, GAMMA), pow(colors[i][j].z, GAMMA)};
+
+	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE_Z; z++)
+		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE_Y; y++)
+			for(int x = 0; x < voxel_map_size().x * CHUNK_SIZE_X; x++)
 			{
-				int index = FLATTEN_INDEX(x, y, z, voxel_map_size());
+				int mapIndex = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
+				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
 
-				voxelMap[index] = index;
-				voxelLightingRequests[index] = (ivec4){x, y, z};
-			}
-
-	for(int x = 0; x < CHUNK_SIZE_X * 10; x++)
-		for(int y = 0; y < CHUNK_SIZE_Y * 3; y++)
-			for(int z = 0; z < CHUNK_SIZE_Z *  10; z++)
-			{
-				Voxel vox;
-				int index = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
-
-				if(y == 6 || y == 7)
-				{
-					vox.material = 0;
-					vox.albedo = (vec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
-					vox.normal = y == 7 ? (vec3){0.0, 1.0, 0.0} : (vec3){0.0, -1.0, 0.0};
-				}
-				else if(x >= 78 && y > 7)
-				{
-					vox.material = 1;
-					vox.albedo = (vec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
-					vox.normal = (vec3){-1.0, 0.0, 0.0};
-				}
-				else if(z >= 78 && y > 7)
-				{
-					vox.material = 1;
-					vox.albedo = (vec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
-					vox.normal = (vec3){0.0, 0.0, -1.0};
-				}
-				else
-					vox.material = 255;
-
-
-				voxelChunks[voxelMap[index]].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
-			}
-
-	uvec3 spherePositions[8] = {(uvec3){10, 14, 12}, (uvec3){11, 14, 35}, (uvec3){32, 14, 17}, (uvec3){55, 14, 13}, (uvec3){53, 14, 34}, (uvec3){28, 14, 45}, (uvec3){20, 14, 65}, (uvec3){55, 14, 60}};
-	vec3 sphereColors[8] = {(vec3){0.0f, 0.0f, 0.0f}, (vec3){0.1f, 0.1f, 1.0f}, (vec3){0.224f, 0.831f, 0.718f}, (vec3){1.0f, 1.0f, 1.0f}, (vec3){0.569f, 0.224f, 0.831f}, (vec3){0.839f, 0.235f, 0.255f}, (vec3){0.0f, 0.0f, 0.0f}, (vec3){0.306f, 0.831f, 0.224f}};
-	unsigned int sphereMaterials[8] = {0, 3, 2, 2, 4, 4, 2, 0};
-
-	for(int i = 0; i < 8; i++)
-	{
-		uvec3 pos = spherePositions[i];
-
-		for(int x = pos.x - 6; x <= pos.x + 6; x++)
-			for(int y = pos.y - 6; y <= pos.y + 6; y++)
-				for(int z = pos.z - 6; z <= pos.z + 6; z++)
+				if(vec3_distance((vec3){x, y, z}, (vec3){116.0f, 116.0f, 116.0f}) < 116.0f)
 				{
 					Voxel vox;
-					int index = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
-
-					float distance = vec3_distance((vec3){pos.x, pos.y, pos.z}, (vec3){x, y, z});
-					vox.material = (distance < 7.0f) ? sphereMaterials[i] : 255;
-					vox.normal = (vec3){x - (int)pos.x, y - (int)pos.y, z - (int)pos.z};
+					vox.material = 0;
+					vox.normal = (vec3){x - 116.0f, y - 116.0f, z - 116.0f};
 
 					float maxNormal = abs(vox.normal.x);
 					if(abs(vox.normal.y) > maxNormal)
@@ -255,47 +212,16 @@ int main()
 						maxNormal = abs(vox.normal.z);
 
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
+					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
-					if(sphereColors[i].x == 0.0f)
-					{
-						vox.albedo = (vec3){pow(x / (pos.x + 6.0f), GAMMA), pow(y / (pos.y + 6.0f), GAMMA), pow(z / (pos.z + 6.0f), GAMMA)};
-					}
-					else
-					{
-						vox.albedo = (vec3){pow(sphereColors[i].x, GAMMA), pow(sphereColors[i].y, GAMMA), pow(sphereColors[i].z, GAMMA)};
-					}
-
-					voxelChunks[voxelMap[index]].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
+					voxelMap[mapIndex] = mapIndex;
+					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 				}
-	}
-
-	//--------------//
+			}
 
 	voxelMaterials[0].emissive = false;
-	voxelMaterials[0].specular = 0.0f;
 	voxelMaterials[0].opacity = 1.0f;
-
-	voxelMaterials[1].emissive = false;
-	voxelMaterials[1].specular = 1.0f;
-	voxelMaterials[1].opacity = 1.0f;
-	voxelMaterials[1].reflectSky = true;
-	voxelMaterials[1].shininess = 100;
-
-	voxelMaterials[2].emissive = true;
-	voxelMaterials[2].specular = 0.0f;
-	voxelMaterials[2].opacity = 1.0f;
-
-	voxelMaterials[3].emissive = false;
-	voxelMaterials[3].specular = 0.7f;
-	voxelMaterials[3].opacity = 1.0f;
-	voxelMaterials[3].reflectSky = false;
-	voxelMaterials[3].shininess = 3;
-
-	voxelMaterials[4].emissive = false;
-	voxelMaterials[4].specular = 0.7f;
-	voxelMaterials[4].opacity = 0.5f;
-	voxelMaterials[4].reflectSky = false;
-	voxelMaterials[4].shininess = 10;
+	voxelMaterials[0].specular = 0.0f;
 
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
@@ -307,9 +233,15 @@ int main()
 	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
 	//sunStrength = (vec3){0.5f, 0.3f, 0.15f}; //for sunset:
 	//sunDir = vec3_normalize((vec3){-1.0f, 0.7f, -1.0f});
-	for(int i = 0; i < 3000; i++)
+	for(int i = 0; i < 100; i++)
 	{
-		update_voxel_indirect_lighting(10 * 3 * 10, glfwGetTime());
+		update_voxel_indirect_lighting(30 * 30 * 30, glfwGetTime());
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+	}
+
+	for(int i = 0; i < 10; i++)
+	{
+		update_voxel_direct_lighting(30 * 30 * 30, camPos);
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 	}
 
@@ -353,8 +285,6 @@ int main()
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//render voxels:
-		update_voxel_direct_lighting(10 * 3 * 10, camPos);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV);
 
 		texture_activate(finalTex, 0);

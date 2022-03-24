@@ -4,6 +4,7 @@
 #include "globals.h"
 #include <stdlib.h>
 #include <malloc.h>
+#include <stdint.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -74,6 +75,9 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		return false;
 	}
 
+	for(int i = 0; i < mapSize.x * mapSize.y * mapSize.z; i++)
+		voxelMap[i] = -1;
+
 	voxelChunks = malloc(sizeof(VoxelChunk) * maxChunks);
 	if(!voxelChunks)
 	{
@@ -82,6 +86,12 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		free(voxelMap);
 		return false;
 	}
+
+	for(int i = 0; i < maxChunks; i++)
+		for(int z = 0; z < CHUNK_SIZE_Z; z++)
+			for(int y = 0; y < CHUNK_SIZE_Y; y++)
+				for(int x = 0; x < CHUNK_SIZE_X; x++)
+					voxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
 
 	voxelMaterials = malloc(sizeof(VoxelMaterial) * MAX_MATERIALS);
 	if(!voxelMaterials)
@@ -425,12 +435,11 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 	VoxelGPU res;
 	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
 	uvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
-	uvec4 nullVec = {0, 0, 0, 0};
 
 	res.albedo = encode_uint_RGBA(albedo);
 	res.normal = encode_uint_RGBA(normal);
-	res.directLight = encode_uint_RGBA(nullVec);
-	res.specLight = encode_uint_RGBA(nullVec);
+	res.directLight = encode_uint_RGBA((uvec4){0, 0, 0, 1});
+	res.specLight = encode_uint_RGBA((uvec4){0, 0, 0, 0});
 
 	return res;
 }
