@@ -225,7 +225,6 @@ int main()
 	//---------------------------------
 	send_all_data_temp();
 	update_gpu_voxel_data();
-	update_gpu_voxel_data();
 
 	//calculate indirect lighting:
 	//---------------------------------

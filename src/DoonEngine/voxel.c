@@ -37,7 +37,6 @@ VoxelChunk* voxelChunks = 0;
 VoxelMaterial* voxelMaterials = 0;
 ivec4* voxelLightingRequests = 0;
 
-uvec4* voxelMapGPU = 0; //what gets sent to/received from the gpu
 ivec4* chunkBufferLayout; //how the chunk buffer is laid out on the gpu, used for chunk streaming
 
 //lighting parameters:
@@ -79,13 +78,6 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	for(int i = 0; i < mapSize.x * mapSize.y * mapSize.z; i++)
 		voxelMap[i].flag = voxelMap[i].visible = 0;
-
-	voxelMapGPU = malloc(sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z);
-	if(!voxelMapGPU)
-	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR GPU VOXEL MAP\n");
-		return false;
-	}
 
 	voxelChunks = malloc(sizeof(VoxelChunk) * maxChunks);
 	if(!voxelChunks)
@@ -185,7 +177,6 @@ void deinit_voxel_pipeline()
 	glDeleteBuffers(1, &lightingRequestBuffer);
 
 	free(voxelMap);
-	free(voxelMapGPU);
 	free(voxelChunks);
 	free(chunkBufferLayout);
 	free(voxelMaterials);
@@ -198,81 +189,94 @@ void deinit_voxel_pipeline()
 
 void update_gpu_voxel_data()
 {
-	int maxIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z;
-	size_t size = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
+	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
+	const size_t gpuChunkSize = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z; //the size of a voxel chunk on the GPU
 
+	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
+	uvec4* voxelMapGPU = (uvec4*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
+	//bind the chunk buffer so it can be updated:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 
-	int count = 0;
+	//loop through every map tile:
 	for(int z = 0; z < mapSizeGPU.z; z++)
-		for(int y = 0; y < mapSizeGPU.y; y++)
-			for(int x = 0; x < mapSizeGPU.x; x++)
+	for(int y = 0; y < mapSizeGPU.y; y++)
+	for(int x = 0; x < mapSizeGPU.x; x++)
+	{
+		int cpuMapIndex = FLATTEN_INDEX(x, y, z, mapSize);    //the map index for the cpu-side memory
+		int gpuMapIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU); //the map index for the gpu-side memory
+
+		voxelMapGPU[gpuMapIndex].y = 0; //set the "visible" flag to 0
+
+		if(voxelMapGPU[gpuMapIndex].z < UINT32_MAX) //increase the "time last used" flag
+			voxelMapGPU[gpuMapIndex].z++;
+
+		if(voxelMapGPU[gpuMapIndex].x == 3) //if flag = 3 (requested), try to load a new chunk
+		{
+			//variables that belong to the oldest chunk:
+			int maxTime = 0;
+			int maxTimeIndex = -1;
+			int maxTimeMapIndex = -1;
+
+			//loop through every chunk to look for oldest:
+			for(int i = 0; i < maxChunksGPU; i++)
 			{
-				int cpuIndex = FLATTEN_INDEX(x, y, z, mapSize);
-				int gpuIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU);
+				ivec4 chunkPos = chunkBufferLayout[i];
+				int chunkMapIndex = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSizeGPU);
 
-				if(voxelMapGPU[gpuIndex].x == 3) //if flag = 3 (requested), load chunk
+				//if chunk does not belong to any active map tile, instantly use it
+				if(chunkPos.w < 0 || chunkMapIndex >= maxGpuMapIndex)
 				{
-					int maxTime = 0;
-					int maxTimeIndex = -1;
-					int maxTimeMapIndex = -1;
-
-					for(int i = 0; i < maxChunksGPU; i++)
-					{
-						ivec4 pos = chunkBufferLayout[i];
-						int mapIndex = FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSizeGPU);
-
-						if(pos.w < 0 || mapIndex >= maxIndex)
-						{
-							maxTime = 2;
-							maxTimeIndex = i;
-							maxTimeMapIndex = -1;
-							break;
-						}
-						else if(voxelMapGPU[mapIndex].z > maxTime)
-						{
-							maxTime = voxelMapGPU[mapIndex].z;
-							maxTimeIndex = i;
-							maxTimeMapIndex = mapIndex;
-						}
-					}
-
-					if(maxTime > 1)
-					{
-						if(maxTimeMapIndex >= 0)
-							voxelMapGPU[maxTimeMapIndex].x = voxelMapGPU[maxTimeMapIndex].x > 0 ? 2 : 0;
-
-						voxelMapGPU[gpuIndex].x = 1;
-						voxelMapGPU[gpuIndex].w = maxTimeIndex;
-
-						chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0};
-
-						glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * size, sizeof(VoxelChunk), &voxelChunks[cpuIndex]);
-					}
+					maxTime = 2;
+					maxTimeIndex = i;
+					maxTimeMapIndex = -1;
+					break;
+				}
+				else if(voxelMapGPU[chunkMapIndex].z > maxTime) //else, check if it is older than the current oldest
+				{
+					maxTime = voxelMapGPU[chunkMapIndex].z;
+					maxTimeIndex = i;
+					maxTimeMapIndex = chunkMapIndex;
 				}
 			}
 
-	for(int z = 0; z < mapSizeGPU.z; z++)
-		for(int y = 0; y < mapSizeGPU.y; y++)
-			for(int x = 0; x < mapSizeGPU.x; x++)
+			if(maxTime > 1) //only load in the new chunk if the old one isnt currently in use
 			{
-				int i = FLATTEN_INDEX(x, y, z, mapSizeGPU);
+				if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded
+					voxelMapGPU[maxTimeMapIndex].x = voxelMapGPU[maxTimeMapIndex].x > 0 ? 2 : 0;
 
-				voxelMapGPU[i].y = 0; //set visible
+				voxelMapGPU[gpuMapIndex].x = 1; //set the new tile's flag to loaded
+				voxelMapGPU[gpuMapIndex].w = maxTimeIndex;
 
-				if(voxelMapGPU[i].z < UINT32_MAX)
-					voxelMapGPU[i].z++;
+				chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0}; //update the chunk layout
+
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * gpuChunkSize, sizeof(VoxelChunk), &voxelChunks[cpuMapIndex]); //send the data
 			}
+			else //if the oldest chunk is currently in use, double the buffer size
+			{
+				ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
 
-	for(int i = 0; i < maxChunksGPU; i++)
-		if(chunkBufferLayout[i].w >= 0)
-			count++;
+				//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
+				void* oldChunkData = malloc(gpuChunkSize * maxChunksGPU);
+				if(!oldChunkData)
+				{
+					ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
+					return;
+				}
 
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, gpuChunkSize * maxChunksGPU, oldChunkData); //get old data
+				set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, gpuChunkSize * (maxChunksGPU / 2), oldChunkData); //send back old data
+
+				free(oldChunkData); //free temporary memory
+			}
+		}
+	}
+
+	//unmap:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
+	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
 void update_voxel_indirect_lighting(unsigned int numChunks, float time)
@@ -326,14 +330,8 @@ void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
 
 void send_all_data_temp()
 {
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
-	int min = min(maxChunks, maxChunksGPU);
-	size_t size = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
-	for(int i = 0; i < min; i++)
-	{
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * size, sizeof(VoxelChunk), &voxelChunks[i]);
-	}
-
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
+	uvec4* voxelMapGPU = (uvec4*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 	for(int z = 0; z < mapSizeGPU.z; z++)
 		for(int y = 0; y < mapSizeGPU.y; y++)
 			for(int x = 0; x < mapSizeGPU.x; x++)
@@ -346,9 +344,7 @@ void send_all_data_temp()
 				voxelMapGPU[gpuIndex].z = 0;
 				voxelMapGPU[gpuIndex].w = 0;
 			}
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
+	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelMaterial) * MAX_MATERIALS, voxelMaterials);
@@ -438,13 +434,6 @@ bool set_voxel_map_size_gpu(uvec3 size)
 		return false;
 	}
 
-	voxelMapGPU = realloc(voxelMapGPU, sizeof(uvec4) * size.x * size.y * size.z);
-	if(!voxelMapGPU)
-	{
-		ERROR_LOG("ERROR - FAILED TO REALLOCATE GPU VOXEL MAP\n");
-		return false;
-	}	
-
 	mapSizeGPU = size;
 	return true;
 }
@@ -462,6 +451,19 @@ bool set_max_voxel_chunks_gpu(unsigned int num)
 	{	
 		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
 		return false;
+	}
+
+	chunkBufferLayout = realloc(chunkBufferLayout, sizeof(ivec4) * num);
+	if(!chunkBufferLayout)
+	{
+		ERROR_LOG("ERROR - FAILED TO REALLOCATE MEMORY FOR VOXEL MATERIALS");
+		return false;
+	}
+
+	if(num > maxChunksGPU)
+	{
+		for(int i = num - maxChunksGPU; i < num; i++)
+			chunkBufferLayout[i] = (ivec4){-1, -1, -1, -1};
 	}
 
 	maxChunksGPU = num;
