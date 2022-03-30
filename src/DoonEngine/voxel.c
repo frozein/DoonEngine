@@ -32,10 +32,13 @@ unsigned int maxChunksGPU = 0;
 unsigned int maxLightingRequests = 0;
 
 //cpu-side memory:
-int* voxelMap = 0;
+VoxelChunkHandle* voxelMap = 0;
 VoxelChunk* voxelChunks = 0;
 VoxelMaterial* voxelMaterials = 0;
 ivec4* voxelLightingRequests = 0;
+
+uvec4* voxelMapGPU = 0; //what gets sent to/received from the gpu
+ivec4* chunkBufferLayout; //how the chunk buffer is laid out on the gpu, used for chunk streaming
 
 //lighting parameters:
 vec3 sunDir = {-1.0f, 1.0f, -1.0f};
@@ -67,23 +70,27 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	//allocate cpu-side memory:
 	//---------------------------------
-	voxelMap = malloc(sizeof(int) * mapSize.x * mapSize.y * mapSize.z);
+	voxelMap = malloc(sizeof(VoxelChunkHandle) * mapSize.x * mapSize.y * mapSize.z);
 	if(!voxelMap)
 	{
 		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MAP\n");
-		texture_free(finalTex);
 		return false;
 	}
 
 	for(int i = 0; i < mapSize.x * mapSize.y * mapSize.z; i++)
-		voxelMap[i] = -1;
+		voxelMap[i].flag = voxelMap[i].visible = 0;
+
+	voxelMapGPU = malloc(sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z);
+	if(!voxelMapGPU)
+	{
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR GPU VOXEL MAP\n");
+		return false;
+	}
 
 	voxelChunks = malloc(sizeof(VoxelChunk) * maxChunks);
 	if(!voxelChunks)
 	{
 		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL CHUNKS\n");
-		texture_free(finalTex);
-		free(voxelMap);
 		return false;
 	}
 
@@ -93,13 +100,20 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 				for(int x = 0; x < CHUNK_SIZE_X; x++)
 					voxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
 
+	chunkBufferLayout = malloc(sizeof(ivec4) * maxChunksGPU);
+	if(!chunkBufferLayout)
+	{
+		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR CHUNK BUFFER LAYOUT\n");
+		return false;
+	}
+
+	for(int i = 0; i < maxChunksGPU; i++)
+		chunkBufferLayout[i] = (ivec4){-1, -1, -1, -1};
+
 	voxelMaterials = malloc(sizeof(VoxelMaterial) * MAX_MATERIALS);
 	if(!voxelMaterials)
 	{
 		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MATERIALS\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
 		return false;
 	}
 
@@ -107,10 +121,6 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	if(!voxelLightingRequests)
 	{
 		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL LIGHTING REQUESTS\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
 		return false;
 	}
 
@@ -119,23 +129,12 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	if(!gen_shader_storage_buffer(&mapBuffer, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
-		free(voxelLightingRequests);
 		return false;
 	}
 
-	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * 2 * maxChunksGPU, 1))
+	if(!gen_shader_storage_buffer(&chunkBuffer, (sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z) * maxChunksGPU, 1))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
-		free(voxelLightingRequests);
-		glDeleteBuffers(1, &mapBuffer);
 		return false;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
@@ -144,27 +143,12 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	if(!gen_shader_storage_buffer(&materialBuffer, sizeof(VoxelMaterial) * MAX_MATERIALS, 2))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
-		free(voxelLightingRequests);
-		glDeleteBuffers(1, &mapBuffer);
-		glDeleteBuffers(1, &chunkBuffer);
 		return false;
 	}
 
 	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 3))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
-		free(voxelLightingRequests);
-		glDeleteBuffers(1, &mapBuffer);
-		glDeleteBuffers(1, &chunkBuffer);
-		glDeleteBuffers(1, &materialBuffer);
 		return false;
 	}
 
@@ -177,19 +161,6 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	if(direct < 0 || indirect < 0 || final < 0)
 	{
 		ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
-		texture_free(finalTex);
-		free(voxelMap);
-		free(voxelChunks);
-		free(voxelMaterials);
-		free(voxelLightingRequests);
-		glDeleteBuffers(1, &mapBuffer);
-		glDeleteBuffers(1, &chunkBuffer);
-		glDeleteBuffers(1, &materialBuffer);
-		glDeleteBuffers(1, &lightingRequestBuffer);
-		shader_program_free(direct   >= 0 ? direct : 0);
-		shader_program_free(indirect >= 0 ? indirect : 0);
-		shader_program_free(final    >= 0 ? final : 0);
-
 		return false;
 	}
 
@@ -214,11 +185,94 @@ void deinit_voxel_pipeline()
 	glDeleteBuffers(1, &lightingRequestBuffer);
 
 	free(voxelMap);
+	free(voxelMapGPU);
 	free(voxelChunks);
+	free(chunkBufferLayout);
 	free(voxelMaterials);
 	free(voxelLightingRequests);
 
 	texture_free(finalTex);
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+
+void update_gpu_voxel_data()
+{
+	int maxIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z;
+	size_t size = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
+	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
+
+	int count = 0;
+	for(int z = 0; z < mapSizeGPU.z; z++)
+		for(int y = 0; y < mapSizeGPU.y; y++)
+			for(int x = 0; x < mapSizeGPU.x; x++)
+			{
+				int cpuIndex = FLATTEN_INDEX(x, y, z, mapSize);
+				int gpuIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU);
+
+				if(voxelMapGPU[gpuIndex].x == 3) //if flag = 3 (requested), load chunk
+				{
+					int maxTime = 0;
+					int maxTimeIndex = -1;
+					int maxTimeMapIndex = -1;
+
+					for(int i = 0; i < maxChunksGPU; i++)
+					{
+						ivec4 pos = chunkBufferLayout[i];
+						int mapIndex = FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSizeGPU);
+
+						if(pos.w < 0 || mapIndex >= maxIndex)
+						{
+							maxTime = 2;
+							maxTimeIndex = i;
+							maxTimeMapIndex = -1;
+							break;
+						}
+						else if(voxelMapGPU[mapIndex].z > maxTime)
+						{
+							maxTime = voxelMapGPU[mapIndex].z;
+							maxTimeIndex = i;
+							maxTimeMapIndex = mapIndex;
+						}
+					}
+
+					if(maxTime > 1)
+					{
+						if(maxTimeMapIndex >= 0)
+							voxelMapGPU[maxTimeMapIndex].x = voxelMapGPU[maxTimeMapIndex].x > 0 ? 2 : 0;
+
+						voxelMapGPU[gpuIndex].x = 1;
+						voxelMapGPU[gpuIndex].w = maxTimeIndex;
+
+						chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0};
+
+						glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * size, sizeof(VoxelChunk), &voxelChunks[cpuIndex]);
+					}
+				}
+			}
+
+	for(int z = 0; z < mapSizeGPU.z; z++)
+		for(int y = 0; y < mapSizeGPU.y; y++)
+			for(int x = 0; x < mapSizeGPU.x; x++)
+			{
+				int i = FLATTEN_INDEX(x, y, z, mapSizeGPU);
+
+				voxelMapGPU[i].y = 0; //set visible
+
+				if(voxelMapGPU[i].z < UINT32_MAX)
+					voxelMapGPU[i].z++;
+			}
+
+	for(int i = 0; i < maxChunksGPU; i++)
+		if(chunkBufferLayout[i].w >= 0)
+			count++;
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
 }
 
 void update_voxel_indirect_lighting(unsigned int numChunks, float time)
@@ -230,6 +284,9 @@ void update_voxel_indirect_lighting(unsigned int numChunks, float time)
 	shader_uniform_int(indirectLightingShader, "bounceLimit", bounceLimit);
 	shader_uniform_float(indirectLightingShader, "time", time);
 	glUniform3uiv(glGetUniformLocation(indirectLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * numChunks, voxelLightingRequests);
 
 	glDispatchCompute(numChunks, 1, 1);
 }
@@ -244,6 +301,9 @@ void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos)
 	shader_uniform_float(directLightingShader, "ambientStrength", ambientStrength);
 	shader_uniform_vec3 (directLightingShader, "camPos", camPos);
 	glUniform3uiv(glGetUniformLocation(directLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * numChunks, voxelLightingRequests);
 
 	glDispatchCompute(maxLightingRequests, 1, 1);
 }
@@ -266,31 +326,32 @@ void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
 
 void send_all_data_temp()
 {
-	ivec4* tempMap = malloc(sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z);
-
-	for(int x = 0; x < mapSize.x; x++)
-		for(int y = 0; y < mapSize.y; y++)
-			for(int z = 0; z < mapSize.z; z++)
-			{
-				int index = x + mapSize.x * y + mapSize.x * mapSize.y * z;
-				tempMap[index].x = voxelMap[index] < maxChunksGPU ? voxelMap[index] : -1;
-			}
-
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 	int min = min(maxChunks, maxChunksGPU);
+	size_t size = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
 	for(int i = 0; i < min; i++)
 	{
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * 2 * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[i]);
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * size, sizeof(VoxelChunk), &voxelChunks[i]);
 	}
 
+	for(int z = 0; z < mapSizeGPU.z; z++)
+		for(int y = 0; y < mapSizeGPU.y; y++)
+			for(int x = 0; x < mapSizeGPU.x; x++)
+			{
+				int cpuIndex = x + mapSize.x * (y + z * mapSize.y);
+				int gpuIndex = x + mapSizeGPU.x * (y + z * mapSizeGPU.y);
+
+				voxelMapGPU[gpuIndex].x = voxelMap[cpuIndex].flag > 0 ? 2 : 0;
+				voxelMapGPU[gpuIndex].y = 0;
+				voxelMapGPU[gpuIndex].z = 0;
+				voxelMapGPU[gpuIndex].w = 0;
+			}
+
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, tempMap);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(uvec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z, voxelMapGPU);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelMaterial) * MAX_MATERIALS, voxelMaterials);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * maxLightingRequests, voxelLightingRequests);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -312,7 +373,7 @@ uvec3 voxel_map_size()
 
 bool set_voxel_map_size(uvec3 size)
 {
-	int* newMap = malloc(sizeof(int) * size.x * size.y * size.z);
+	VoxelChunkHandle* newMap = malloc(sizeof(VoxelChunkHandle) * size.x * size.y * size.z);
 	if(!newMap)
 	{
 		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
@@ -327,7 +388,8 @@ bool set_voxel_map_size(uvec3 size)
 				int oldIndex = x + mapSize.x * (y + z * mapSize.y);
 				int newIndex = x + size.x * (y + z * size.y);
 
-				newMap[newIndex] = oldIndex < oldMaxIndex ? voxelMap[oldIndex] : -1;
+				newMap[newIndex].flag  = oldIndex < oldMaxIndex ? voxelMap[oldIndex].flag  : 0;
+				newMap[newIndex].gpuIndex = oldIndex < oldMaxIndex ? voxelMap[oldIndex].gpuIndex : 0;
 			}
 
 	free(voxelMap);
@@ -375,6 +437,13 @@ bool set_voxel_map_size_gpu(uvec3 size)
 		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL MAP BUFFER\n");
 		return false;
 	}
+
+	voxelMapGPU = realloc(voxelMapGPU, sizeof(uvec4) * size.x * size.y * size.z);
+	if(!voxelMapGPU)
+	{
+		ERROR_LOG("ERROR - FAILED TO REALLOCATE GPU VOXEL MAP\n");
+		return false;
+	}	
 
 	mapSizeGPU = size;
 	return true;
@@ -470,7 +539,7 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 	return pos.x < CHUNK_SIZE_X && pos.y < CHUNK_SIZE_Y && pos.z < CHUNK_SIZE_Z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-int get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
+VoxelChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
 	return voxelMap[pos.x + mapSize.x * (pos.y + mapSize.y * pos.z)];
 }

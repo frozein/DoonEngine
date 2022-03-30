@@ -58,6 +58,8 @@ float fov = 0.8f;
 
 float deltaTime = 0.0f;
 
+bool updateData = true;
+
 #define GAMMA 2.2f
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -86,6 +88,7 @@ int main()
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
+	//glfwSwapInterval(1);
 
 	//load opengl functions:
 	//---------------------------------
@@ -178,19 +181,12 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 30 * 30 * 30, 30 * 30 * 30))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 2000, 30 * 30 * 30))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		scanf("%d", &error);
 		return -1;
 	}
-
-	int lightingCount = 0;
-
-	vec3 colors[3][2] = {{(vec3){1.00, 0.25, 0.00}, (vec3){1.00, 0.70, 0.00}}, {(vec3){0.35, 0.00, 0.73}, (vec3){0.00, 0.55, 0.94}}, {(vec3){0.00, 1.00, 0.28}, (vec3){0.64, 0.82, 0.00}}};
-	for(int i = 0; i < 3; i++)
-		for(int j = 0; j < 2; j++)
-			colors[i][j] = (vec3){pow(colors[i][j].x, GAMMA), pow(colors[i][j].y, GAMMA), pow(colors[i][j].z, GAMMA)};
 
 	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE_Z; z++)
 		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE_Y; y++)
@@ -214,7 +210,9 @@ int main()
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
 					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
-					voxelMap[mapIndex] = mapIndex;
+					voxelMap[mapIndex].gpuIndex = mapIndex;
+					voxelMap[mapIndex].index = mapIndex;
+					voxelMap[mapIndex].flag = 1;
 					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 				}
 			}
@@ -226,6 +224,8 @@ int main()
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
 	send_all_data_temp();
+	update_gpu_voxel_data();
+	update_gpu_voxel_data();
 
 	//calculate indirect lighting:
 	//---------------------------------
@@ -233,17 +233,14 @@ int main()
 	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
 	//sunStrength = (vec3){0.5f, 0.3f, 0.15f}; //for sunset:
 	//sunDir = vec3_normalize((vec3){-1.0f, 0.7f, -1.0f});
-	for(int i = 0; i < 100; i++)
+	/*for(int i = 0; i < 50; i++)
 	{
 		update_voxel_indirect_lighting(30 * 30 * 30, glfwGetTime());
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-	}
+	}*/
 
-	for(int i = 0; i < 10; i++)
-	{
-		update_voxel_direct_lighting(30 * 30 * 30, camPos);
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-	}
+	//update_voxel_direct_lighting(30 * 30 * 30, camPos);
+	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 	//main loop:
 	//---------------------------------
@@ -285,7 +282,9 @@ int main()
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//render voxels:
-		draw_voxels(camPos, camFront, camPlaneU, camPlaneV);
+		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		if(updateData)
+			update_gpu_voxel_data();
 
 		texture_activate(finalTex, 0);
 		shader_program_activate(quadShader);
@@ -365,6 +364,11 @@ void process_input(GLFWwindow *window)
 		viewMode = 4;
 	if(glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
 		viewMode = 5;
+
+	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
+		updateData = true;
+	if(glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS)
+		updateData = false;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((vec3){camFront.x, 0.0f, camFront.z}), camSpeed));

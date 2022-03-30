@@ -102,7 +102,7 @@ void main()
 	//find positions:
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
-	int chunkIndex = get_map_tile(chunkPos);
+	uint chunkIndex = get_map_tile(chunkPos).index;
 	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
 
 	//return if voxel does not exist lol:

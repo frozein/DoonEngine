@@ -38,7 +38,19 @@ typedef struct VoxelGPU
 typedef struct VoxelChunk
 {
 	VoxelGPU voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
+	uvec3 position;
+	
+	GLuint fill;
 } VoxelChunk;
+
+typedef struct VoxelChunkHandle
+{
+	GLuint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
+	GLuint visible;  //whether or not the voxel is visible to the camera
+	GLuint lastUsed; //the time since the chunk was last used
+	GLuint gpuIndex; //the index of the chunk in the GPU-side chunk buffer 
+	GLuint index;    //the index of the chunk
+} VoxelChunkHandle;
 
 typedef struct VoxelMaterial
 {
@@ -56,7 +68,7 @@ typedef struct VoxelMaterial
 //--------------------------------------------------------------------------------------------------------------------------------//
 //NOTE: this memory may differ from that on the GPU, what gets sent to the GPU is determined automatically
 
-extern int* voxelMap; //The x component maps each map position to a chunk in voxelChunks
+extern VoxelChunkHandle* voxelMap; //The x component maps each map position to a chunk in voxelChunks
 extern VoxelChunk* voxelChunks; //Every currently loaded chunk
 extern VoxelMaterial* voxelMaterials; //Every currently active material
 extern ivec4* voxelLightingRequests; //Every chunk requested to have its lighting updated
@@ -75,6 +87,8 @@ bool init_voxel_pipeline(uvec2 textureSize, Texture finalTex, uvec3 mapSize, uns
 //Completely cleans up and deinitializes the voxel pipeline
 void deinit_voxel_pipeline();
 
+//Updates all of the GPU-side voxel memory
+void update_gpu_voxel_data();
 //Iterates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
 void update_voxel_indirect_lighting(unsigned int numChunks, float time);
 //Updates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks

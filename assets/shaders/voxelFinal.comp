@@ -91,6 +91,10 @@ void main()
 				break;
 			}
 			}
+
+			uvec3 mapPos = uvec3(floor(rayPos));
+			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+			map[index].visible = 1;
 		}
 		else
 		{

@@ -36,7 +36,16 @@ struct CompressedVoxel //a compressed voxel
 struct Chunk //a chunk of voxels
 {
 	CompressedVoxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
+	uvec3 position; //the position of the chunk in the map, for streaming chunk data
 	vec4 indirectLight[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];     //not compressed due to a need for precision
+};
+
+struct ChunkHandle //a handle to a Chunk
+{
+	uint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
+	uint visible;  //whether or not the chunk is visible to the camera
+	uint lastUsed; //the time since the chunk was last used
+	uint index;    //the index of the chunk in the chunk buffer
 };
 
 struct Material
@@ -54,7 +63,7 @@ struct Material
 
 layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains the chunk map
 {
-	int map[];
+	ChunkHandle map[];
 };
 
 layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
@@ -99,9 +108,10 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-int get_map_tile(ivec3 pos) //returns the value of the map at a position
+ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 {
 	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
+	map[index].lastUsed = 0;
 	return map[index];
 }
 
@@ -235,14 +245,14 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 						colorAdd += voxel.specLight * material.specular;
 					
 					//set the visibility to true:
-					atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
+					//atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				}
 			}
 			else
 			{
 				//return the position and set the visibility of the voxel to true
 				chunkPos = mapPos;
-				atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
+				//atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				return true;
 			}
 
@@ -273,8 +283,8 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 	while(in_map_bounds(mapPos))
 	{
 		//check if a solid chunk has been hit:
-		int mapIndex = get_map_tile(mapPos);
-		if (mapIndex >= 0)
+		ChunkHandle mapTile = get_map_tile(mapPos);
+		if (mapTile.flag == 1)
 		{
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
@@ -282,14 +292,22 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			if(step_chunk(mapIndex, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, addSpec, voxel, chunkPos, colorAdd, colorMult))
+			if(step_chunk(mapTile.index, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, addSpec, voxel, chunkPos, colorAdd, colorMult))
 			{
 				vec3 voxelPos = mapPos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
+				map[mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z)].visible = 1;
 
 				return true;
 			}
+		}
+		else if(mapTile.flag > 1)
+		{
+			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+			map[index].flag = 3;
+
+			return true;
 		}
 
 		//iterate the dda algorithm:

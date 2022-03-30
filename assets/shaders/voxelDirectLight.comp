@@ -97,15 +97,17 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 
 void main()
 {
+	//TODO: COMBINE SPEC AND SHADOW RAYS, COMBINE DIRECT AND GLOBAL LIGHT SHADERS
+
 	//find positions:
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
-	int chunkIndex = get_map_tile(chunkPos);
+	uint chunkIndex = get_map_tile(chunkPos).index;
 	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
 	Material thisMaterial = materials[thisVoxel.material];
 
 	//return if voxel does not exist lol:
-	if(thisVoxel.material == 255 || thisVoxel.visible == 0)
+	if(thisVoxel.material == 255)
 		return;
 	
 	//find position of ray (center of the voxel):
