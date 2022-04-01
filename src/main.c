@@ -23,20 +23,8 @@ void mouse_callback(GLFWwindow* window, double x, double y);
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY);
 //Handles window resizeing. DO NOT CALL DIRECTLY
 void framebuffer_size_callback(GLFWwindow* window, int w, int h);
-
-void GLAPIENTRY
-MessageCallback( GLenum source,
-                 GLenum type,
-                 GLuint id,
-                 GLenum severity,
-                 GLsizei length,
-                 const GLchar* message,
-                 const void* userParam )
-{
-  ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
-           ( type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : "" ),
-            type, severity, message );
-}
+//Prints any OpenGL error or warning messages to the screen
+void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -104,7 +92,7 @@ int main()
 	glViewport(0, 0, SCREEN_W, SCREEN_H);
 
 	glEnable              ( GL_DEBUG_OUTPUT );
-	glDebugMessageCallback( MessageCallback, 0 );
+	glDebugMessageCallback( message_callback, 0 );
 
 	//set callback funcs:
 	//---------------------------------
@@ -224,7 +212,7 @@ int main()
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
 	send_all_data_temp();
-	update_gpu_voxel_data();
+	update_gpu_voxel_data(false);
 
 	//calculate indirect lighting:
 	//---------------------------------
@@ -246,6 +234,9 @@ int main()
 	float lastFrame = glfwGetTime();
 	int numFrames = 0;
 	float cumTime = 0.0;
+
+	unsigned int numChunksToUpdate = 0;
+	int frameNum = 0;
 
 	while(!glfwWindowShouldClose(window))
 	{
@@ -283,11 +274,19 @@ int main()
 		//render voxels:
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		if(updateData)
-			update_gpu_voxel_data();
+		{
+			frameNum++;
+
+			if(frameNum % 5 == 0)
+				numChunksToUpdate = update_gpu_voxel_data(true);
+			else
+				update_gpu_voxel_data(false);
+		}
+
+		update_voxel_direct_lighting(numChunksToUpdate / 5, (numChunksToUpdate / 5) * (frameNum % 5), camPos);
 
 		texture_activate(finalTex, 0);
 		shader_program_activate(quadShader);
-
 
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
@@ -386,4 +385,11 @@ void process_input(GLFWwindow *window)
 void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 {
 	glViewport(0, 0, w, h);
+}
+
+void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
+{
+	ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+        	 (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
+        	  type, severity, message );
 }

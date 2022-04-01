@@ -72,6 +72,7 @@ extern VoxelChunkHandle* voxelMap; //The x component maps each map position to a
 extern VoxelChunk* voxelChunks; //Every currently loaded chunk
 extern VoxelMaterial* voxelMaterials; //Every currently active material
 extern ivec4* voxelLightingRequests; //Every chunk requested to have its lighting updated
+extern ivec4* chunkBufferLayout; //How the chunk buffer is laid out on the gpu, used for chunk streaming
 
 extern vec3 sunDir;
 extern vec3 sunStrength;
@@ -88,11 +89,11 @@ bool init_voxel_pipeline(uvec2 textureSize, Texture finalTex, uvec3 mapSize, uns
 void deinit_voxel_pipeline();
 
 //Updates all of the GPU-side voxel memory
-void update_gpu_voxel_data();
+unsigned int update_gpu_voxel_data(bool updateLighting);
 //Iterates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
-void update_voxel_indirect_lighting(unsigned int numChunks, float time);
+void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time);
 //Updates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
-void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos);
+void update_voxel_direct_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos);
 //Draws the voxels to a texture and renders them to the screen
 void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
 

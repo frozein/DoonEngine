@@ -36,8 +36,7 @@ VoxelChunkHandle* voxelMap = 0;
 VoxelChunk* voxelChunks = 0;
 VoxelMaterial* voxelMaterials = 0;
 ivec4* voxelLightingRequests = 0;
-
-ivec4* chunkBufferLayout; //how the chunk buffer is laid out on the gpu, used for chunk streaming
+ivec4* chunkBufferLayout;
 
 //lighting parameters:
 vec3 sunDir = {-1.0f, 1.0f, -1.0f};
@@ -187,7 +186,7 @@ void deinit_voxel_pipeline()
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void update_gpu_voxel_data()
+unsigned int update_gpu_voxel_data(bool updateLighting)
 {
 	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
 	const size_t gpuChunkSize = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z; //the size of a voxel chunk on the GPU
@@ -199,6 +198,9 @@ void update_gpu_voxel_data()
 	//bind the chunk buffer so it can be updated:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 
+	//the current number of chunks to have their lighting updated:
+	int numChunksToUpdate = 0;
+
 	//loop through every map tile:
 	for(int z = 0; z < mapSizeGPU.z; z++)
 	for(int y = 0; y < mapSizeGPU.y; y++)
@@ -206,11 +208,6 @@ void update_gpu_voxel_data()
 	{
 		int cpuMapIndex = FLATTEN_INDEX(x, y, z, mapSize);    //the map index for the cpu-side memory
 		int gpuMapIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU); //the map index for the gpu-side memory
-
-		voxelMapGPU[gpuMapIndex].y = 0; //set the "visible" flag to 0
-
-		if(voxelMapGPU[gpuMapIndex].z < UINT32_MAX) //increase the "time last used" flag
-			voxelMapGPU[gpuMapIndex].z++;
 
 		if(voxelMapGPU[gpuMapIndex].x == 3) //if flag = 3 (requested), try to load a new chunk
 		{
@@ -262,7 +259,7 @@ void update_gpu_voxel_data()
 				if(!oldChunkData)
 				{
 					ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
-					return;
+					return 0;
 				}
 
 				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, gpuChunkSize * maxChunksGPU, oldChunkData); //get old data
@@ -272,14 +269,25 @@ void update_gpu_voxel_data()
 				free(oldChunkData); //free temporary memory
 			}
 		}
+
+		//if chunk is loaded and visible, add to lighting request buffer
+		if(updateLighting && voxelMapGPU[gpuMapIndex].x == 1 && voxelMapGPU[gpuMapIndex].y == 1)
+			voxelLightingRequests[numChunksToUpdate++] = (ivec4){x, y, z, 0};
+		
+		voxelMapGPU[gpuMapIndex].y = 0; //set the "visible" flag to 0
+
+		if(voxelMapGPU[gpuMapIndex].z < UINT32_MAX) //increase the "time last used" flag
+			voxelMapGPU[gpuMapIndex].z++;
 	}
 
 	//unmap:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+
+	return numChunksToUpdate;
 }
 
-void update_voxel_indirect_lighting(unsigned int numChunks, float time)
+void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time)
 {
 	shader_program_activate(indirectLightingShader);
 
@@ -290,12 +298,12 @@ void update_voxel_indirect_lighting(unsigned int numChunks, float time)
 	glUniform3uiv(glGetUniformLocation(indirectLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * numChunks, voxelLightingRequests);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);
 
 	glDispatchCompute(numChunks, 1, 1);
 }
 
-void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos)
+void update_voxel_direct_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos)
 {
 	shader_program_activate(directLightingShader);
 
@@ -307,9 +315,9 @@ void update_voxel_direct_lighting(unsigned int numChunks, vec3 camPos)
 	glUniform3uiv(glGetUniformLocation(directLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(vec4) * numChunks, voxelLightingRequests);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);
 
-	glDispatchCompute(maxLightingRequests, 1, 1);
+	glDispatchCompute(numChunks, 1, 1);
 }
 
 void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
