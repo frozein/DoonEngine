@@ -28,10 +28,12 @@ typedef struct Voxel
 //a single voxel, as stored on the GPU
 typedef struct VoxelGPU
 {
-	GLuint albedo; //compressed
-	GLuint normal; //compressed
-	GLuint directLight; //compressed
-	GLuint specLight; //compressed
+	GLuint albedo;         //compressed
+	GLuint normal;         //compressed
+	GLuint directLight;    //compressed
+	GLuint specLight;      //compressed
+	vec3 indirectLight;    //not compressed due to need for precision
+	float indirectSamples; //not compressed due to need for precision
 } VoxelGPU;
 
 //a chunk of voxels, as stored on the GPU

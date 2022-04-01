@@ -237,6 +237,7 @@ int main()
 
 	unsigned int numChunksToUpdate = 0;
 	int frameNum = 0;
+	float oldTime = 0.0f;
 
 	while(!glfwWindowShouldClose(window))
 	{
@@ -271,19 +272,24 @@ int main()
 		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
-		//render voxels:
+		//render voxels (split the lighting calculations over 5 frames):
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		if(updateData)
 		{
 			frameNum++;
 
 			if(frameNum % 5 == 0)
+			{
 				numChunksToUpdate = update_gpu_voxel_data(true);
+				oldTime = glfwGetTime();
+			}
 			else
 				update_gpu_voxel_data(false);
 		}
 
-		update_voxel_direct_lighting(numChunksToUpdate / 5, (numChunksToUpdate / 5) * (frameNum % 5), camPos);
+		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
+		update_voxel_direct_lighting(numThisFrame, numThisFrame * (frameNum % 5), camPos);
+		update_voxel_indirect_lighting(numThisFrame, numThisFrame * (frameNum % 5), oldTime);
 
 		texture_activate(finalTex, 0);
 		shader_program_activate(quadShader);

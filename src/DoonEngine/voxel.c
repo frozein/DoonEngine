@@ -123,7 +123,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		return false;
 	}
 
-	if(!gen_shader_storage_buffer(&chunkBuffer, (sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z) * maxChunksGPU, 1))
+	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * maxChunksGPU, 1))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER\n");
 		return false;
@@ -189,7 +189,6 @@ void deinit_voxel_pipeline()
 unsigned int update_gpu_voxel_data(bool updateLighting)
 {
 	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
-	const size_t gpuChunkSize = sizeof(VoxelChunk) + sizeof(vec4) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z; //the size of a voxel chunk on the GPU
 
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
@@ -246,25 +245,28 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 				voxelMapGPU[gpuMapIndex].x = 1; //set the new tile's flag to loaded
 				voxelMapGPU[gpuMapIndex].w = maxTimeIndex;
 
-				chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0}; //update the chunk layout
+				//store old data to maintain saved lighting and load in new data:
+				int unloadedCpuIndex = FLATTEN_INDEX(chunkBufferLayout[maxTimeIndex].x, chunkBufferLayout[maxTimeIndex].y, chunkBufferLayout[maxTimeIndex].z, mapSize);
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[unloadedCpuIndex]);
+				glBufferSubData   (GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[cpuMapIndex]);
 
-				glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * gpuChunkSize, sizeof(VoxelChunk), &voxelChunks[cpuMapIndex]); //send the data
+				chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0}; //update the chunk layout
 			}
 			else //if the oldest chunk is currently in use, double the buffer size
 			{
 				ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
 
 				//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
-				void* oldChunkData = malloc(gpuChunkSize * maxChunksGPU);
+				void* oldChunkData = malloc(sizeof(VoxelChunk) * maxChunksGPU);
 				if(!oldChunkData)
 				{
 					ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
 					return 0;
 				}
 
-				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, gpuChunkSize * maxChunksGPU, oldChunkData); //get old data
+				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * maxChunksGPU, oldChunkData); //get old data
 				set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
-				glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, gpuChunkSize * (maxChunksGPU / 2), oldChunkData); //send back old data
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * (maxChunksGPU / 2), oldChunkData); //send back old data
 
 				free(oldChunkData); //free temporary memory
 			}
@@ -454,7 +456,7 @@ unsigned int max_voxel_chunks_gpu()
 bool set_max_voxel_chunks_gpu(unsigned int num)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, 2 * sizeof(VoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(VoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{	
 		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
@@ -519,6 +521,8 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 	res.normal = encode_uint_RGBA(normal);
 	res.directLight = encode_uint_RGBA((uvec4){0, 0, 0, 1});
 	res.specLight = encode_uint_RGBA((uvec4){0, 0, 0, 0});
+	res.indirectLight = (vec3){0.0f, 0.0f, 0.0f};
+	res.indirectSamples = 0.0f;
 
 	return res;
 }
