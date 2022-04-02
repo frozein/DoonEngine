@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <malloc.h>
 #include <stdint.h>
+#include <math.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -560,10 +561,94 @@ VoxelChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a pos
 
 VoxelGPU get_voxel(unsigned int chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
 {
-	return voxelChunks[chunk].voxels[pos.x][pos.y][pos.z];
+ 	return voxelChunks[chunk].voxels[pos.x][pos.y][pos.z];
+}
+
+bool does_voxel_exist(unsigned int chunk, ivec3 localPos) //returns true if the voxel at the position is solid (not empty)
+{
+	VoxelGPU voxel = get_voxel(chunk, localPos);
+	unsigned int material = voxel.albedo & 0xFF;
+	return material < 255;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+
+static int sign(float num)
+{
+	return (num > 0) ? 1 : ((num < 0) ? -1 : 0);
+}
+
+bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitPos, Voxel* hitVoxel, ivec3* hitNormal)
+{
+	//scale to use voxel-level coordinates
+	rayPos = vec3_scale(rayPos, CHUNK_SIZE_X);
+
+	//utility:
+	vec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};
+	vec3 rayDirSign = {sign(rayDir.x), sign(rayDir.y), sign(rayDir.z)};
+
+	//create vars needed for dda:
+	ivec3 pos = {floor(rayPos.x), floor(rayPos.y), floor(rayPos.z)}; //the position in the voxel map
+	vec3 deltaDist = {fabs(invRayDir.x), fabs(invRayDir.y), fabs(invRayDir.z)}; //the distance the ray has to travel to move one unit in each direction
+	ivec3 rayStep = {rayDirSign.x, rayDirSign.y, rayDirSign.z}; //the direction the ray steps
+
+	vec3 sideDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+	sideDist.x = (rayDirSign.x * (pos.x - rayPos.x) + (rayDirSign.x * 0.5) + 0.5) * deltaDist.x;
+	sideDist.y = (rayDirSign.y * (pos.y - rayPos.y) + (rayDirSign.y * 0.5) + 0.5) * deltaDist.y;
+	sideDist.z = (rayDirSign.z * (pos.z - rayPos.z) + (rayDirSign.z * 0.5) + 0.5) * deltaDist.z;
+
+	unsigned int numSteps = 0;
+	while(numSteps < maxSteps)
+	{
+		//check if in bounds:
+		ivec3 mapPos = {pos.x / CHUNK_SIZE_X, pos.y / CHUNK_SIZE_Y, pos.z / CHUNK_SIZE_Z};
+		if(in_map_bounds(mapPos))
+		{
+			VoxelChunkHandle mapTile = get_map_tile(mapPos);
+			ivec3 localPos = {pos.x % CHUNK_SIZE_X, pos.y % CHUNK_SIZE_Y, pos.z % CHUNK_SIZE_Z};
+
+			//check if voxel exists:
+			if(mapTile.flag == 1 && does_voxel_exist(mapTile.index, localPos))
+			{
+				*hitVoxel = voxelGPU_to_voxel(get_voxel(mapTile.index, localPos));
+				*hitPos = pos;
+				return true;
+			}
+		}
+
+		//iterate DDA algorithm:
+		if (sideDist.x < sideDist.y) 
+			if (sideDist.x < sideDist.z) 
+			{
+				sideDist.x += deltaDist.x;
+				pos.x += rayStep.x;
+				*hitNormal = (ivec3){-rayStep.x, 0, 0};
+			}
+			else 
+			{
+				sideDist.z += deltaDist.z;
+				pos.z += rayStep.z;
+				*hitNormal = (ivec3){0, 0, -rayStep.z};
+			}
+		else
+			if (sideDist.y < sideDist.z) 
+			{
+				sideDist.y += deltaDist.y;
+				pos.y += rayStep.y;
+				*hitNormal = (ivec3){0, -rayStep.y, 0};
+			}
+			else 
+			{
+				sideDist.z += deltaDist.z;
+				pos.z += rayStep.z;
+				*hitNormal = (ivec3){0, 0, -rayStep.z};
+			}
+
+		numSteps++;
+	}
+
+	return false;
+}
 
 static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding)
 {

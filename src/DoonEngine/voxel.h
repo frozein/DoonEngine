@@ -74,7 +74,6 @@ extern VoxelChunkHandle* voxelMap; //The x component maps each map position to a
 extern VoxelChunk* voxelChunks; //Every currently loaded chunk
 extern VoxelMaterial* voxelMaterials; //Every currently active material
 extern ivec4* voxelLightingRequests; //Every chunk requested to have its lighting updated
-extern ivec4* chunkBufferLayout; //How the chunk buffer is laid out on the gpu, used for chunk streaming
 
 extern vec3 sunDir;
 extern vec3 sunStrength;
@@ -84,25 +83,32 @@ extern float shadowSoftness;
 extern unsigned int viewMode;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//INITIALIZATION:
 
 //Initializes the entire voxel rendering pipeline. MUST BE CALLED BEFORE ANY OF THE OTHER FUNCTIONS. Returns true on success, false on failure
 bool init_voxel_pipeline(uvec2 textureSize, Texture finalTex, uvec3 mapSize, unsigned int maxChunks, uvec3 mapSizeGPU, unsigned int maxChunksGPU, unsigned int maxLightingRequests);
 //Completely cleans up and deinitializes the voxel pipeline
 void deinit_voxel_pipeline();
 
+//--------------------------------------------------------------------------------------------------------------------------------//
+//UPDATING/DRAWING:
+
 //Updates all of the GPU-side voxel memory
 unsigned int update_gpu_voxel_data(bool updateLighting);
+
+//Draws the voxels to a texture and renders them to the screen
+void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
+
 //Iterates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
 void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time);
 //Updates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
 void update_voxel_direct_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos);
-//Draws the voxels to a texture and renders them to the screen
-void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
 
 //TEMPORARY
 void send_all_data_temp();
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//CPU-SIDE SETTINGS:
 
 //Returns the current texture size. Returns true on success, false on failure
 uvec2 voxel_texture_size();
@@ -122,6 +128,7 @@ unsigned int current_voxel_chunks();
 bool set_max_voxel_chunks(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//GPU-SIDE SETTINGS
 
 //Returns the current map size on the GPU (in chunks)
 uvec3 voxel_map_size_gpu();
@@ -139,6 +146,21 @@ unsigned int max_voxel_lighting_requests();
 bool set_max_voxel_lighting_requests(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//UTILITY:
+
+//Returns whether or not a given map position is inside the map bounds
+bool in_map_bounds(ivec3 pos);
+//Returns whether or not a given chunk position is inside the chunk bounds
+bool in_chunk_bounds(ivec3 pos);
+//Returns the map tile at the given map position. DOESN'T DO ANY BOUNDS CHECKING
+VoxelChunkHandle get_map_tile(ivec3 pos);
+//Returns the voxel at the given chunk position. DOESN'T DO ANY BOUNDS CHECKING
+VoxelGPU get_voxel(unsigned int chunk, ivec3 pos); //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
+//Returns whether or not the voxel at the given chunk position is solid 
+bool does_voxel_exist(unsigned int chunk, ivec3 localPos);
+
+//Casts a ray into the voxel map and returns whether or not a voxel was hit. If one was hit, data about it is stored in the pointer parameters
+bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitPos, Voxel* hitVoxel, ivec3* hitNormal);
 
 //Compresses a voxel
 VoxelGPU voxel_to_voxelGPU(Voxel voxel);
