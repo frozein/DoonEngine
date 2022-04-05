@@ -18,7 +18,9 @@
 void process_input(GLFWwindow *window);
 
 //Handles updates to the mouse position. DO NOT CALL DIRECTLY
-void mouse_callback(GLFWwindow* window, double x, double y);
+void mouse_pos_callback(GLFWwindow* window, double x, double y);
+//Handles updates to the mouse buttons. DO NOT CALL DIRECTLY
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods);
 //Handles scroll wheel movement. DO NOT CALL DIRECTLY
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY);
 //Handles window resizeing. DO NOT CALL DIRECTLY
@@ -97,7 +99,8 @@ int main()
 	//set callback funcs:
 	//---------------------------------
 	glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
-	glfwSetCursorPosCallback(window, mouse_callback);
+	glfwSetCursorPosCallback(window, mouse_pos_callback);
+	glfwSetMouseButtonCallback(window, mouse_button_callback);
 	glfwSetScrollCallback(window, scroll_callback); 
 	glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
@@ -182,6 +185,7 @@ int main()
 			{
 				int mapIndex = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
 				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
+				voxelMap[mapIndex].index = mapIndex;
 
 				if(vec3_distance((vec3){x, y, z}, (vec3){116.0f, 116.0f, 116.0f}) < 116.0f)
 				{
@@ -198,8 +202,6 @@ int main()
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
 					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
-					voxelMap[mapIndex].gpuIndex = mapIndex;
-					voxelMap[mapIndex].index = mapIndex;
 					voxelMap[mapIndex].flag = 1;
 					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
 				}
@@ -212,7 +214,7 @@ int main()
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
 	send_all_data_temp();
-	update_gpu_voxel_data(false);
+	stream_voxel_chunks(false);
 
 	//calculate indirect lighting:
 	//---------------------------------
@@ -280,11 +282,11 @@ int main()
 
 			if(frameNum % 5 == 0)
 			{
-				numChunksToUpdate = update_gpu_voxel_data(true);
+				numChunksToUpdate = stream_voxel_chunks(true);
 				oldTime = glfwGetTime();
 			}
 			else
-				update_gpu_voxel_data(false);
+				stream_voxel_chunks(false);
 		}
 
 		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
@@ -313,7 +315,7 @@ int main()
 	return 0;
 }
 
-void mouse_callback(GLFWwindow *window, double x, double y)
+void mouse_pos_callback(GLFWwindow *window, double x, double y)
 {
 	if(firstMouse)
 	{
@@ -338,6 +340,45 @@ void mouse_callback(GLFWwindow *window, double x, double y)
 		pitch = 89.0f;
 	if(pitch < -89.0f)
 		pitch = -89.0f;
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+	Voxel hitVoxel;
+	ivec3 hitPos;
+	ivec3 hitNormal;
+
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+		if(step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		{
+			ivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
+
+			ivec3 mapPos =   {newPos.x / CHUNK_SIZE_X, newPos.y / CHUNK_SIZE_Y, newPos.z / CHUNK_SIZE_Z};
+			ivec3 localPos = {newPos.x % CHUNK_SIZE_X, newPos.y % CHUNK_SIZE_Y, newPos.z % CHUNK_SIZE_Z};
+
+			if(in_map_bounds(mapPos))
+			{
+				Voxel newVox;
+				newVox.albedo = (vec3){0.0f, 0.0f, 0.0f};
+				newVox.material = 0;
+
+				unsigned int index = FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size());
+
+				voxelMap[index].flag = 1;
+				voxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = voxel_to_voxelGPU(newVox);
+				update_voxel_chunk(mapPos);
+			}
+		}
+
+	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
+		if(step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		{
+			ivec3 mapPos =   {hitPos.x / CHUNK_SIZE_X, hitPos.y / CHUNK_SIZE_Y, hitPos.z / CHUNK_SIZE_Z};
+			ivec3 localPos = {hitPos.x % CHUNK_SIZE_X, hitPos.y % CHUNK_SIZE_Y, hitPos.z % CHUNK_SIZE_Z};
+
+			voxelChunks[FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
+			update_voxel_chunk(mapPos);
+		}
 }
 
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY)

@@ -103,7 +103,7 @@ void main()
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
 	uint chunkIndex = get_map_tile(chunkPos).index;
-	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos));
+	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
 
 	//return if voxel does not exist lol:
 	if(thisVoxel.material == 255)
@@ -120,8 +120,8 @@ void main()
 	//update final lighting and increase number of samples
 	vec3 finalColor = (thisVoxel.indirectLight * thisVoxel.indirectSamples + indirectLight) / (thisVoxel.indirectSamples + 1.0);
 
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight = finalColor;
-	chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectSamples += 1.0;
+	chunks[chunkIndex].indirectLight[localPos.x][localPos.y][localPos.z].xyz = finalColor;
+	chunks[chunkIndex].indirectLight[localPos.x][localPos.y][localPos.z].w += 1.0;
 
 	return;
 }

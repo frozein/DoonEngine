@@ -47,12 +47,14 @@ unsigned int bounceLimit = 5;
 float shadowSoftness = 10.0f;
 unsigned int viewMode = 0;
 
+const size_t halfChunkSize = sizeof(VoxelGPU) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding);
 
 bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mChunks, uvec3 mSizeGPU, unsigned int mChunksGPU, unsigned int mLightingRequests)
-{
+{	
 	//assign variables:
 	//---------------------------------
 	textureSize = tSize;
@@ -90,7 +92,10 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 		for(int z = 0; z < CHUNK_SIZE_Z; z++)
 			for(int y = 0; y < CHUNK_SIZE_Y; y++)
 				for(int x = 0; x < CHUNK_SIZE_X; x++)
+				{
 					voxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
+					voxelChunks[i].indirectLight[x][y][z] = (vec4){0, 0, 0, 0};
+				}
 
 	chunkBufferLayout = malloc(sizeof(ivec4) * maxChunksGPU);
 	if(!chunkBufferLayout)
@@ -118,7 +123,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	//generate buffers:
 	//---------------------------------
-	if(!gen_shader_storage_buffer(&mapBuffer, sizeof(ivec4) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
+	if(!gen_shader_storage_buffer(&mapBuffer, sizeof(VoxelChunkHandle) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
 	{
 		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER\n");
 		return false;
@@ -187,13 +192,13 @@ void deinit_voxel_pipeline()
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-unsigned int update_gpu_voxel_data(bool updateLighting)
+unsigned int stream_voxel_chunks(bool updateLighting)
 {
 	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
 
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	uvec4* voxelMapGPU = (uvec4*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
+	VoxelChunkHandle* voxelMapGPU = (VoxelChunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
 	//bind the chunk buffer so it can be updated:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
@@ -209,7 +214,12 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 		int cpuMapIndex = FLATTEN_INDEX(x, y, z, mapSize);    //the map index for the cpu-side memory
 		int gpuMapIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU); //the map index for the gpu-side memory
 
-		if(voxelMapGPU[gpuMapIndex].x == 3) //if flag = 3 (requested), try to load a new chunk
+		//if a chunk was added to the cpu map, request it to be added to the gpu map:
+		if(voxelMap[cpuMapIndex].flag > 0 && voxelMapGPU[gpuMapIndex].flag == 0)
+			voxelMapGPU[gpuMapIndex].flag = 3;
+
+		//if flag = 3 (requested), try to load a new chunk:
+		if(voxelMapGPU[gpuMapIndex].flag == 3 && voxelMap[cpuMapIndex].flag == 1)
 		{
 			//variables that belong to the oldest chunk:
 			int maxTime = 0;
@@ -230,9 +240,9 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 					maxTimeMapIndex = -1;
 					break;
 				}
-				else if(voxelMapGPU[chunkMapIndex].z > maxTime) //else, check if it is older than the current oldest
+				else if(voxelMapGPU[chunkMapIndex].lastUsed > maxTime) //else, check if it is older than the current oldest
 				{
-					maxTime = voxelMapGPU[chunkMapIndex].z;
+					maxTime = voxelMapGPU[chunkMapIndex].lastUsed;
 					maxTimeIndex = i;
 					maxTimeMapIndex = chunkMapIndex;
 				}
@@ -240,15 +250,16 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 
 			if(maxTime > 1) //only load in the new chunk if the old one isnt currently in use
 			{
-				if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded
-					voxelMapGPU[maxTimeMapIndex].x = voxelMapGPU[maxTimeMapIndex].x > 0 ? 2 : 0;
+				if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded and store old data (to maintain semi-baked lighting)
+				{
+					voxelMapGPU[maxTimeMapIndex].flag = voxelMapGPU[maxTimeMapIndex].flag > 0 ? 2 : 0;
+					glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk) + halfChunkSize, halfChunkSize, &voxelChunks[maxTimeMapIndex].indirectLight[0][0][0]);
+				}
 
-				voxelMapGPU[gpuMapIndex].x = 1; //set the new tile's flag to loaded
-				voxelMapGPU[gpuMapIndex].w = maxTimeIndex;
+				voxelMapGPU[gpuMapIndex].flag = 1; //set the new tile's flag to loaded
+				voxelMapGPU[gpuMapIndex].index = maxTimeIndex;
 
-				//store old data to maintain saved lighting and load in new data:
-				int unloadedCpuIndex = FLATTEN_INDEX(chunkBufferLayout[maxTimeIndex].x, chunkBufferLayout[maxTimeIndex].y, chunkBufferLayout[maxTimeIndex].z, mapSize);
-				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[unloadedCpuIndex]);
+				//load in new data:
 				glBufferSubData   (GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[cpuMapIndex]);
 
 				chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0}; //update the chunk layout
@@ -274,13 +285,15 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 		}
 
 		//if chunk is loaded and visible, add to lighting request buffer
-		if(updateLighting && voxelMapGPU[gpuMapIndex].x == 1 && voxelMapGPU[gpuMapIndex].y == 1)
+		if(updateLighting && voxelMapGPU[gpuMapIndex].flag == 1 && voxelMapGPU[gpuMapIndex].visible == 1)
 			voxelLightingRequests[numChunksToUpdate++] = (ivec4){x, y, z, 0};
-		
-		voxelMapGPU[gpuMapIndex].y = 0; //set the "visible" flag to 0
 
-		if(voxelMapGPU[gpuMapIndex].z < UINT32_MAX) //increase the "time last used" flag
-			voxelMapGPU[gpuMapIndex].z++;
+		//increase the "time last used" flag:
+		if(voxelMapGPU[gpuMapIndex].lastUsed < UINT32_MAX)
+			voxelMapGPU[gpuMapIndex].lastUsed++;
+
+ 		//set the "visible" flag to 0:
+		voxelMapGPU[gpuMapIndex].visible = 0;
 	}
 
 	//unmap:
@@ -288,6 +301,21 @@ unsigned int update_gpu_voxel_data(bool updateLighting)
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 
 	return numChunksToUpdate;
+}
+
+void update_voxel_chunk(ivec3 chunk)
+{
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
+
+	for(int i = 0; i < maxChunksGPU; i++)
+	{
+		ivec4 pos = chunkBufferLayout[i];
+		if(pos.x == chunk.x && pos.y == chunk.y && pos.z == chunk.z)
+		{
+			glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(VoxelChunk), halfChunkSize, &voxelChunks[FLATTEN_INDEX(chunk.x, chunk.y, chunk.z, mapSize)]);
+			break;
+		}
+	}
 }
 
 void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time)
@@ -396,7 +424,6 @@ bool set_voxel_map_size(uvec3 size)
 				int newIndex = x + size.x * (y + z * size.y);
 
 				newMap[newIndex].flag  = oldIndex < oldMaxIndex ? voxelMap[oldIndex].flag  : 0;
-				newMap[newIndex].gpuIndex = oldIndex < oldMaxIndex ? voxelMap[oldIndex].gpuIndex : 0;
 			}
 
 	free(voxelMap);
@@ -522,8 +549,6 @@ VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 	res.normal = encode_uint_RGBA(normal);
 	res.directLight = encode_uint_RGBA((uvec4){0, 0, 0, 1});
 	res.specLight = encode_uint_RGBA((uvec4){0, 0, 0, 0});
-	res.indirectLight = (vec3){0.0f, 0.0f, 0.0f};
-	res.indirectSamples = 0.0f;
 
 	return res;
 }
@@ -556,7 +581,7 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 
 VoxelChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
-	return voxelMap[pos.x + mapSize.x * (pos.y + mapSize.y * pos.z)];
+	return voxelMap[FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSize)];
 }
 
 VoxelGPU get_voxel(unsigned int chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
@@ -575,11 +600,13 @@ bool does_voxel_exist(unsigned int chunk, ivec3 localPos) //returns true if the 
 
 static int sign(float num)
 {
-	return (num > 0) ? 1 : ((num < 0) ? -1 : 0);
+	return (num > 0.0f) ? 1 : ((num < 0.0f) ? -1 : 0);
 }
 
 bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitPos, Voxel* hitVoxel, ivec3* hitNormal)
 {
+	*hitNormal = (ivec3){-1000, -1000, -1000};
+
 	//scale to use voxel-level coordinates
 	rayPos = vec3_scale(rayPos, CHUNK_SIZE_X);
 
@@ -589,7 +616,7 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 
 	//create vars needed for dda:
 	ivec3 pos = {floor(rayPos.x), floor(rayPos.y), floor(rayPos.z)}; //the position in the voxel map
-	vec3 deltaDist = {fabs(invRayDir.x), fabs(invRayDir.y), fabs(invRayDir.z)}; //the distance the ray has to travel to move one unit in each direction
+	vec3 deltaDist = {fabsf(invRayDir.x), fabsf(invRayDir.y), fabsf(invRayDir.z)}; //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = {rayDirSign.x, rayDirSign.y, rayDirSign.z}; //the direction the ray steps
 
 	vec3 sideDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
@@ -602,6 +629,13 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 	{
 		//check if in bounds:
 		ivec3 mapPos = {pos.x / CHUNK_SIZE_X, pos.y / CHUNK_SIZE_Y, pos.z / CHUNK_SIZE_Z};
+		if(pos.x < 0)
+			mapPos.x--;
+		if(pos.y < 0)
+			mapPos.y--;
+		if(pos.z < 0)
+			mapPos.z--;
+
 		if(in_map_bounds(mapPos))
 		{
 			VoxelChunkHandle mapTile = get_map_tile(mapPos);

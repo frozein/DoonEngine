@@ -32,17 +32,13 @@ typedef struct VoxelGPU
 	GLuint normal;         //compressed
 	GLuint directLight;    //compressed
 	GLuint specLight;      //compressed
-	vec3 indirectLight;    //not compressed due to need for precision
-	float indirectSamples; //not compressed due to need for precision
 } VoxelGPU;
 
 //a chunk of voxels, as stored on the GPU
 typedef struct VoxelChunk
 {
 	VoxelGPU voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
-	uvec3 position;
-	
-	GLuint fill;
+	vec4 indirectLight[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
 } VoxelChunk;
 
 typedef struct VoxelChunkHandle
@@ -50,8 +46,7 @@ typedef struct VoxelChunkHandle
 	GLuint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
 	GLuint visible;  //whether or not the voxel is visible to the camera
 	GLuint lastUsed; //the time since the chunk was last used
-	GLuint gpuIndex; //the index of the chunk in the GPU-side chunk buffer 
-	GLuint index;    //the index of the chunk
+	GLuint index;    //the index of the chunk (cpu or gpu side depending on where the handle came from)
 } VoxelChunkHandle;
 
 typedef struct VoxelMaterial
@@ -94,7 +89,9 @@ void deinit_voxel_pipeline();
 //UPDATING/DRAWING:
 
 //Updates all of the GPU-side voxel memory
-unsigned int update_gpu_voxel_data(bool updateLighting);
+unsigned int stream_voxel_chunks(bool updateLighting);
+//Updates a single chunk to the GPU. Call when a chunk has been edited
+void update_voxel_chunk(ivec3 pos);
 
 //Draws the voxels to a texture and renders them to the screen
 void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
