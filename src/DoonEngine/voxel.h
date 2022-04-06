@@ -91,15 +91,13 @@ void deinit_voxel_pipeline();
 //Updates all of the GPU-side voxel memory
 unsigned int stream_voxel_chunks(bool updateLighting);
 //Sets a single chunk to be updated on the GPU. Call when a chunk has been edited. camPos is needed so lighting can be updated instantly (if bool is set)
-void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos);
+void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos, float time);
 
 //Draws the voxels to a texture and renders them to the screen
 void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV);
 
-//Iterates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
-void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time);
 //Updates the indirect lighting on every chunk currently in voxelLightingRequests, up to numChunks
-void update_voxel_direct_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos);
+void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos, float time);
 
 //TEMPORARY
 void send_all_data_temp();

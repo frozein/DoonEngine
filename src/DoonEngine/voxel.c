@@ -10,8 +10,7 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //shader handles:
-unsigned int directLightingShader = 0;
-unsigned int indirectLightingShader = 0;
+unsigned int lightingShader = 0;
 unsigned int finalShader = 0;
 
 //buffer handles:
@@ -151,18 +150,16 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	//load shaders:
 	//---------------------------------
-	int direct   = compute_shader_program_load("shaders/voxelDirectLight.comp", "shaders/voxelShared.comp");
-	int indirect = compute_shader_program_load("shaders/voxelGlobalLight.comp", "shaders/voxelShared.comp");
-	int final    = compute_shader_program_load("shaders/voxelFinal.comp"      , "shaders/voxelShared.comp");
+	int lighting = compute_shader_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
+	int final    = compute_shader_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
 
-	if(direct < 0 || indirect < 0 || final < 0)
+	if(lighting < 0 || final < 0)
 	{
 		ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
 		return false;
 	}
 
-	directLightingShader = direct;
-	indirectLightingShader = indirect;
+	lightingShader = lighting;
 	finalShader = final;
 
 	//return:
@@ -172,8 +169,7 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 void deinit_voxel_pipeline()
 {
-	shader_program_free(directLightingShader);
-	shader_program_free(indirectLightingShader);
+	shader_program_free(lightingShader);
 	shader_program_free(finalShader);
 
 	glDeleteBuffers(1, &mapBuffer);
@@ -306,7 +302,7 @@ unsigned int stream_voxel_chunks(bool updateLighting)
 	return numChunksToUpdate;
 }
 
-void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos)
+void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos, float time)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 
@@ -324,35 +320,22 @@ void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 cam
 		}
 
 	if(updateLighting)
-		update_voxel_direct_lighting(num, 0, camPos);
+		update_voxel_lighting(num, 0, camPos, time);
 }
 
-void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time)
+void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos, float time)
 {
-	shader_program_activate(indirectLightingShader);
+	shader_program_activate(lightingShader);
 
-	shader_uniform_vec3(indirectLightingShader, "sunDir", vec3_normalize(sunDir));
-	shader_uniform_vec3(indirectLightingShader, "sunStrength", sunStrength);
-	shader_uniform_int(indirectLightingShader, "bounceLimit", bounceLimit);
-	shader_uniform_float(indirectLightingShader, "time", time);
-	glUniform3uiv(glGetUniformLocation(indirectLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
+	shader_uniform_vec3 (lightingShader, "sunDir", vec3_normalize(sunDir));
+	shader_uniform_vec3 (lightingShader, "sunStrength", sunStrength);
+	shader_uniform_float(lightingShader, "shadowSoftness", shadowSoftness);
+	shader_uniform_float(lightingShader, "ambientStrength", ambientStrength);
+	shader_uniform_vec3 (lightingShader, "camPos", camPos);
+	shader_uniform_int  (lightingShader, "bounceLimit", bounceLimit);
+	shader_uniform_float(lightingShader, "time", time);
 
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);
-
-	glDispatchCompute(numChunks, 1, 1);
-}
-
-void update_voxel_direct_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos)
-{
-	shader_program_activate(directLightingShader);
-
-	shader_uniform_vec3 (directLightingShader, "sunDir", vec3_normalize(sunDir));
-	shader_uniform_vec3(directLightingShader, "sunStrength", sunStrength);
-	shader_uniform_float(directLightingShader, "shadowSoftness", shadowSoftness);
-	shader_uniform_float(directLightingShader, "ambientStrength", ambientStrength);
-	shader_uniform_vec3 (directLightingShader, "camPos", camPos);
-	glUniform3uiv(glGetUniformLocation(directLightingShader, "mapSize"), 1, (GLuint*)&mapSize);
+	glUniform3uiv(glGetUniformLocation(lightingShader, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);

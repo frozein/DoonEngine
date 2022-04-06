@@ -273,8 +273,8 @@ int main()
 		}
 
 		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
-		update_voxel_direct_lighting(numThisFrame, numThisFrame * (frameNum % 5), camPos);
-		update_voxel_indirect_lighting(numThisFrame, numThisFrame * (frameNum % 5), oldTime);
+		update_voxel_lighting(numThisFrame, numThisFrame * (frameNum % 5), camPos, oldTime);
+		//update_voxel_indirect_lighting(numThisFrame, numThisFrame * (frameNum % 5), oldTime);
 
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 
@@ -351,7 +351,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 				voxelMap[index].flag = 1;
 				voxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = voxel_to_voxelGPU(newVox);
-				update_voxel_chunk(&mapPos, 1, true, camPos);
+				update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
 			}
 		}
 
@@ -362,7 +362,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			ivec3 localPos = {hitPos.x % CHUNK_SIZE_X, hitPos.y % CHUNK_SIZE_Y, hitPos.z % CHUNK_SIZE_Z};
 
 			voxelChunks[FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
-			update_voxel_chunk(&mapPos, 1, true, camPos);
+			update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
 		}
 }
 
