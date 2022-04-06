@@ -214,22 +214,6 @@ int main()
 	//send data to GPU (TEMPORARY):
 	//---------------------------------
 	send_all_data_temp();
-	stream_voxel_chunks(false);
-
-	//calculate indirect lighting:
-	//---------------------------------
-	//sunStrength = (vec3){0.0f, 0.0f, 0.0f}; //for night:
-	//sunDir = vec3_normalize((vec3){-0.2f, 1.0f, -0.2f});
-	//sunStrength = (vec3){0.5f, 0.3f, 0.15f}; //for sunset:
-	//sunDir = vec3_normalize((vec3){-1.0f, 0.7f, -1.0f});
-	/*for(int i = 0; i < 50; i++)
-	{
-		update_voxel_indirect_lighting(30 * 30 * 30, glfwGetTime());
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
-	}*/
-
-	//update_voxel_direct_lighting(30 * 30 * 30, camPos);
-	//glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 	//main loop:
 	//---------------------------------
@@ -275,7 +259,6 @@ int main()
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//render voxels (split the lighting calculations over 5 frames):
-		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		if(updateData)
 		{
 			frameNum++;
@@ -292,6 +275,8 @@ int main()
 		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
 		update_voxel_direct_lighting(numThisFrame, numThisFrame * (frameNum % 5), camPos);
 		update_voxel_indirect_lighting(numThisFrame, numThisFrame * (frameNum % 5), oldTime);
+
+		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 
 		texture_activate(finalTex, 0);
 		shader_program_activate(quadShader);
@@ -366,7 +351,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 				voxelMap[index].flag = 1;
 				voxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = voxel_to_voxelGPU(newVox);
-				update_voxel_chunk(mapPos);
+				update_voxel_chunk(&mapPos, 1, true, camPos);
 			}
 		}
 
@@ -377,7 +362,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			ivec3 localPos = {hitPos.x % CHUNK_SIZE_X, hitPos.y % CHUNK_SIZE_Y, hitPos.z % CHUNK_SIZE_Z};
 
 			voxelChunks[FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
-			update_voxel_chunk(mapPos);
+			update_voxel_chunk(&mapPos, 1, true, camPos);
 		}
 }
 

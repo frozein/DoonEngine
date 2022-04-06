@@ -192,10 +192,75 @@ void deinit_voxel_pipeline()
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-unsigned int stream_voxel_chunks(bool updateLighting)
+static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex, int cpuIndex)
 {
 	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
 
+	//variables that belong to the oldest chunk:
+	int maxTime = 0;
+	int maxTimeIndex = -1;
+	int maxTimeMapIndex = -1;
+
+	//loop through every chunk to look for oldest:
+	for(int i = 0; i < maxChunksGPU; i++)
+	{
+		ivec4 chunkPos = chunkBufferLayout[i];
+		int chunkMapIndex = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSizeGPU);
+
+		//if chunk does not belong to any active map tile, instantly use it
+		if(chunkPos.w < 0 || chunkMapIndex >= maxGpuMapIndex)
+		{
+			maxTime = 2;
+			maxTimeIndex = i;
+			maxTimeMapIndex = -1;
+			break;
+		}
+		else if(voxelMapGPU[chunkMapIndex].lastUsed > maxTime) //else, check if it is older than the current oldest
+		{
+			maxTime = voxelMapGPU[chunkMapIndex].lastUsed;
+			maxTimeIndex = i;
+			maxTimeMapIndex = chunkMapIndex;
+		}
+	}
+
+	if(maxTime > 1) //only load in the new chunk if the old one isnt currently in use
+	{
+		if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded and store old data (to maintain semi-baked lighting)
+		{
+			voxelMapGPU[maxTimeMapIndex].flag = voxelMapGPU[maxTimeMapIndex].flag > 0 ? 2 : 0;
+			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk) + halfChunkSize, halfChunkSize, &voxelChunks[maxTimeMapIndex].indirectLight[0][0][0]);
+		}
+
+		voxelMapGPU[gpuIndex].flag = 1; //set the new tile's flag to loaded
+		voxelMapGPU[gpuIndex].index = maxTimeIndex;
+
+		//load in new data:
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[cpuIndex]);
+
+		chunkBufferLayout[maxTimeIndex] = (ivec4){pos.x, pos.y, pos.z, 0}; //update the chunk layout
+	}
+	else //if the oldest chunk is currently in use, double the buffer size
+	{
+		ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
+
+		//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
+		void* oldChunkData = malloc(sizeof(VoxelChunk) * maxChunksGPU);
+		if(!oldChunkData)
+		{
+			ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
+			return;
+		}
+
+		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * maxChunksGPU, oldChunkData); //get old data
+		set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * (maxChunksGPU / 2), oldChunkData); //send back old data
+
+		free(oldChunkData); //free temporary memory
+	}
+}
+
+unsigned int stream_voxel_chunks(bool updateLighting)
+{
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
 	VoxelChunkHandle* voxelMapGPU = (VoxelChunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
@@ -220,71 +285,9 @@ unsigned int stream_voxel_chunks(bool updateLighting)
 
 		//if flag = 3 (requested), try to load a new chunk:
 		if(voxelMapGPU[gpuMapIndex].flag == 3 && voxelMap[cpuMapIndex].flag == 1)
-		{
-			//variables that belong to the oldest chunk:
-			int maxTime = 0;
-			int maxTimeIndex = -1;
-			int maxTimeMapIndex = -1;
+			stream_chunk((ivec3){x, y, z}, voxelMapGPU, gpuMapIndex, cpuMapIndex);
 
-			//loop through every chunk to look for oldest:
-			for(int i = 0; i < maxChunksGPU; i++)
-			{
-				ivec4 chunkPos = chunkBufferLayout[i];
-				int chunkMapIndex = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSizeGPU);
-
-				//if chunk does not belong to any active map tile, instantly use it
-				if(chunkPos.w < 0 || chunkMapIndex >= maxGpuMapIndex)
-				{
-					maxTime = 2;
-					maxTimeIndex = i;
-					maxTimeMapIndex = -1;
-					break;
-				}
-				else if(voxelMapGPU[chunkMapIndex].lastUsed > maxTime) //else, check if it is older than the current oldest
-				{
-					maxTime = voxelMapGPU[chunkMapIndex].lastUsed;
-					maxTimeIndex = i;
-					maxTimeMapIndex = chunkMapIndex;
-				}
-			}
-
-			if(maxTime > 1) //only load in the new chunk if the old one isnt currently in use
-			{
-				if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded and store old data (to maintain semi-baked lighting)
-				{
-					voxelMapGPU[maxTimeMapIndex].flag = voxelMapGPU[maxTimeMapIndex].flag > 0 ? 2 : 0;
-					glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk) + halfChunkSize, halfChunkSize, &voxelChunks[maxTimeMapIndex].indirectLight[0][0][0]);
-				}
-
-				voxelMapGPU[gpuMapIndex].flag = 1; //set the new tile's flag to loaded
-				voxelMapGPU[gpuMapIndex].index = maxTimeIndex;
-
-				//load in new data:
-				glBufferSubData   (GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[cpuMapIndex]);
-
-				chunkBufferLayout[maxTimeIndex] = (ivec4){x, y, z, 0}; //update the chunk layout
-			}
-			else //if the oldest chunk is currently in use, double the buffer size
-			{
-				ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
-
-				//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
-				void* oldChunkData = malloc(sizeof(VoxelChunk) * maxChunksGPU);
-				if(!oldChunkData)
-				{
-					ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
-					return 0;
-				}
-
-				glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * maxChunksGPU, oldChunkData); //get old data
-				set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
-				glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * (maxChunksGPU / 2), oldChunkData); //send back old data
-
-				free(oldChunkData); //free temporary memory
-			}
-		}
-
-		//if chunk is loaded and visible, add to lighting request buffer
+		//if chunk is loaded and visible, add to lighting request buffer:
 		if(updateLighting && voxelMapGPU[gpuMapIndex].flag == 1 && voxelMapGPU[gpuMapIndex].visible == 1)
 			voxelLightingRequests[numChunksToUpdate++] = (ivec4){x, y, z, 0};
 
@@ -303,19 +306,25 @@ unsigned int stream_voxel_chunks(bool updateLighting)
 	return numChunksToUpdate;
 }
 
-void update_voxel_chunk(ivec3 chunk)
+void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 
-	for(int i = 0; i < maxChunksGPU; i++)
-	{
-		ivec4 pos = chunkBufferLayout[i];
-		if(pos.x == chunk.x && pos.y == chunk.y && pos.z == chunk.z)
+	for(int i = 0; i < num; i++)
+		for(int j = 0; j < maxChunksGPU; j++)
 		{
-			glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(VoxelChunk), halfChunkSize, &voxelChunks[FLATTEN_INDEX(chunk.x, chunk.y, chunk.z, mapSize)]);
-			break;
+			ivec3 pos = positions[i];
+			ivec4 bufferPos = chunkBufferLayout[j];
+			if(bufferPos.x == pos.x && bufferPos.y == pos.y && bufferPos.z == pos.z)
+			{
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, j * sizeof(VoxelChunk), halfChunkSize, &voxelChunks[FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSize)]);
+				voxelLightingRequests[i] = (ivec4){pos.x, pos.y, pos.z, 0};
+				break;
+			}
 		}
-	}
+
+	if(updateLighting)
+		update_voxel_direct_lighting(num, 0, camPos);
 }
 
 void update_voxel_indirect_lighting(unsigned int numChunks, unsigned int offset, float time)
