@@ -7,6 +7,7 @@
 #include "DoonEngine/globals.h"
 #include <malloc.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
 #include <GLAD/glad.h>
@@ -58,6 +59,7 @@ int main()
 {
 	VoxelModel model;
 	load_vox_file("testApple.vox", &model);
+	calculate_model_normals(1, &model);
 
 	int error;
 
@@ -279,8 +281,8 @@ int main()
 		}
 
 		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
-		update_voxel_lighting(numThisFrame, numThisFrame * (frameNum % 5), camPos, oldTime);
-		//update_voxel_indirect_lighting(numThisFrame, numThisFrame * (frameNum % 5), oldTime);
+		int offset = numThisFrame * (frameNum % 5);
+		update_voxel_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
 
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 

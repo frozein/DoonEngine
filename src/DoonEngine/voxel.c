@@ -802,6 +802,65 @@ bool load_vox_file(const char* path, VoxelModel* model)
 	return true;
 }
 
+void calculate_model_normals(int r, VoxelModel* model)
+{
+	for(int xC = 0; xC < model->size.x; xC++)
+	for(int yC = 0; yC < model->size.y; yC++)
+	for(int zC = 0; zC < model->size.z; zC++)
+	{
+		vec3 sum = {0.0f, 0.0f, 0.0f};
+
+		int iC = FLATTEN_INDEX(xC, yC, zC, model->size);
+		Voxel voxC = voxelGPU_to_voxel(model->voxels[iC]);
+		if(voxC.material == 255)
+			continue;
+
+		for(int xP = xC - r; xP <= xC + r; xP++)
+		for(int yP = yC - r; yP <= yC + r; yP++)
+		for(int zP = zC - r; zP <= zC + r; zP++)
+		{
+			if(xP < 0 || yP < 0 || zP < 0)
+				continue;
+			
+			if(xP >= model->size.x || yP >= model->size.y || zP >= model->size.z)
+				continue;
+
+			int iP = FLATTEN_INDEX(xP, yP, zP, model->size);
+
+			if(iP == iC)
+				continue;
+
+			if(voxelGPU_to_voxel(model->voxels[iP]).material < 255)
+			{
+				//vec3_print(sum);
+
+				vec3 toCenter = {xP - xC, yP - yC, zP - zC};
+				float dist = vec3_length(toCenter);
+				toCenter = vec3_scale(toCenter, 1.0f / dist);
+				sum = vec3_add(sum, toCenter);
+
+				//vec3_print(toCenter);
+				//vec3_print(sum);
+			}
+		}
+
+		//vec3_print(sum);
+		if(sum.x == 0.0f && sum.y == 0.0f && sum.z == 0.0f)
+			sum = (vec3){0.0f, 1.0f, 0.0f};
+
+		float maxNormal = abs(sum.x);
+		if(abs(sum.y) > maxNormal)
+			maxNormal = abs(sum.y);
+		if(abs(sum.z) > maxNormal)
+			maxNormal = abs(sum.z);
+
+		sum = vec3_scale(sum, 1.0f / maxNormal);
+
+		voxC.normal = sum;
+		model->voxels[iC] = voxel_to_voxelGPU(voxC);
+	}
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //STATIC UTIL FUNCTIONS:
 

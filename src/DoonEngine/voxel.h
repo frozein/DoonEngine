@@ -176,5 +176,6 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 //MODEL UTILITIES:
 
 bool load_vox_file(const char* path, VoxelModel* model);
+void calculate_model_normals(int radius, VoxelModel* model);
 
 #endif
