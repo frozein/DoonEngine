@@ -8,9 +8,7 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //the size of each chunk (in voxels):
-#define CHUNK_SIZE_X 8
-#define CHUNK_SIZE_Y 8
-#define CHUNK_SIZE_Z 8
+#define CHUNK_SIZE ((uvec3){8, 8, 8})
 
 //the maximum material index that can be used:
 #define MAX_MATERIALS 256
@@ -37,10 +35,11 @@ typedef struct VoxelGPU
 //a chunk of voxels, as stored on the GPU
 typedef struct VoxelChunk
 {
-	VoxelGPU voxels[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
-	vec4 indirectLight[CHUNK_SIZE_X][CHUNK_SIZE_Y][CHUNK_SIZE_Z];
+	VoxelGPU voxels[8][8][8]; //CHUNK SIZE = 8
+	vec4 indirectLight[8][8][8];
 } VoxelChunk;
 
+//a handle to a voxel chunk, along with some meta-data
 typedef struct VoxelChunkHandle
 {
 	GLuint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
@@ -49,6 +48,7 @@ typedef struct VoxelChunkHandle
 	GLuint index;    //the index of the chunk (cpu or gpu side depending on where the handle came from)
 } VoxelChunkHandle;
 
+//material properties for a voxel
 typedef struct VoxelMaterial
 {
 	GLuint emissive;
@@ -61,6 +61,13 @@ typedef struct VoxelMaterial
 
 	vec3 fill; //needed for alignment
 } VoxelMaterial;
+
+//a voxel model, not placed into the world
+typedef struct VoxelModel
+{
+	uvec3 size;
+	VoxelGPU* voxels;
+} VoxelModel;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //NOTE: this memory may differ from that on the GPU, what gets sent to the GPU is determined automatically
@@ -103,7 +110,7 @@ void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 cam
 void send_all_data_temp();
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//CPU-SIDE SETTINGS:
+//CPU-SIDE MAP SETTINGS:
 
 //Returns the current texture size. Returns true on success, false on failure
 uvec2 voxel_texture_size();
@@ -123,7 +130,7 @@ unsigned int current_voxel_chunks();
 bool set_max_voxel_chunks(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//GPU-SIDE SETTINGS
+//GPU-SIDE MAP SETTINGS:
 
 //Returns the current map size on the GPU (in chunks)
 uvec3 voxel_map_size_gpu();
@@ -141,7 +148,15 @@ unsigned int max_voxel_lighting_requests();
 bool set_max_voxel_lighting_requests(unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//UTILITY:
+//GENERAL UTILITY:
+
+//Compresses a voxel
+VoxelGPU voxel_to_voxelGPU(Voxel voxel);
+//Decompresses a voxel
+Voxel voxelGPU_to_voxel(VoxelGPU voxel);
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//MAP UTILITY:
 
 //Returns whether or not a given map position is inside the map bounds
 bool in_map_bounds(ivec3 pos);
@@ -157,9 +172,9 @@ bool does_voxel_exist(unsigned int chunk, ivec3 localPos);
 //Casts a ray into the voxel map and returns whether or not a voxel was hit. If one was hit, data about it is stored in the pointer parameters
 bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitPos, Voxel* hitVoxel, ivec3* hitNormal);
 
-//Compresses a voxel
-VoxelGPU voxel_to_voxelGPU(Voxel voxel);
-//Decompresses a voxel
-Voxel voxelGPU_to_voxel(VoxelGPU voxel);
+//--------------------------------------------------------------------------------------------------------------------------------//
+//MODEL UTILITIES:
+
+bool load_vox_file(const char* path, VoxelModel* model);
 
 #endif

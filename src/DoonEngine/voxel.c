@@ -6,8 +6,12 @@
 #include <malloc.h>
 #include <stdint.h>
 #include <math.h>
+#include <stdio.h>
+#include <memory.h>
+#include <string.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//GLOBAL STATE:
 
 //shader handles:
 unsigned int lightingShader = 0;
@@ -46,9 +50,10 @@ unsigned int bounceLimit = 5;
 float shadowSoftness = 10.0f;
 unsigned int viewMode = 0;
 
-const size_t halfChunkSize = sizeof(VoxelGPU) * CHUNK_SIZE_X * CHUNK_SIZE_Y * CHUNK_SIZE_Z;
+const size_t halfChunkSize = sizeof(VoxelGPU) * 8 * 8 * 8; //CHANGE CHUNK SIZE HERE
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//INITIALIZATION:
 
 static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding);
 
@@ -88,9 +93,9 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 	}
 
 	for(int i = 0; i < maxChunks; i++)
-		for(int z = 0; z < CHUNK_SIZE_Z; z++)
-			for(int y = 0; y < CHUNK_SIZE_Y; y++)
-				for(int x = 0; x < CHUNK_SIZE_X; x++)
+		for(int z = 0; z < CHUNK_SIZE.z; z++)
+			for(int y = 0; y < CHUNK_SIZE.y; y++)
+				for(int x = 0; x < CHUNK_SIZE.x; x++)
 				{
 					voxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
 					voxelChunks[i].indirectLight[x][y][z] = (vec4){0, 0, 0, 0};
@@ -187,6 +192,7 @@ void deinit_voxel_pipeline()
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//UPDATING/DRAWING:
 
 static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex, int cpuIndex)
 {
@@ -323,6 +329,22 @@ void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 cam
 		update_voxel_lighting(num, 0, camPos, time);
 }
 
+void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
+{
+	shader_program_activate(finalShader);
+
+	shader_uniform_vec3 (finalShader, "camPos", camPos);
+	shader_uniform_vec3 (finalShader, "camDir", camFront);
+	shader_uniform_vec3 (finalShader, "camPlaneU", camPlaneU);
+	shader_uniform_vec3 (finalShader, "camPlaneV", camPlaneV);
+	shader_uniform_uint (finalShader, "viewMode", viewMode);
+	shader_uniform_float(finalShader, "ambientStrength", ambientStrength);
+	shader_uniform_vec3(finalShader, "sunStrength", sunStrength);
+	glUniform3uiv(glGetUniformLocation(finalShader, "mapSize"), 1, (GLuint*)&mapSize);
+
+	glDispatchCompute(textureSize.x / 16, textureSize.y / 16, 1);
+}
+
 void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos, float time)
 {
 	shader_program_activate(lightingShader);
@@ -341,22 +363,6 @@ void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 cam
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);
 
 	glDispatchCompute(numChunks, 1, 1);
-}
-
-void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
-{
-	shader_program_activate(finalShader);
-
-	shader_uniform_vec3 (finalShader, "camPos", camPos);
-	shader_uniform_vec3 (finalShader, "camDir", camFront);
-	shader_uniform_vec3 (finalShader, "camPlaneU", camPlaneU);
-	shader_uniform_vec3 (finalShader, "camPlaneV", camPlaneV);
-	shader_uniform_uint (finalShader, "viewMode", viewMode);
-	shader_uniform_float(finalShader, "ambientStrength", ambientStrength);
-	shader_uniform_vec3(finalShader, "sunStrength", sunStrength);
-	glUniform3uiv(glGetUniformLocation(finalShader, "mapSize"), 1, (GLuint*)&mapSize);
-
-	glDispatchCompute(textureSize.x / 16, textureSize.y / 16, 1);
 }
 
 void send_all_data_temp()
@@ -382,6 +388,7 @@ void send_all_data_temp()
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//CPU-SIDE MAP SETTINGS:
 
 uvec2 voxel_texture_size()
 {
@@ -448,6 +455,7 @@ bool set_max_voxel_chunks(unsigned int num)
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//GPU-SIDE MAP SETTINGS:
 
 uvec3 voxel_map_size_gpu()
 {
@@ -527,6 +535,7 @@ bool set_max_voxel_lighting_requests(unsigned int num)
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//GENERAL UTILITY:
 
 static GLuint encode_uint_RGBA(uvec4 val);
 static uvec4 decode_uint_RGBA(GLuint val);
@@ -568,7 +577,7 @@ bool in_map_bounds(ivec3 pos) //returns whether a position is in bounds in the m
 
 bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a chunk
 {
-	return pos.x < CHUNK_SIZE_X && pos.y < CHUNK_SIZE_Y && pos.z < CHUNK_SIZE_Z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
 VoxelChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
@@ -588,8 +597,6 @@ bool does_voxel_exist(unsigned int chunk, ivec3 localPos) //returns true if the 
 	return material < 255;
 }
 
-//--------------------------------------------------------------------------------------------------------------------------------//
-
 static int sign(float num)
 {
 	return (num > 0.0f) ? 1 : ((num < 0.0f) ? -1 : 0);
@@ -600,7 +607,7 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 	*hitNormal = (ivec3){-1000, -1000, -1000};
 
 	//scale to use voxel-level coordinates
-	rayPos = vec3_scale(rayPos, CHUNK_SIZE_X);
+	rayPos = vec3_scale(rayPos, CHUNK_SIZE.x);
 
 	//utility:
 	vec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};
@@ -620,7 +627,7 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 	while(numSteps < maxSteps)
 	{
 		//check if in bounds:
-		ivec3 mapPos = {pos.x / CHUNK_SIZE_X, pos.y / CHUNK_SIZE_Y, pos.z / CHUNK_SIZE_Z};
+		ivec3 mapPos = {pos.x / CHUNK_SIZE.x, pos.y / CHUNK_SIZE.y, pos.z / CHUNK_SIZE.z};
 		if(pos.x < 0)
 			mapPos.x--;
 		if(pos.y < 0)
@@ -631,7 +638,7 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 		if(in_map_bounds(mapPos))
 		{
 			VoxelChunkHandle mapTile = get_map_tile(mapPos);
-			ivec3 localPos = {pos.x % CHUNK_SIZE_X, pos.y % CHUNK_SIZE_Y, pos.z % CHUNK_SIZE_Z};
+			ivec3 localPos = {pos.x % CHUNK_SIZE.x, pos.y % CHUNK_SIZE.y, pos.z % CHUNK_SIZE.z};
 
 			//check if voxel exists:
 			if(mapTile.flag == 1 && does_voxel_exist(mapTile.index, localPos))
@@ -675,6 +682,128 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 
 	return false;
 }
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//MODEL UTILITIES:
+
+typedef struct VoxFileVoxel
+{
+	unsigned char x, y, z, w;
+} VoxFileVoxel;
+
+typedef struct VoxFileChunk
+{
+	uint32_t id;
+	uint32_t len;
+	uint32_t childLen;
+	size_t endPtr;
+} VoxFileChunk;
+
+#define CHUNK_ID(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
+
+static int read_int( FILE *fp ) 
+{
+	int v = 0;
+	fread( &v, 4, 1, fp );
+	return v;
+}
+
+void read_chunk_info( FILE *fp, VoxFileChunk* chunk ) 
+{
+	chunk->id       = read_int(fp);
+	chunk->len      = read_int(fp);
+	chunk->childLen = read_int(fp);
+	chunk->endPtr   = ftell(fp) + chunk->len + chunk->childLen;
+}
+
+bool load_vox_file(const char* path, VoxelModel* model)
+{
+	FILE* fp = fopen(path, "rb");
+
+	unsigned int numVoxels;
+	VoxFileVoxel* tempVoxels = NULL;
+	VoxFileVoxel palette[256];
+	model->voxels = NULL;
+
+	//check if actually is vox file:
+	int idNum = read_int(fp);
+	if(idNum != CHUNK_ID('V', 'O', 'X', ' '))
+	{
+		ERROR_LOG("ERROR - NOT A VALID .VOX FILE\n");
+		return false;
+	}
+
+	fseek( fp, 4, SEEK_CUR ); //skip version num
+
+	VoxFileChunk mainChunk; //skip main chunk (never has content)
+	read_chunk_info(fp, &mainChunk);
+		
+	//iterate remaining chunks:
+	while(ftell(fp) < mainChunk.endPtr) 
+	{
+		VoxFileChunk chunk;
+		read_chunk_info(fp, &chunk);
+
+		switch(chunk.id)
+		{
+		case CHUNK_ID('S', 'I', 'Z', 'E'): //SIZE chunk
+		{
+			//read size:
+			uvec3 size;
+			size.x = read_int(fp);
+			size.y = read_int(fp);
+			size.z = read_int(fp);
+			model->size = size;
+
+			break;
+		}
+		case CHUNK_ID('X', 'Y', 'Z', 'I'):
+		{
+			if(tempVoxels != NULL)
+				free(tempVoxels);
+
+			numVoxels = read_int(fp);
+
+			tempVoxels = malloc(numVoxels * sizeof(VoxFileVoxel));
+			fread(tempVoxels, sizeof(VoxFileVoxel), numVoxels, fp);
+
+			break;
+		}
+		case CHUNK_ID('R', 'G', 'B', 'A'):
+		{
+			fread(&palette[1], sizeof(VoxFileVoxel), 255, fp);
+			break;
+		}
+		}
+
+		fseek(fp, chunk.endPtr, SEEK_SET); //skip to end of chunk
+	}
+
+	size_t modelSize = model->size.x * model->size.y * model->size.z;
+	model->voxels = malloc(modelSize * sizeof(VoxelGPU));
+	for(int i = 0; i < modelSize; i++)
+		model->voxels[i].albedo = UINT32_MAX;
+
+	for(int i = 0; i < numVoxels; i++)
+	{
+		Voxel vox;
+		VoxFileVoxel pos = tempVoxels[i];
+		VoxFileVoxel color = palette[pos.w];
+
+		vox.albedo.x = pow((float)color.x / 255.0f, 2.2f);
+		vox.albedo.y = pow((float)color.y / 255.0f, 2.2f);
+		vox.albedo.z = pow((float)color.z / 255.0f, 2.2f);
+		vox.material = 0;
+		vox.normal = (vec3){0.0f, 1.0f, 0.0f};
+
+		model->voxels[FLATTEN_INDEX(pos.x, pos.z, pos.y, model->size)] = voxel_to_voxelGPU(vox); //have to invert z and y because magicavoxel has z as the up axis
+	}
+
+	return true;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//STATIC UTIL FUNCTIONS:
 
 static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding)
 {

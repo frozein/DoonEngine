@@ -56,6 +56,9 @@ bool updateData = true;
 
 int main()
 {
+	VoxelModel model;
+	load_vox_file("testApple.vox", &model);
+
 	int error;
 
 	//init GLFW:
@@ -172,26 +175,26 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 2000, 30 * 30 * 30))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){1, 1, 1}, 1 * 1 * 1, (uvec3){1, 1, 1}, 1, 1 * 1 * 1))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		scanf("%d", &error);
 		return -1;
 	}
 
-	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE_Z; z++)
-		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE_Y; y++)
-			for(int x = 0; x < voxel_map_size().x * CHUNK_SIZE_X; x++)
+	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE.z; z++)
+		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE.y; y++)
+			for(int x = 0; x < voxel_map_size().x * CHUNK_SIZE.x; x++)
 			{
 				int mapIndex = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
 				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
 				voxelMap[mapIndex].index = mapIndex;
 
-				if(vec3_distance((vec3){x, y, z}, (vec3){116.0f, 116.0f, 116.0f}) < 116.0f)
+				/*if(vec3_distance((vec3){x, y, z}, (vec3){3.5f, 3.5f, 3.5f}) < 3.0f)
 				{
 					Voxel vox;
 					vox.material = 0;
-					vox.normal = (vec3){x - 116.0f, y - 116.0f, z - 116.0f};
+					vox.normal = (vec3){x - 3.5f, y - 3.5f, z - 3.5f};
 
 					float maxNormal = abs(vox.normal.x);
 					if(abs(vox.normal.y) > maxNormal)
@@ -200,11 +203,14 @@ int main()
 						maxNormal = abs(vox.normal.z);
 
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
-					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
+					vox.albedo = (vec3){pow(x / 8.0f, GAMMA), pow(y / 8.0f, GAMMA), pow(z / 8.0f, GAMMA)};
 
 					voxelMap[mapIndex].flag = 1;
 					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
-				}
+				}*/
+
+				voxelMap[mapIndex].flag = 1;
+				voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = model.voxels[FLATTEN_INDEX(x % 8, y % 8, z % 8, model.size)];
 			}
 
 	voxelMaterials[0].emissive = false;
@@ -338,8 +344,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 		{
 			ivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
-			ivec3 mapPos =   {newPos.x / CHUNK_SIZE_X, newPos.y / CHUNK_SIZE_Y, newPos.z / CHUNK_SIZE_Z};
-			ivec3 localPos = {newPos.x % CHUNK_SIZE_X, newPos.y % CHUNK_SIZE_Y, newPos.z % CHUNK_SIZE_Z};
+			ivec3 mapPos =   {newPos.x / CHUNK_SIZE.x, newPos.y / CHUNK_SIZE.y, newPos.z / CHUNK_SIZE.z};
+			ivec3 localPos = {newPos.x % CHUNK_SIZE.x, newPos.y % CHUNK_SIZE.y, newPos.z % CHUNK_SIZE.z};
 
 			if(in_map_bounds(mapPos))
 			{
@@ -358,8 +364,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
 		if(step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			ivec3 mapPos =   {hitPos.x / CHUNK_SIZE_X, hitPos.y / CHUNK_SIZE_Y, hitPos.z / CHUNK_SIZE_Z};
-			ivec3 localPos = {hitPos.x % CHUNK_SIZE_X, hitPos.y % CHUNK_SIZE_Y, hitPos.z % CHUNK_SIZE_Z};
+			ivec3 mapPos =   {hitPos.x / CHUNK_SIZE.x, hitPos.y / CHUNK_SIZE.y, hitPos.z / CHUNK_SIZE.z};
+			ivec3 localPos = {hitPos.x % CHUNK_SIZE.x, hitPos.y % CHUNK_SIZE.y, hitPos.z % CHUNK_SIZE.z};
 
 			voxelChunks[FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
 			update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
