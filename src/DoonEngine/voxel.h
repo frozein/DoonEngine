@@ -175,7 +175,15 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MODEL UTILITIES:
 
+//Loads a model from a magicaVoxel file (.vox). Returns true on success, false on failure
 bool load_vox_file(const char* path, VoxelModel* model);
+//Frees the memory for a model
+void free_model(VoxelModel model);
+
+//Calculates the normals for every voxel in a model, the larger the radius, the smoother the normals but the longer the calculation time
 void calculate_model_normals(int radius, VoxelModel* model);
+
+//Places a model into the world
+void place_model_into_world(VoxelModel model, ivec3 pos);
 
 #endif

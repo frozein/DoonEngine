@@ -737,7 +737,7 @@ bool load_vox_file(const char* path, VoxelModel* model)
 
 	VoxFileChunk mainChunk; //skip main chunk (never has content)
 	read_chunk_info(fp, &mainChunk);
-		
+
 	//iterate remaining chunks:
 	while(ftell(fp) < mainChunk.endPtr) 
 	{
@@ -802,6 +802,11 @@ bool load_vox_file(const char* path, VoxelModel* model)
 	return true;
 }
 
+void free_model(VoxelModel model)
+{
+	free(model.voxels);
+}
+
 void calculate_model_normals(int r, VoxelModel* model)
 {
 	for(int xC = 0; xC < model->size.x; xC++)
@@ -832,19 +837,13 @@ void calculate_model_normals(int r, VoxelModel* model)
 
 			if(voxelGPU_to_voxel(model->voxels[iP]).material < 255)
 			{
-				//vec3_print(sum);
-
 				vec3 toCenter = {xP - xC, yP - yC, zP - zC};
-				float dist = vec3_length(toCenter);
+				float dist = vec3_dot(toCenter, toCenter);
 				toCenter = vec3_scale(toCenter, 1.0f / dist);
 				sum = vec3_add(sum, toCenter);
-
-				//vec3_print(toCenter);
-				//vec3_print(sum);
 			}
 		}
 
-		//vec3_print(sum);
 		if(sum.x == 0.0f && sum.y == 0.0f && sum.z == 0.0f)
 			sum = (vec3){0.0f, 1.0f, 0.0f};
 
@@ -858,6 +857,27 @@ void calculate_model_normals(int r, VoxelModel* model)
 
 		voxC.normal = sum;
 		model->voxels[iC] = voxel_to_voxelGPU(voxC);
+	}
+}
+
+void place_model_into_world(VoxelModel model, ivec3 pos)
+{
+	for(int x = 0; x < model.size.x; x++)
+	for(int y = 0; y < model.size.y; y++)
+	for(int z = 0; z < model.size.z; z++)
+	{
+		int iModel = FLATTEN_INDEX(x, y, z, model.size);
+		if(voxelGPU_to_voxel(model.voxels[iModel]).material < 255)
+		{
+			ivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
+			ivec3 chunkPos = {worldPos.x / CHUNK_SIZE.x, worldPos.y / CHUNK_SIZE.y, worldPos.z / CHUNK_SIZE.z};
+
+			if(in_map_bounds(chunkPos))
+			{
+				int iWorld = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSize);
+				voxelChunks[iWorld].voxels[worldPos.x % CHUNK_SIZE.x][worldPos.y % CHUNK_SIZE.y][worldPos.z % CHUNK_SIZE.z] = model.voxels[iModel];
+			}
+		}
 	}
 }
 

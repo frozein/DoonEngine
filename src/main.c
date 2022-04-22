@@ -58,8 +58,8 @@ bool updateData = true;
 int main()
 {
 	VoxelModel model;
-	load_vox_file("testApple.vox", &model);
-	calculate_model_normals(1, &model);
+	load_vox_file("tree.vox", &model);
+	calculate_model_normals(2, &model);
 
 	int error;
 
@@ -177,13 +177,14 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){1, 1, 1}, 1 * 1 * 1, (uvec3){1, 1, 1}, 1, 1 * 1 * 1))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 2000, 30 * 30 * 30))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		scanf("%d", &error);
 		return -1;
 	}
 
+	//place_model_into_world(model, (ivec3){0, 0, 0});
 	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE.z; z++)
 		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE.y; y++)
 			for(int x = 0; x < voxel_map_size().x * CHUNK_SIZE.x; x++)
@@ -192,11 +193,11 @@ int main()
 				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
 				voxelMap[mapIndex].index = mapIndex;
 
-				/*if(vec3_distance((vec3){x, y, z}, (vec3){3.5f, 3.5f, 3.5f}) < 3.0f)
+				if(vec3_distance((vec3){x, y, z}, (vec3){116.0f, 116.0f, 116.0f}) < 116.0f)
 				{
 					Voxel vox;
 					vox.material = 0;
-					vox.normal = (vec3){x - 3.5f, y - 3.5f, z - 3.5f};
+					vox.normal = (vec3){x - 116.0f, y - 116.0f, z - 116.0f};
 
 					float maxNormal = abs(vox.normal.x);
 					if(abs(vox.normal.y) > maxNormal)
@@ -205,14 +206,14 @@ int main()
 						maxNormal = abs(vox.normal.z);
 
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
-					vox.albedo = (vec3){pow(x / 8.0f, GAMMA), pow(y / 8.0f, GAMMA), pow(z / 8.0f, GAMMA)};
+					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
 					voxelMap[mapIndex].flag = 1;
 					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
-				}*/
+				}
 
-				voxelMap[mapIndex].flag = 1;
-				voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = model.voxels[FLATTEN_INDEX(x % 8, y % 8, z % 8, model.size)];
+				//voxelMap[mapIndex].flag = 1;
+				//voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = model.voxels[FLATTEN_INDEX(x % 8, y % 8, z % 8, model.size)];
 			}
 
 	voxelMaterials[0].emissive = false;
