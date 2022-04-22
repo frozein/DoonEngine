@@ -234,6 +234,7 @@ static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex,
 		}
 
 		voxelMapGPU[gpuIndex].flag = 1; //set the new tile's flag to loaded
+		voxelMapGPU[gpuIndex].lastUsed = 0;
 		voxelMapGPU[gpuIndex].index = maxTimeIndex;
 
 		//load in new data:

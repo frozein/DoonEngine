@@ -68,12 +68,10 @@ int main()
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
 
 	//create and init window:
 	//---------------------------------
-	glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 	GLFWwindow* window = glfwCreateWindow(SCREEN_W, SCREEN_H, "VoxelEngine", NULL, NULL);
 	if(window == NULL)
 	{
@@ -83,7 +81,7 @@ int main()
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
-	//glfwSwapInterval(1);
+	glfwSwapInterval(0);
 
 	//load opengl functions:
 	//---------------------------------
@@ -114,6 +112,7 @@ int main()
 	int quadShader = shader_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
 	if(quadShader < 0)
 	{
+		ERROR_LOG("quad shader failed\n");
 		shader_program_free(quadShader);
 		glfwTerminate();
 		scanf("%d", &error);
@@ -177,9 +176,10 @@ int main()
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){1, 1, 1}, 1 * 1 * 1, (uvec3){1, 1, 1}, 1, 1 * 1 * 1))
+	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){30, 30, 30}, 30 * 30 * 30, (uvec3){30, 30, 30}, 2000, 30 * 30 * 30))
 	{
 		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
+		glfwTerminate();
 		scanf("%d", &error);
 		return -1;
 	}
@@ -192,11 +192,11 @@ int main()
 				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
 				voxelMap[mapIndex].index = mapIndex;
 
-				/*if(vec3_distance((vec3){x, y, z}, (vec3){3.5f, 3.5f, 3.5f}) < 3.0f)
+				if(vec3_distance((vec3){x, y, z}, (vec3){116.0f, 116.0f, 116.0f}) < 116.0f)
 				{
 					Voxel vox;
 					vox.material = 0;
-					vox.normal = (vec3){x - 3.5f, y - 3.5f, z - 3.5f};
+					vox.normal = (vec3){x - 116.0f, y - 116.0f, z - 116.0f};
 
 					float maxNormal = abs(vox.normal.x);
 					if(abs(vox.normal.y) > maxNormal)
@@ -205,14 +205,14 @@ int main()
 						maxNormal = abs(vox.normal.z);
 
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
-					vox.albedo = (vec3){pow(x / 8.0f, GAMMA), pow(y / 8.0f, GAMMA), pow(z / 8.0f, GAMMA)};
+					vox.albedo = (vec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
 					voxelMap[mapIndex].flag = 1;
 					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
-				}*/
+				}
 
-				voxelMap[mapIndex].flag = 1;
-				voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = model.voxels[FLATTEN_INDEX(x % 8, y % 8, z % 8, model.size)];
+				//voxelMap[mapIndex].flag = 1;
+				//voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = model.voxels[FLATTEN_INDEX(x % 8, y % 8, z % 8, model.size)];
 			}
 
 	voxelMaterials[0].emissive = false;
@@ -229,6 +229,7 @@ int main()
 	int numFrames = 0;
 	float cumTime = 0.0;
 
+	const int lightingSplit = 5;
 	unsigned int numChunksToUpdate = 0;
 	int frameNum = 0;
 	float oldTime = 0.0f;
@@ -266,12 +267,12 @@ int main()
 		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
 		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
-		//render voxels (split the lighting calculations over 5 frames):
+		//stream voxel data:
 		if(updateData)
 		{
 			frameNum++;
 
-			if(frameNum % 5 == 0)
+			if(frameNum % lightingSplit == 0)
 			{
 				numChunksToUpdate = stream_voxel_chunks(true);
 				oldTime = glfwGetTime();
@@ -279,18 +280,24 @@ int main()
 			else
 				stream_voxel_chunks(false);
 		}
+		glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 
-		int numThisFrame = (int)ceil(numChunksToUpdate / 5.0f);
-		int offset = numThisFrame * (frameNum % 5);
+		//update lighting (split over multiple frames):
+		int numThisFrame = (int)ceil((float)numChunksToUpdate / lightingSplit);
+		int offset = numThisFrame * (frameNum % lightingSplit);
 		update_voxel_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
+		//render voxels to texture:
 		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
+		//render final quad to the screen:
 		texture_activate(finalTex, 0);
 		shader_program_activate(quadShader);
-
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
+		glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
 
 		//finish rendering and swap:
 		glfwSwapBuffers(window);
@@ -429,6 +436,9 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 
 void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
 {
+	if(severity == GL_DEBUG_SEVERITY_NOTIFICATION || type == 0x8250)
+		return;
+
 	ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
         	 (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
         	  type, severity, message );
