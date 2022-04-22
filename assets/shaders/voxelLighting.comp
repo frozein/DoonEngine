@@ -1,7 +1,8 @@
 //INCLUDES "voxelShared.comp"
 #version 430 core
 
-layout(local_size_x = CHUNK_SIZE.x, local_size_y = CHUNK_SIZE.y, local_size_z = CHUNK_SIZE.z) in; //local group size of chunk
+//NOTE: can't use "CHUNK_SIZE" constant here because local_size must be a literal on some gpus
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; //local group size of chunk
 
 layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer //a buffer that holds all of the chunks that are set to have their lighting updated
 {
@@ -82,7 +83,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 				hitVoxel.indirectLight *= 1.0 - hitMaterial.specular;
 				hitVoxel.directLight   *= 1.0 - hitMaterial.specular;	
 
-				if(hitMaterial.emissive)
+				if(hitMaterial.emissive == 1)
 				{
 					color += (hitVoxel.albedo * colorMult + colorAdd) * multiplier * albedo;
 					break;
@@ -159,7 +160,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 				return;
 
 			//multiply the final color:
-			if(hitMaterial.emissive)
+			if(hitMaterial.emissive == 1)
 			{
 				color += newColor * hitVoxel.albedo;
 				return;

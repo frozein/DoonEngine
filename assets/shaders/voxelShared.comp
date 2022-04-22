@@ -1,6 +1,6 @@
 //----------------------------------------------------------BEGIN-SHARED----------------------------------------------------------//
 
-#define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
+#define CHUNK_SIZE uvec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
 #define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / 2 * CHUNK_SIZE, precomputed
 
@@ -35,8 +35,9 @@ struct CompressedVoxel //a compressed voxel
 
 struct Chunk //a chunk of voxels
 {
-	CompressedVoxel voxels[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
-	vec4 indirectLight[CHUNK_SIZE.x][CHUNK_SIZE.y][CHUNK_SIZE.z];
+	//NOTE: can't use "CHUNK_SIZE" const for the size since some gpus dont allow it in a struct
+	CompressedVoxel voxels[8][8][8]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
+	vec4 indirectLight[8][8][8];
 };
 
 struct ChunkHandle //a handle to a Chunk
@@ -110,7 +111,6 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 {
 	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
-	map[index].lastUsed = 0;
 	return map[index];
 }
 
@@ -141,13 +141,13 @@ Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight) //decompr
 	uvec4 specLight 	= decode_uint_RGBA(compressed.specLight);
 
 	Voxel res;
-	res.albedo = albedo.xyz * 0.00392156862;
-	res.normal = (normal.xyz * 0.00392156862 - 0.5) * 2.0;
+	res.albedo = vec3(albedo.xyz) * 0.00392156862;
+	res.normal = (vec3(normal.xyz) * 0.00392156862 - 0.5) * 2.0;
 	res.material = albedo.w;
 	res.indirectLight = indirectLight.xyz;
 	res.indirectSamples = indirectLight.w;
-	res.directLight = directLight.xyz * 0.00392156862;
-	res.specLight = specLight.xyz * 0.00392156862;
+	res.directLight = vec3(directLight.xyz) * 0.00392156862;
+	res.specLight = vec3(specLight.xyz) * 0.00392156862;
 	res.visible = directLight.w;
 
 	return res;
@@ -297,13 +297,20 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
 
+				uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+
+				if(map[index].lastUsed > 0)
+					map[index].lastUsed = 0;
+
 				return true;
 			}
 		}
 		else if(mapTile.flag > 1)
 		{
 			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-			map[index].flag = 3;
+
+			if(map[index].flag != 3)
+				map[index].flag = 3;
 
 			return false;
 		}

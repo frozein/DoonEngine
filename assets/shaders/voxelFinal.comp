@@ -26,8 +26,8 @@ void main()
 
 	//calculate ray position and direction:
 	vec2 screenPos;
-	screenPos.x = gl_GlobalInvocationID.x / (gl_NumWorkGroups.x * 8.0) - 1.0; //(0,0) at the center of the screen
-	screenPos.y = gl_GlobalInvocationID.y / (gl_NumWorkGroups.y * 8.0) - 1.0;
+	screenPos.x = gl_GlobalInvocationID.x / (float(gl_NumWorkGroups.x) * 8.0) - 1.0; //(0,0) at the center of the screen
+	screenPos.y = gl_GlobalInvocationID.y / (float(gl_NumWorkGroups.y) * 8.0) - 1.0;
 
 	vec3 rayDir = camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV;
 	vec3 invRayDir = 1.0 / rayDir;
@@ -57,7 +57,7 @@ void main()
 			case 0: //total lighting
 			{	
 				vec3 solidColor;
-				if(finalMaterial.emissive)
+				if(finalMaterial.emissive == 1)
 					solidColor = finalVoxel.albedo;
 				else
 					solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight;
@@ -94,7 +94,9 @@ void main()
 
 			uvec3 mapPos = uvec3(floor(rayPos));
 			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-			map[index].visible = 1;
+
+			if(map[index].visible == 0)
+				map[index].visible = 1;
 		}
 		else
 		{
