@@ -544,6 +544,8 @@ static uvec4 decode_uint_RGBA(GLuint val);
 VoxelGPU voxel_to_voxelGPU(Voxel voxel)
 {
 	VoxelGPU res;
+	voxel.albedo = vec3_clamp(voxel.albedo, 0.0f, 1.0f);
+	voxel.normal = vec3_clamp(voxel.normal, -1.0f, 1.0f);
 	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
 	uvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
 
@@ -721,6 +723,12 @@ bool load_vox_file(const char* path, VoxelModel* model)
 {
 	FILE* fp = fopen(path, "rb");
 
+	if(fp == NULL)
+	{
+		ERROR_LOG("ERROR - UNABLE TO OPEN FILE \"%s\"\n", path);
+		return false;
+	}
+
 	unsigned int numVoxels;
 	VoxFileVoxel* tempVoxels = NULL;
 	VoxFileVoxel palette[256];
@@ -854,8 +862,7 @@ void calculate_model_normals(int r, VoxelModel* model)
 		if(abs(sum.z) > maxNormal)
 			maxNormal = abs(sum.z);
 
-		sum = vec3_scale(sum, 1.0f / maxNormal);
-
+		sum = vec3_scale(sum, -1.0f / maxNormal);
 		voxC.normal = sum;
 		model->voxels[iC] = voxel_to_voxelGPU(voxC);
 	}
@@ -876,6 +883,7 @@ void place_model_into_world(VoxelModel model, ivec3 pos)
 			if(in_map_bounds(chunkPos))
 			{
 				int iWorld = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSize);
+				voxelMap[iWorld].flag = 1;
 				voxelChunks[iWorld].voxels[worldPos.x % CHUNK_SIZE.x][worldPos.y % CHUNK_SIZE.y][worldPos.z % CHUNK_SIZE.z] = model.voxels[iModel];
 			}
 		}

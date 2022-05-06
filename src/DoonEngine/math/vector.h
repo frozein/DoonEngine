@@ -20,6 +20,8 @@ vec2 vec2_scale(vec2 v, GLfloat s);
 
 //Returns a normalized vector2
 vec2 vec2_normalize(vec2 v);
+//Clamps each value of the vector2 between min and max and returns the result
+vec2 vec2_clamp(vec2 v, GLfloat min, GLfloat max);
 //Returns the result of a linear interpolation between 2 vector2s
 vec2 vec2_lerp(vec2 from, vec2 to, GLfloat a);
 
@@ -47,6 +49,8 @@ vec3 vec3_scale(vec3 v, GLfloat s);
 
 //Returns a normalized vector3
 vec3 vec3_normalize(vec3 v);
+//Clamps each value of the vector3 between min and max and returns the result
+vec3 vec3_clamp(vec3 v, GLfloat min, GLfloat max);
 //Returns the result of a linear interpolation between 2 vector3s
 vec3 vec3_lerp(vec3 from, vec3 to, GLfloat a);
 //Returns the cross product of 2 vector3s
@@ -76,6 +80,8 @@ vec4 vec4_scale(vec4 v, GLfloat s);
 
 //Returns a normalized vector4
 vec4 vec4_normalize(vec4 v);
+//Clamps each value of the vector4 between min and max and returns the result
+vec4 vec4_clamp(vec4 v, GLfloat min, GLfloat max);
 //Returns the result of a linear interpolation between 2 vector4s
 vec4 vec4_lerp(vec4 from, vec4 to, GLfloat a);
 

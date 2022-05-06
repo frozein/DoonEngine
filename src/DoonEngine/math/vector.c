@@ -5,6 +5,19 @@
 #define NORMALIZE_TOLERANCE 0.0001
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//UTILITY FUNCTIONS:
+
+static GLfloat DN_clamp(GLfloat v, GLfloat min, GLfloat max)
+{
+	if(v < min)
+		return min;
+	if(v > max)
+		return max;
+	
+	return v;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
 //VEC2:
 
 void vec2_print(vec2 v)
@@ -46,6 +59,11 @@ vec2 vec2_normalize(vec2 v)
 	}
 
 	return res;
+}
+
+vec2 vec2_clamp(vec2 v, GLfloat min, GLfloat max)
+{
+	return (vec2){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max)};
 }
 
 vec2 vec2_lerp(vec2 from, vec2 to, GLfloat a)
@@ -117,6 +135,11 @@ vec3 vec3_normalize(vec3 v)
 	}
 
 	return res;
+}
+
+vec3 vec3_clamp(vec3 v, GLfloat min, GLfloat max)
+{
+	return (vec3){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max), DN_clamp(v.z, min, max)};
 }
 
 vec3 vec3_lerp(vec3 from, vec3 to, GLfloat a)
@@ -196,6 +219,11 @@ vec4 vec4_normalize(vec4 v)
 	}
 
 	return res;
+}
+
+vec4 vec4_clamp(vec4 v, GLfloat min, GLfloat max)
+{
+	return (vec4){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max), DN_clamp(v.z, min, max), DN_clamp(v.w, min, max)};
 }
 
 vec4 vec4_lerp(vec4 from, vec4 to, GLfloat a)

@@ -182,7 +182,7 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 
 void main()
 {
-	//TODO: COMBINE SPEC AND SHADOW RAYS, COMBINE DIRECT AND GLOBAL LIGHT SHADERS
+	//TODO: COMBINE SPEC AND SHADOW RAYS
 
 	//find positions:
 	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
