@@ -1,6 +1,6 @@
 #include "voxel.h"
-#include "shader.h"
-#include "texture.h"
+#include "utility/shader.h"
+#include "utility/texture.h"
 #include "globals.h"
 #include <stdlib.h>
 #include <malloc.h>
@@ -9,55 +9,50 @@
 #include <stdio.h>
 #include <memory.h>
 #include <string.h>
+#include "math/all.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GLOBAL STATE:
 
 //shader handles:
-unsigned int lightingShader = 0;
-unsigned int finalShader = 0;
+GLprogram lightingProgram = 0;
+GLprogram finalProgram = 0;
 
 //buffer handles:
-unsigned int mapBuffer = 0;
-unsigned int chunkBuffer = 0;
-unsigned int materialBuffer = 0;
-unsigned int lightingRequestBuffer = 0;
+typedef GLuint GLbuffer;
 
-Texture finalTex = {0, GL_TEXTURE_2D};
+GLbuffer mapBuffer = 0;
+GLbuffer chunkBuffer = 0;
+GLbuffer materialBuffer = 0;
+GLbuffer lightingRequestBuffer = 0;
+
+DNtexture finalTex = {0, GL_TEXTURE_2D};
 
 //memory meta-data:
-uvec2 textureSize = {0, 0};
+DNuvec2 textureSize = {0, 0};
 
-uvec3 mapSize = {0, 0, 0};
+DNuvec3 mapSize = {0, 0, 0};
 unsigned int maxChunks = 0;
 
-uvec3 mapSizeGPU = {0, 0, 0};
+DNuvec3 mapSizeGPU = {0, 0, 0};
 unsigned int maxChunksGPU = 0;
 unsigned int maxLightingRequests = 0;
 
 //cpu-side memory:
-VoxelChunkHandle* voxelMap = 0;
-VoxelChunk* voxelChunks = 0;
-VoxelMaterial* voxelMaterials = 0;
-ivec4* voxelLightingRequests = 0;
-ivec4* chunkBufferLayout;
+DNvoxelChunkHandle* dnVoxelMap = 0;
+DNvoxelChunk* dnVoxelChunks = 0;
+DNvoxelMaterial* dnVoxelMaterials = 0;
+DNivec4* dnVoxelLightingRequests = 0;
+DNivec4* chunkBufferLayout;
 
-//lighting parameters:
-vec3 sunDir = {-1.0f, 1.0f, -1.0f};
-vec3 sunStrength = {0.6f, 0.6f, 0.6f};
-float ambientStrength = 0.01f;
-unsigned int bounceLimit = 5;
-float shadowSoftness = 10.0f;
-unsigned int viewMode = 0;
-
-const size_t halfChunkSize = sizeof(VoxelGPU) * 8 * 8 * 8; //CHANGE CHUNK SIZE HERE
+const size_t halfChunkSize = sizeof(DNvoxelGPU) * 8 * 8 * 8; //CHANGE CHUNK SIZE HERE
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //INITIALIZATION:
 
-static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding);
+static bool _DN_gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding);
 
-bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mChunks, uvec3 mSizeGPU, unsigned int mChunksGPU, unsigned int mLightingRequests)
+bool DN_init_voxel_pipeline(DNuvec2 tSize, DNtexture fTex, DNuvec3 mSize, unsigned int mChunks, DNuvec3 mSizeGPU, unsigned int mChunksGPU, unsigned int mLightingRequests)
 {	
 	//assign variables:
 	//---------------------------------
@@ -75,126 +70,132 @@ bool init_voxel_pipeline(uvec2 tSize, Texture fTex, uvec3 mSize, unsigned int mC
 
 	//allocate cpu-side memory:
 	//---------------------------------
-	voxelMap = malloc(sizeof(VoxelChunkHandle) * mapSize.x * mapSize.y * mapSize.z);
-	if(!voxelMap)
+	dnVoxelMap = DN_MALLOC(sizeof(DNvoxelChunkHandle) * mapSize.x * mapSize.y * mapSize.z);
+	if(!dnVoxelMap)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MAP\n");
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MAP\n");
 		return false;
 	}
 
 	for(int i = 0; i < mapSize.x * mapSize.y * mapSize.z; i++)
-		voxelMap[i].flag = voxelMap[i].visible = 0;
+		dnVoxelMap[i].flag = dnVoxelMap[i].visible = 0;
 
-	voxelChunks = malloc(sizeof(VoxelChunk) * maxChunks);
-	if(!voxelChunks)
+	dnVoxelChunks = DN_MALLOC(sizeof(DNvoxelChunk) * maxChunks);
+	if(!dnVoxelChunks)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL CHUNKS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL CHUNKS\n");
 		return false;
 	}
 
 	for(int i = 0; i < maxChunks; i++)
-		for(int z = 0; z < CHUNK_SIZE.z; z++)
-			for(int y = 0; y < CHUNK_SIZE.y; y++)
-				for(int x = 0; x < CHUNK_SIZE.x; x++)
+		for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
+			for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
+				for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
 				{
-					voxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
-					voxelChunks[i].indirectLight[x][y][z] = (vec4){0, 0, 0, 0};
+					dnVoxelChunks[i].voxels[x][y][z].albedo = UINT32_MAX;
+					dnVoxelChunks[i].indirectLight[x][y][z] = (DNvec4){0, 0, 0, 0};
 				}
 
-	chunkBufferLayout = malloc(sizeof(ivec4) * maxChunksGPU);
+	chunkBufferLayout = DN_MALLOC(sizeof(DNivec4) * maxChunksGPU);
 	if(!chunkBufferLayout)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR CHUNK BUFFER LAYOUT\n");
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR CHUNK BUFFER LAYOUT\n");
 		return false;
 	}
 
 	for(int i = 0; i < maxChunksGPU; i++)
-		chunkBufferLayout[i] = (ivec4){-1, -1, -1, -1};
+		chunkBufferLayout[i] = (DNivec4){-1, -1, -1, -1};
 
-	voxelMaterials = malloc(sizeof(VoxelMaterial) * MAX_MATERIALS);
-	if(!voxelMaterials)
+	dnVoxelMaterials = DN_MALLOC(sizeof(DNvoxelMaterial) * DN_MAX_VOXEL_MATERIALS);
+	if(!dnVoxelMaterials)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MATERIALS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MATERIALS\n");
 		return false;
 	}
 
-	voxelLightingRequests = malloc(sizeof(ivec4) * maxLightingRequests);
-	if(!voxelLightingRequests)
+	dnVoxelLightingRequests = DN_MALLOC(sizeof(DNivec4) * maxLightingRequests);
+	if(!dnVoxelLightingRequests)
 	{
-		ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL LIGHTING REQUESTS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL LIGHTING REQUESTS\n");
 		return false;
 	}
 
 	//generate buffers:
 	//---------------------------------
-	if(!gen_shader_storage_buffer(&mapBuffer, sizeof(VoxelChunkHandle) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
+	if(!_DN_gen_shader_storage_buffer(&mapBuffer, sizeof(DNvoxelChunkHandle) * mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.x, 0))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MAP BUFFER\n");
 		return false;
 	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
 
-	if(!gen_shader_storage_buffer(&chunkBuffer, sizeof(VoxelChunk) * maxChunksGPU, 1))
+	if(!_DN_gen_shader_storage_buffer(&chunkBuffer, sizeof(DNvoxelChunk) * maxChunksGPU, 1))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL CHUNK BUFFER\n");
 		return false;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
 
-	if(!gen_shader_storage_buffer(&materialBuffer, sizeof(VoxelMaterial) * MAX_MATERIALS, 2))
+	if(!_DN_gen_shader_storage_buffer(&materialBuffer, sizeof(DNvoxelMaterial) * DN_MAX_VOXEL_MATERIALS, 2))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
 		return false;
 	}
 
-	if(!gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(ivec4) * maxLightingRequests, 3))
+	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(DNivec4) * maxLightingRequests, 3))
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
 		return false;
 	}
 
 	//load shaders:
 	//---------------------------------
-	int lighting = compute_shader_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
-	int final    = compute_shader_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
+	int lighting = DN_compute_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
+	int final    = DN_compute_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
 
 	if(lighting < 0 || final < 0)
 	{
-		ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
 		return false;
 	}
 
-	lightingShader = lighting;
-	finalShader = final;
+	lightingProgram = lighting;
+	finalProgram = final;
+
+	//set default lighting parameters:
+	//---------------------------------
+	DN_set_voxel_lighting_parameters((DNvec3){-1.0f, 1.0f, -1.0f}, (DNvec3){0.6f, 0.6f, 0.6f}, 0.01f, 5, 2, 10.0f);
 
 	//return:
 	//---------------------------------
 	return true;
 }
 
-void deinit_voxel_pipeline()
+void DN_deinit_voxel_pipeline()
 {
-	shader_program_free(lightingShader);
-	shader_program_free(finalShader);
+	DN_program_free(lightingProgram);
+	DN_program_free(finalProgram);
 
 	glDeleteBuffers(1, &mapBuffer);
 	glDeleteBuffers(1, &chunkBuffer);
 	glDeleteBuffers(1, &materialBuffer);
 	glDeleteBuffers(1, &lightingRequestBuffer);
 
-	free(voxelMap);
-	free(voxelChunks);
-	free(chunkBufferLayout);
-	free(voxelMaterials);
-	free(voxelLightingRequests);
+	DN_FREE(dnVoxelMap);
+	DN_FREE(dnVoxelChunks);
+	DN_FREE(chunkBufferLayout);
+	DN_FREE(dnVoxelMaterials);
+	DN_FREE(dnVoxelLightingRequests);
 
-	texture_free(finalTex);
+	DN_texture_free(finalTex);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UPDATING/DRAWING:
 
-static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex, int cpuIndex)
+static void _DN_stream_voxel_chunk(DNivec3 pos, DNvoxelChunkHandle* voxelMapGPU, int gpuIndex, int cpuIndex, bool autoResize)
 {
 	const int maxGpuMapIndex = mapSizeGPU.x * mapSizeGPU.y * mapSizeGPU.z; //the maximum map index on the GPU
 
@@ -206,8 +207,8 @@ static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex,
 	//loop through every chunk to look for oldest:
 	for(int i = 0; i < maxChunksGPU; i++)
 	{
-		ivec4 chunkPos = chunkBufferLayout[i];
-		int chunkMapIndex = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSizeGPU);
+		DNivec4 chunkPos = chunkBufferLayout[i];
+		int chunkMapIndex = DN_FLATTEN_INDEX(chunkPos, mapSizeGPU);
 
 		//if chunk does not belong to any active map tile, instantly use it
 		if(chunkPos.w < 0 || chunkMapIndex >= maxGpuMapIndex)
@@ -230,7 +231,7 @@ static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex,
 		if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded and store old data (to maintain semi-baked lighting)
 		{
 			voxelMapGPU[maxTimeMapIndex].flag = voxelMapGPU[maxTimeMapIndex].flag > 0 ? 2 : 0;
-			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk) + halfChunkSize, halfChunkSize, &voxelChunks[maxTimeMapIndex].indirectLight[0][0][0]);
+			glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNvoxelChunk) + halfChunkSize, halfChunkSize, &dnVoxelChunks[maxTimeMapIndex].indirectLight[0][0][0]);
 		}
 
 		voxelMapGPU[gpuIndex].flag = 1; //set the new tile's flag to loaded
@@ -238,35 +239,37 @@ static void stream_chunk(ivec3 pos, VoxelChunkHandle* voxelMapGPU, int gpuIndex,
 		voxelMapGPU[gpuIndex].index = maxTimeIndex;
 
 		//load in new data:
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(VoxelChunk), sizeof(VoxelChunk), &voxelChunks[cpuIndex]);
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNvoxelChunk), sizeof(DNvoxelChunk), &dnVoxelChunks[cpuIndex]);
 
-		chunkBufferLayout[maxTimeIndex] = (ivec4){pos.x, pos.y, pos.z, 0}; //update the chunk layout
+		chunkBufferLayout[maxTimeIndex] = (DNivec4){pos.x, pos.y, pos.z, 0}; //update the chunk layout
 	}
-	else //if the oldest chunk is currently in use, double the buffer size
+	else if(autoResize)//if the oldest chunk is currently in use, double the buffer size
 	{
-		ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
+		DN_ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %i CHUNKS\n", maxChunksGPU * 2);
 
 		//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
-		void* oldChunkData = malloc(sizeof(VoxelChunk) * maxChunksGPU);
+		void* oldChunkData = DN_MALLOC(sizeof(DNvoxelChunk) * maxChunksGPU);
 		if(!oldChunkData)
 		{
-			ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
+			DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
 			return;
 		}
 
-		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * maxChunksGPU, oldChunkData); //get old data
-		set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelChunk) * (maxChunksGPU / 2), oldChunkData); //send back old data
+		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelChunk) * maxChunksGPU, oldChunkData); //get old data
+		DN_set_max_voxel_chunks_gpu(maxChunksGPU * 2); //resize buffer
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelChunk) * (maxChunksGPU / 2), oldChunkData); //send back old data
 
-		free(oldChunkData); //free temporary memory
+		DN_FREE(oldChunkData); //free temporary memory
 	}
+	else
+		DN_ERROR_LOG("NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... CHUNKS MAY NOT BE VISIBLE\n");
 }
 
-unsigned int stream_voxel_chunks(bool updateLighting)
+unsigned int DN_stream_voxel_chunks(bool updateLighting, bool autoResize)
 {
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	VoxelChunkHandle* voxelMapGPU = (VoxelChunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
+	DNvoxelChunkHandle* voxelMapGPU = (DNvoxelChunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
 	//bind the chunk buffer so it can be updated:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
@@ -279,20 +282,31 @@ unsigned int stream_voxel_chunks(bool updateLighting)
 	for(int y = 0; y < mapSizeGPU.y; y++)
 	for(int x = 0; x < mapSizeGPU.x; x++)
 	{
-		int cpuMapIndex = FLATTEN_INDEX(x, y, z, mapSize);    //the map index for the cpu-side memory
-		int gpuMapIndex = FLATTEN_INDEX(x, y, z, mapSizeGPU); //the map index for the gpu-side memory
+		DNivec3 pos = {x, y, z};
+		int cpuMapIndex = DN_FLATTEN_INDEX(pos, mapSize);    //the map index for the cpu-side memory
+		int gpuMapIndex = DN_FLATTEN_INDEX(pos, mapSizeGPU); //the map index for the gpu-side memory
 
 		//if a chunk was added to the cpu map, request it to be added to the gpu map:
-		if(voxelMap[cpuMapIndex].flag > 0 && voxelMapGPU[gpuMapIndex].flag == 0)
+		if(dnVoxelMap[cpuMapIndex].flag > 0 && voxelMapGPU[gpuMapIndex].flag == 0)
 			voxelMapGPU[gpuMapIndex].flag = 3;
 
 		//if flag = 3 (requested), try to load a new chunk:
-		if(voxelMapGPU[gpuMapIndex].flag == 3 && voxelMap[cpuMapIndex].flag == 1)
-			stream_chunk((ivec3){x, y, z}, voxelMapGPU, gpuMapIndex, cpuMapIndex);
+		if(voxelMapGPU[gpuMapIndex].flag == 3 && dnVoxelMap[cpuMapIndex].flag == 1)
+			_DN_stream_voxel_chunk(pos, voxelMapGPU, gpuMapIndex, cpuMapIndex, autoResize);
 
 		//if chunk is loaded and visible, add to lighting request buffer:
 		if(updateLighting && voxelMapGPU[gpuMapIndex].flag == 1 && voxelMapGPU[gpuMapIndex].visible == 1)
-			voxelLightingRequests[numChunksToUpdate++] = (ivec4){x, y, z, 0};
+		{
+			if(numChunksToUpdate <= maxLightingRequests)
+				dnVoxelLightingRequests[numChunksToUpdate++] = (DNivec4){x, y, z, 0};
+			else if(autoResize)
+			{
+				DN_ERROR_LOG("NOTE - NUMBER OF VISIBLE CHUNKS EXCEEDS MAX LIGHTING UPDATES... RESIZING LIGHTING REQUESTS TO ACCOMADATE %i CHUNKS\n", maxLightingRequests * 2);
+				DN_set_max_voxel_lighting_requests(2 * maxLightingRequests);
+			}
+			else
+				DN_ERROR_LOG("NOTE - NUMBER OF VISIBLE CHUNKS EXCEEDS MAX LIGHTING UPDATES... UNABLE TO UPDATE ALL CHUNKS\n");
+		}
 
 		//increase the "time last used" flag:
 		if(voxelMapGPU[gpuMapIndex].lastUsed < UINT32_MAX)
@@ -309,109 +323,86 @@ unsigned int stream_voxel_chunks(bool updateLighting)
 	return numChunksToUpdate;
 }
 
-void update_voxel_chunk(ivec3* positions, int num, bool updateLighting, vec3 camPos, float time)
+void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLighting, DNvec3 camPos, float time)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
 
 	for(int i = 0; i < num; i++)
 		for(int j = 0; j < maxChunksGPU; j++)
 		{
-			ivec3 pos = positions[i];
-			ivec4 bufferPos = chunkBufferLayout[j];
+			DNivec3 pos = positions[i];
+			DNivec4 bufferPos = chunkBufferLayout[j];
 			if(bufferPos.x == pos.x && bufferPos.y == pos.y && bufferPos.z == pos.z)
 			{
-				glBufferSubData(GL_SHADER_STORAGE_BUFFER, j * sizeof(VoxelChunk), halfChunkSize, &voxelChunks[FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSize)]);
-				voxelLightingRequests[i] = (ivec4){pos.x, pos.y, pos.z, 0};
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, j * sizeof(DNvoxelChunk), halfChunkSize, &dnVoxelChunks[DN_FLATTEN_INDEX(pos, mapSize)]);
+				dnVoxelLightingRequests[i] = (DNivec4){pos.x, pos.y, pos.z, 0};
 				break;
 			}
 		}
 
 	if(updateLighting)
-		update_voxel_lighting(num, 0, camPos, time);
+		DN_update_voxel_lighting(num, 0, camPos, time);
 }
 
-void draw_voxels(vec3 camPos, vec3 camFront, vec3 camPlaneU, vec3 camPlaneV)
+void DN_draw_voxels(DNvec3 camPos, DNvec3 camFront, DNvec3 camPlaneU, DNvec3 camPlaneV, unsigned int viewMode)
 {
-	shader_program_activate(finalShader);
+	DN_program_activate(finalProgram);
 
-	shader_uniform_vec3 (finalShader, "camPos", camPos);
-	shader_uniform_vec3 (finalShader, "camDir", camFront);
-	shader_uniform_vec3 (finalShader, "camPlaneU", camPlaneU);
-	shader_uniform_vec3 (finalShader, "camPlaneV", camPlaneV);
-	shader_uniform_uint (finalShader, "viewMode", viewMode);
-	shader_uniform_float(finalShader, "ambientStrength", ambientStrength);
-	shader_uniform_vec3(finalShader, "sunStrength", sunStrength);
-	glUniform3uiv(glGetUniformLocation(finalShader, "mapSize"), 1, (GLuint*)&mapSize);
+	DN_program_uniform_vec3 (finalProgram, "camPos", camPos);
+	DN_program_uniform_vec3 (finalProgram, "camDir", camFront);
+	DN_program_uniform_vec3 (finalProgram, "camPlaneU", camPlaneU);
+	DN_program_uniform_vec3 (finalProgram, "camPlaneV", camPlaneV);
+	DN_program_uniform_uint (finalProgram, "viewMode", viewMode);
+	glUniform3uiv(glGetUniformLocation(finalProgram, "mapSize"), 1, (GLuint*)&mapSize);
 
-	glDispatchCompute(textureSize.x / 16, textureSize.y / 16, 1);
+	const int WORKGROUP_SIZE = 16;
+	glDispatchCompute(textureSize.x / WORKGROUP_SIZE, textureSize.y / WORKGROUP_SIZE, 1);
 }
 
-void update_voxel_lighting(unsigned int numChunks, unsigned int offset, vec3 camPos, float time)
+void DN_update_voxel_lighting(unsigned int numChunks, unsigned int offset, DNvec3 camPos, float time)
 {
-	shader_program_activate(lightingShader);
+	if(numChunks > maxLightingRequests)
+	{
+		DN_ERROR_LOG("WARNING - NUM CHUNKS REQUESTED TO BE UPDATED IS GREATER THAN THE MAXIMUM, UPDATING THE MAX NUMBER INSTEAD\n");
+		numChunks = maxLightingRequests;
+	}
 
-	shader_uniform_vec3 (lightingShader, "sunDir", vec3_normalize(sunDir));
-	shader_uniform_vec3 (lightingShader, "sunStrength", sunStrength);
-	shader_uniform_float(lightingShader, "shadowSoftness", shadowSoftness);
-	shader_uniform_float(lightingShader, "ambientStrength", ambientStrength);
-	shader_uniform_vec3 (lightingShader, "camPos", camPos);
-	shader_uniform_int  (lightingShader, "bounceLimit", bounceLimit);
-	shader_uniform_float(lightingShader, "time", time);
+	DN_program_activate(lightingProgram);
+	DN_program_uniform_vec3 (lightingProgram, "camPos", camPos);
+	DN_program_uniform_float(lightingProgram, "time", time);
 
-	glUniform3uiv(glGetUniformLocation(lightingShader, "mapSize"), 1, (GLuint*)&mapSize);
+	glUniform3uiv(glGetUniformLocation(lightingProgram, "mapSize"), 1, (GLuint*)&mapSize);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(ivec4) * numChunks, &voxelLightingRequests[offset]);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNivec4) * numChunks, &dnVoxelLightingRequests[offset]);
 
 	glDispatchCompute(numChunks, 1, 1);
-}
-
-void send_all_data_temp()
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer);
-	uvec4* voxelMapGPU = (uvec4*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
-	for(int z = 0; z < mapSizeGPU.z; z++)
-		for(int y = 0; y < mapSizeGPU.y; y++)
-			for(int x = 0; x < mapSizeGPU.x; x++)
-			{
-				int cpuIndex = x + mapSize.x * (y + z * mapSize.y);
-				int gpuIndex = x + mapSizeGPU.x * (y + z * mapSizeGPU.y);
-
-				voxelMapGPU[gpuIndex].x = voxelMap[cpuIndex].flag > 0 ? 2 : 0;
-				voxelMapGPU[gpuIndex].y = 0;
-				voxelMapGPU[gpuIndex].z = 0;
-				voxelMapGPU[gpuIndex].w = 0;
-			}
-	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(VoxelMaterial) * MAX_MATERIALS, voxelMaterials);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //CPU-SIDE MAP SETTINGS:
 
-uvec2 voxel_texture_size()
+DNuvec2 DN_voxel_texture_size()
 {
 	return textureSize;
 }
 
-bool set_voxel_texture_size(uvec2 size)
+bool DN_set_voxel_texture_size(DNuvec2 size)
 {
 	return true; //TODO implement
 }
 
-uvec3 voxel_map_size()
+DNuvec3 DN_voxel_map_size()
 {
 	return mapSize;
 }
 
-bool set_voxel_map_size(uvec3 size)
+bool DN_set_voxel_map_size(DNuvec3 size)
 {
-	VoxelChunkHandle* newMap = malloc(sizeof(VoxelChunkHandle) * size.x * size.y * size.z);
+	DNvoxelChunkHandle* newMap = DN_MALLOC(sizeof(DNvoxelChunkHandle) * size.x * size.y * size.z);
 	if(!newMap)
 	{
-		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
+		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
 		return false;
 	}	
 
@@ -423,31 +414,31 @@ bool set_voxel_map_size(uvec3 size)
 				int oldIndex = x + mapSize.x * (y + z * mapSize.y);
 				int newIndex = x + size.x * (y + z * size.y);
 
-				newMap[newIndex].flag  = oldIndex < oldMaxIndex ? voxelMap[oldIndex].flag  : 0;
+				newMap[newIndex].flag  = oldIndex < oldMaxIndex ? dnVoxelMap[oldIndex].flag  : 0;
 			}
 
-	free(voxelMap);
-	voxelMap = newMap;
+	DN_FREE(dnVoxelMap);
+	dnVoxelMap = newMap;
 	mapSize = size;
 	return true;
 }
 
-unsigned int max_voxel_chunks()
+unsigned int DN_max_voxel_chunks()
 {
 	return maxChunks;
 }
 
-unsigned int current_voxel_chunks()
+unsigned int DN_current_voxel_chunks()
 {
 	return 0; //TODO implement
 }
 
-bool set_max_voxel_chunks(unsigned int num)
+bool DN_set_max_voxel_chunks(unsigned int num)
 {
-	voxelChunks = realloc(voxelChunks, sizeof(VoxelChunk) * num);
-	if(!voxelChunks)
+	dnVoxelChunks = DN_REALLOC(dnVoxelChunks, sizeof(DNvoxelChunk) * num);
+	if(!dnVoxelChunks)
 	{
-		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL CHUNKS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL CHUNKS\n");
 		return false;
 	}
 
@@ -458,18 +449,18 @@ bool set_max_voxel_chunks(unsigned int num)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU-SIDE MAP SETTINGS:
 
-uvec3 voxel_map_size_gpu()
+DNuvec3 DN_voxel_map_size_gpu()
 {
 	return mapSizeGPU;
 }
 
-bool set_voxel_map_size_gpu(uvec3 size)
+bool DN_set_voxel_map_size_gpu(DNuvec3 size)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ivec4) * size.x * size.y * size.x, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNivec4) * size.x * size.y * size.x, NULL, GL_DYNAMIC_DRAW); //allocate
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{	
-		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL MAP BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL MAP BUFFER\n");
 		return false;
 	}
 
@@ -477,57 +468,57 @@ bool set_voxel_map_size_gpu(uvec3 size)
 	return true;
 }
 
-unsigned int max_voxel_chunks_gpu()
+unsigned int DN_max_voxel_chunks_gpu()
 {
 	return maxChunksGPU;
 }
 
-bool set_max_voxel_chunks_gpu(unsigned int num)
+bool DN_set_max_voxel_chunks_gpu(unsigned int num)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(VoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNvoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{	
-		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
 		return false;
 	}
 
-	chunkBufferLayout = realloc(chunkBufferLayout, sizeof(ivec4) * num);
+	chunkBufferLayout = DN_REALLOC(chunkBufferLayout, sizeof(DNivec4) * num);
 	if(!chunkBufferLayout)
 	{
-		ERROR_LOG("ERROR - FAILED TO REALLOCATE MEMORY FOR VOXEL MATERIALS");
+		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE MEMORY FOR VOXEL MATERIALS");
 		return false;
 	}
 
 	if(num > maxChunksGPU)
 	{
 		for(int i = num - maxChunksGPU; i < num; i++)
-			chunkBufferLayout[i] = (ivec4){-1, -1, -1, -1};
+			chunkBufferLayout[i] = (DNivec4){-1, -1, -1, -1};
 	}
 
 	maxChunksGPU = num;
 	return true;
 }
 
-unsigned int max_voxel_lighting_requests()
+unsigned int DN_max_voxel_lighting_requests()
 {
 	return maxLightingRequests;
 }
 
-bool set_max_voxel_lighting_requests(unsigned int num)
+bool DN_set_max_voxel_lighting_requests(unsigned int num)
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(ivec4) * num, NULL, GL_DYNAMIC_DRAW); //allocate
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNivec4) * num, NULL, GL_DYNAMIC_DRAW); //allocate
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{	
-		ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL LIGHTING REQUEST BUFFER\n");
+		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL LIGHTING REQUEST BUFFER\n");
 		return false;
 	}
 
-	voxelLightingRequests = realloc(voxelLightingRequests, sizeof(ivec4) * num);
-	if(!voxelLightingRequests)
+	dnVoxelLightingRequests = DN_REALLOC(dnVoxelLightingRequests, sizeof(DNivec4) * num);
+	if(!dnVoxelLightingRequests)
 	{
-		ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL LIGHTING REQUESTS\n");
+		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL LIGHTING REQUESTS\n");
 		return false;
 	}
 
@@ -535,37 +526,58 @@ bool set_max_voxel_lighting_requests(unsigned int num)
 	return true;
 }
 
+void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float ambientLightStrength, unsigned int diffuseBounceLimit, unsigned int specBounceLimit, float shadowSoftness)
+{
+	DN_program_activate(lightingProgram);
+	DN_program_uniform_vec3 (lightingProgram, "sunDir", vec3_normalize(sunDir));
+	DN_program_uniform_vec3 (lightingProgram, "sunStrength", sunStrength);
+	DN_program_uniform_float(lightingProgram, "ambientStrength", ambientLightStrength);
+	DN_program_uniform_uint (lightingProgram, "diffuseBounceLimit", diffuseBounceLimit);
+	DN_program_uniform_uint (lightingProgram, "specularBounceLimit", specBounceLimit);
+	DN_program_uniform_float(lightingProgram, "shadowSoftness", shadowSoftness);
+
+	DN_program_activate(finalProgram);
+	DN_program_uniform_float(finalProgram, "ambientStrength", ambientLightStrength);
+	DN_program_uniform_vec3 (finalProgram, "sunStrength", sunStrength);
+}
+
+void DN_set_voxel_materials(DNmaterialHandle min, DNmaterialHandle max)
+{
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelMaterial) * (max - min + 1), &dnVoxelMaterials[min]);
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GENERAL UTILITY:
 
-static GLuint encode_uint_RGBA(uvec4 val);
-static uvec4 decode_uint_RGBA(GLuint val);
+static GLuint _DN_encode_uint_RGBA(DNuvec4 val);
+static DNuvec4 _DN_decode_uint_RGBA(GLuint val);
 
-VoxelGPU voxel_to_voxelGPU(Voxel voxel)
+DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel)
 {
-	VoxelGPU res;
+	DNvoxelGPU res;
 	voxel.albedo = vec3_clamp(voxel.albedo, 0.0f, 1.0f);
 	voxel.normal = vec3_clamp(voxel.normal, -1.0f, 1.0f);
-	uvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
-	uvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
+	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
+	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
 
-	res.albedo = encode_uint_RGBA(albedo);
-	res.normal = encode_uint_RGBA(normal);
-	res.directLight = encode_uint_RGBA((uvec4){0, 0, 0, 1});
-	res.specLight = encode_uint_RGBA((uvec4){0, 0, 0, 0});
+	res.albedo = _DN_encode_uint_RGBA(albedo);
+	res.normal = _DN_encode_uint_RGBA(normal);
+	res.directLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, 1});
+	res.specLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, 0});
 
 	return res;
 }
 
-Voxel voxelGPU_to_voxel(VoxelGPU voxel)
+DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel)
 {
-	Voxel res;
-	uvec4 albedo = decode_uint_RGBA(voxel.albedo);
-	uvec4 normal = decode_uint_RGBA(voxel.normal);
+	DNvoxel res;
+	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
+	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
 
-	res.albedo = vec3_scale((vec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
-	vec3 scaledNormal = vec3_scale((vec3){normal.x, normal.y, normal.z}, 0.00392156862);
-	res.normal = (vec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
+	res.albedo = vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
+	DNvec3 scaledNormal = vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
+	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
 	res.material = albedo.w;
 
 	return res;
@@ -573,29 +585,29 @@ Voxel voxelGPU_to_voxel(VoxelGPU voxel)
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool in_map_bounds(ivec3 pos) //returns whether a position is in bounds in the map
+bool DN_in_voxel_map_bounds(DNivec3 pos) //returns whether a position is in bounds in the map
 {
 	return pos.x < mapSize.x && pos.y < mapSize.y && pos.z < mapSize.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a chunk
+bool DN_in_voxel_chunk_bounds(DNivec3 pos) //returns whether a position is in bounds in a chunk
 {
-	return pos.x < CHUNK_SIZE.x && pos.y < CHUNK_SIZE.y && pos.z < CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+	return pos.x < DN_CHUNK_SIZE.x && pos.y < DN_CHUNK_SIZE.y && pos.z < DN_CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-VoxelChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
+DNvoxelChunkHandle DN_get_voxel_chunk_handle(DNivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
 {
-	return voxelMap[FLATTEN_INDEX(pos.x, pos.y, pos.z, mapSize)];
+	return dnVoxelMap[DN_FLATTEN_INDEX(pos, mapSize)];
 }
 
-VoxelGPU get_voxel(unsigned int chunk, ivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
+DNvoxelGPU DN_get_voxel(unsigned int chunk, DNivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
 {
- 	return voxelChunks[chunk].voxels[pos.x][pos.y][pos.z];
+ 	return dnVoxelChunks[chunk].voxels[pos.x][pos.y][pos.z];
 }
 
-bool does_voxel_exist(unsigned int chunk, ivec3 localPos) //returns true if the voxel at the position is solid (not empty)
+bool DN_does_voxel_exist(unsigned int chunk, DNivec3 localPos) //returns true if the voxel at the position is solid (not empty)
 {
-	VoxelGPU voxel = get_voxel(chunk, localPos);
+	DNvoxelGPU voxel = DN_get_voxel(chunk, localPos);
 	unsigned int material = voxel.albedo & 0xFF;
 	return material < 255;
 }
@@ -605,23 +617,23 @@ static int sign(float num)
 	return (num > 0.0f) ? 1 : ((num < 0.0f) ? -1 : 0);
 }
 
-bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitPos, Voxel* hitVoxel, ivec3* hitNormal)
+bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal)
 {
-	*hitNormal = (ivec3){-1000, -1000, -1000};
+	*hitNormal = (DNivec3){-1000, -1000, -1000};
 
 	//scale to use voxel-level coordinates
-	rayPos = vec3_scale(rayPos, CHUNK_SIZE.x);
+	rayPos = vec3_scale(rayPos, DN_CHUNK_SIZE.x);
 
 	//utility:
-	vec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};
-	vec3 rayDirSign = {sign(rayDir.x), sign(rayDir.y), sign(rayDir.z)};
+	DNvec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};
+	DNvec3 rayDirSign = {sign(rayDir.x), sign(rayDir.y), sign(rayDir.z)};
 
 	//create vars needed for dda:
-	ivec3 pos = {floor(rayPos.x), floor(rayPos.y), floor(rayPos.z)}; //the position in the voxel map
-	vec3 deltaDist = {fabsf(invRayDir.x), fabsf(invRayDir.y), fabsf(invRayDir.z)}; //the distance the ray has to travel to move one unit in each direction
-	ivec3 rayStep = {rayDirSign.x, rayDirSign.y, rayDirSign.z}; //the direction the ray steps
+	DNivec3 pos = {floor(rayPos.x), floor(rayPos.y), floor(rayPos.z)}; //the position in the voxel map
+	DNvec3 deltaDist = {fabsf(invRayDir.x), fabsf(invRayDir.y), fabsf(invRayDir.z)}; //the distance the ray has to travel to move one unit in each direction
+	DNivec3 rayStep = {rayDirSign.x, rayDirSign.y, rayDirSign.z}; //the direction the ray steps
 
-	vec3 sideDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+	DNvec3 sideDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 	sideDist.x = (rayDirSign.x * (pos.x - rayPos.x) + (rayDirSign.x * 0.5) + 0.5) * deltaDist.x;
 	sideDist.y = (rayDirSign.y * (pos.y - rayPos.y) + (rayDirSign.y * 0.5) + 0.5) * deltaDist.y;
 	sideDist.z = (rayDirSign.z * (pos.z - rayPos.z) + (rayDirSign.z * 0.5) + 0.5) * deltaDist.z;
@@ -630,7 +642,7 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 	while(numSteps < maxSteps)
 	{
 		//check if in bounds:
-		ivec3 mapPos = {pos.x / CHUNK_SIZE.x, pos.y / CHUNK_SIZE.y, pos.z / CHUNK_SIZE.z};
+		DNivec3 mapPos = {pos.x / DN_CHUNK_SIZE.x, pos.y / DN_CHUNK_SIZE.y, pos.z / DN_CHUNK_SIZE.z};
 		if(pos.x < 0)
 			mapPos.x--;
 		if(pos.y < 0)
@@ -638,15 +650,15 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 		if(pos.z < 0)
 			mapPos.z--;
 
-		if(in_map_bounds(mapPos))
+		if(DN_in_voxel_map_bounds(mapPos))
 		{
-			VoxelChunkHandle mapTile = get_map_tile(mapPos);
-			ivec3 localPos = {pos.x % CHUNK_SIZE.x, pos.y % CHUNK_SIZE.y, pos.z % CHUNK_SIZE.z};
+			DNvoxelChunkHandle mapTile = DN_get_voxel_chunk_handle(mapPos);
+			DNivec3 localPos = {pos.x % DN_CHUNK_SIZE.x, pos.y % DN_CHUNK_SIZE.y, pos.z % DN_CHUNK_SIZE.z};
 
 			//check if voxel exists:
-			if(mapTile.flag == 1 && does_voxel_exist(mapTile.index, localPos))
+			if(mapTile.flag == 1 && DN_does_voxel_exist(mapTile.index, localPos))
 			{
-				*hitVoxel = voxelGPU_to_voxel(get_voxel(mapTile.index, localPos));
+				*hitVoxel = DN_voxelGPU_to_voxel(DN_get_voxel(mapTile.index, localPos));
 				*hitPos = pos;
 				return true;
 			}
@@ -658,26 +670,26 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 			{
 				sideDist.x += deltaDist.x;
 				pos.x += rayStep.x;
-				*hitNormal = (ivec3){-rayStep.x, 0, 0};
+				*hitNormal = (DNivec3){-rayStep.x, 0, 0};
 			}
 			else 
 			{
 				sideDist.z += deltaDist.z;
 				pos.z += rayStep.z;
-				*hitNormal = (ivec3){0, 0, -rayStep.z};
+				*hitNormal = (DNivec3){0, 0, -rayStep.z};
 			}
 		else
 			if (sideDist.y < sideDist.z) 
 			{
 				sideDist.y += deltaDist.y;
 				pos.y += rayStep.y;
-				*hitNormal = (ivec3){0, -rayStep.y, 0};
+				*hitNormal = (DNivec3){0, -rayStep.y, 0};
 			}
 			else 
 			{
 				sideDist.z += deltaDist.z;
 				pos.z += rayStep.z;
-				*hitNormal = (ivec3){0, 0, -rayStep.z};
+				*hitNormal = (DNivec3){0, 0, -rayStep.z};
 			}
 
 		numSteps++;
@@ -687,213 +699,9 @@ bool step_voxel_map(vec3 rayDir, vec3 rayPos, unsigned int maxSteps, ivec3* hitP
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//MODEL UTILITIES:
-
-typedef struct VoxFileVoxel
-{
-	unsigned char x, y, z, w;
-} VoxFileVoxel;
-
-typedef struct VoxFileChunk
-{
-	uint32_t id;
-	uint32_t len;
-	uint32_t childLen;
-	size_t endPtr;
-} VoxFileChunk;
-
-#define CHUNK_ID(a, b, c, d) ((a) | ((b) << 8) | ((c) << 16) | ((d) << 24))
-
-static int read_int( FILE *fp ) 
-{
-	int v = 0;
-	fread( &v, 4, 1, fp );
-	return v;
-}
-
-void read_chunk_info( FILE *fp, VoxFileChunk* chunk ) 
-{
-	chunk->id       = read_int(fp);
-	chunk->len      = read_int(fp);
-	chunk->childLen = read_int(fp);
-	chunk->endPtr   = ftell(fp) + chunk->len + chunk->childLen;
-}
-
-bool load_vox_file(const char* path, VoxelModel* model)
-{
-	FILE* fp = fopen(path, "rb");
-
-	if(fp == NULL)
-	{
-		ERROR_LOG("ERROR - UNABLE TO OPEN FILE \"%s\"\n", path);
-		return false;
-	}
-
-	unsigned int numVoxels;
-	VoxFileVoxel* tempVoxels = NULL;
-	VoxFileVoxel palette[256];
-	model->voxels = NULL;
-
-	//check if actually is vox file:
-	int idNum = read_int(fp);
-	if(idNum != CHUNK_ID('V', 'O', 'X', ' '))
-	{
-		ERROR_LOG("ERROR - NOT A VALID .VOX FILE\n");
-		return false;
-	}
-
-	fseek( fp, 4, SEEK_CUR ); //skip version num
-
-	VoxFileChunk mainChunk; //skip main chunk (never has content)
-	read_chunk_info(fp, &mainChunk);
-
-	//iterate remaining chunks:
-	while(ftell(fp) < mainChunk.endPtr) 
-	{
-		VoxFileChunk chunk;
-		read_chunk_info(fp, &chunk);
-
-		switch(chunk.id)
-		{
-		case CHUNK_ID('S', 'I', 'Z', 'E'): //SIZE chunk
-		{
-			//read size:
-			uvec3 size;
-			size.x = read_int(fp);
-			size.y = read_int(fp);
-			size.z = read_int(fp);
-			model->size = size;
-
-			break;
-		}
-		case CHUNK_ID('X', 'Y', 'Z', 'I'):
-		{
-			if(tempVoxels != NULL)
-				free(tempVoxels);
-
-			numVoxels = read_int(fp);
-
-			tempVoxels = malloc(numVoxels * sizeof(VoxFileVoxel));
-			fread(tempVoxels, sizeof(VoxFileVoxel), numVoxels, fp);
-
-			break;
-		}
-		case CHUNK_ID('R', 'G', 'B', 'A'):
-		{
-			fread(&palette[1], sizeof(VoxFileVoxel), 255, fp);
-			break;
-		}
-		}
-
-		fseek(fp, chunk.endPtr, SEEK_SET); //skip to end of chunk
-	}
-
-	size_t modelSize = model->size.x * model->size.y * model->size.z;
-	model->voxels = malloc(modelSize * sizeof(VoxelGPU));
-	for(int i = 0; i < modelSize; i++)
-		model->voxels[i].albedo = UINT32_MAX;
-
-	for(int i = 0; i < numVoxels; i++)
-	{
-		Voxel vox;
-		VoxFileVoxel pos = tempVoxels[i];
-		VoxFileVoxel color = palette[pos.w];
-
-		vox.albedo.x = pow((float)color.x / 255.0f, 2.2f);
-		vox.albedo.y = pow((float)color.y / 255.0f, 2.2f);
-		vox.albedo.z = pow((float)color.z / 255.0f, 2.2f);
-		vox.material = 0;
-		vox.normal = (vec3){0.0f, 1.0f, 0.0f};
-
-		model->voxels[FLATTEN_INDEX(pos.x, pos.z, pos.y, model->size)] = voxel_to_voxelGPU(vox); //have to invert z and y because magicavoxel has z as the up axis
-	}
-
-	return true;
-}
-
-void free_model(VoxelModel model)
-{
-	free(model.voxels);
-}
-
-void calculate_model_normals(int r, VoxelModel* model)
-{
-	for(int xC = 0; xC < model->size.x; xC++)
-	for(int yC = 0; yC < model->size.y; yC++)
-	for(int zC = 0; zC < model->size.z; zC++)
-	{
-		vec3 sum = {0.0f, 0.0f, 0.0f};
-
-		int iC = FLATTEN_INDEX(xC, yC, zC, model->size);
-		Voxel voxC = voxelGPU_to_voxel(model->voxels[iC]);
-		if(voxC.material == 255)
-			continue;
-
-		for(int xP = xC - r; xP <= xC + r; xP++)
-		for(int yP = yC - r; yP <= yC + r; yP++)
-		for(int zP = zC - r; zP <= zC + r; zP++)
-		{
-			if(xP < 0 || yP < 0 || zP < 0)
-				continue;
-			
-			if(xP >= model->size.x || yP >= model->size.y || zP >= model->size.z)
-				continue;
-
-			int iP = FLATTEN_INDEX(xP, yP, zP, model->size);
-
-			if(iP == iC)
-				continue;
-
-			if(voxelGPU_to_voxel(model->voxels[iP]).material < 255)
-			{
-				vec3 toCenter = {xP - xC, yP - yC, zP - zC};
-				float dist = vec3_dot(toCenter, toCenter);
-				toCenter = vec3_scale(toCenter, 1.0f / dist);
-				sum = vec3_add(sum, toCenter);
-			}
-		}
-
-		if(sum.x == 0.0f && sum.y == 0.0f && sum.z == 0.0f)
-			sum = (vec3){0.0f, 1.0f, 0.0f};
-
-		float maxNormal = abs(sum.x);
-		if(abs(sum.y) > maxNormal)
-			maxNormal = abs(sum.y);
-		if(abs(sum.z) > maxNormal)
-			maxNormal = abs(sum.z);
-
-		sum = vec3_scale(sum, -1.0f / maxNormal);
-		voxC.normal = sum;
-		model->voxels[iC] = voxel_to_voxelGPU(voxC);
-	}
-}
-
-void place_model_into_world(VoxelModel model, ivec3 pos)
-{
-	for(int x = 0; x < model.size.x; x++)
-	for(int y = 0; y < model.size.y; y++)
-	for(int z = 0; z < model.size.z; z++)
-	{
-		int iModel = FLATTEN_INDEX(x, y, z, model.size);
-		if(voxelGPU_to_voxel(model.voxels[iModel]).material < 255)
-		{
-			ivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
-			ivec3 chunkPos = {worldPos.x / CHUNK_SIZE.x, worldPos.y / CHUNK_SIZE.y, worldPos.z / CHUNK_SIZE.z};
-
-			if(in_map_bounds(chunkPos))
-			{
-				int iWorld = FLATTEN_INDEX(chunkPos.x, chunkPos.y, chunkPos.z, mapSize);
-				voxelMap[iWorld].flag = 1;
-				voxelChunks[iWorld].voxels[worldPos.x % CHUNK_SIZE.x][worldPos.y % CHUNK_SIZE.y][worldPos.z % CHUNK_SIZE.z] = model.voxels[iModel];
-			}
-		}
-	}
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
 //STATIC UTIL FUNCTIONS:
 
-static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding)
+static bool _DN_gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned int binding)
 {
 	unsigned int buffer;
 	glGenBuffers(1, &buffer);
@@ -912,7 +720,7 @@ static bool gen_shader_storage_buffer(unsigned int* dest, size_t size, unsigned 
 	return true;
 }
 
-static GLuint encode_uint_RGBA(uvec4 val)
+static GLuint _DN_encode_uint_RGBA(DNuvec4 val)
 {
 	val.x = val.x & 0xFF;
 	val.y = val.y & 0xFF;
@@ -921,9 +729,9 @@ static GLuint encode_uint_RGBA(uvec4 val)
 	return val.x << 24 | val.y << 16 | val.z << 8 | val.w;
 }
 
-static uvec4 decode_uint_RGBA(GLuint val)
+static DNuvec4 _DN_decode_uint_RGBA(GLuint val)
 {
-	uvec4 res;
+	DNuvec4 res;
 	res.x = (val >> 24) & 0xFF;
 	res.y = (val >> 16) & 0xFF;
 	res.z = (val >> 8) & 0xFF;

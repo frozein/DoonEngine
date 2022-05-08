@@ -6,84 +6,84 @@
 //STRUCTS:
 
 //A 2-dimensional vector
-typedef struct vec2 {
+typedef struct DNvec2 {
 	GLfloat x, y;
-} vec2;
+} DNvec2;
 
 //A 3-dimensional vector
-typedef struct vec3 {
+typedef struct DNvec3 {
 	GLfloat x, y, z;
-} vec3;
+} DNvec3;
 
 //A 4-dimensional vector
-typedef struct vec4 {
+typedef struct DNvec4 {
 	GLfloat x, y, z, w;
-} vec4;
+} DNvec4;
 
 //-----------------------------//
 //NOTE: no math functions exist for integer vectors
 
 //A 2-dimensional integer vector
-typedef struct ivec2
+typedef struct DNivec2
 {
 	GLint x, y;
-} ivec2;
+} DNivec2;
 
 //A 3-dimensional integer vector
-typedef struct ivec3
+typedef struct DNivec3
 {
 	GLint x, y, z;
-} ivec3;
+} DNivec3;
 
 //A 4-dimensional integer vector
-typedef struct ivec4
+typedef struct DNivec4
 {
 	GLint x, y, z, w;
-} ivec4;
+} DNivec4;
 
 //-----------------------------//
 //NOTE: no math functions exist for integer vectors
 
 //A 2-dimensional integer vector
-typedef struct uvec2
+typedef struct DNuvec2
 {
 	GLuint x, y;
-} uvec2;
+} DNuvec2;
 
 //A 3-dimensional integer vector
-typedef struct uvec3
+typedef struct DNuvec3
 {
 	GLuint x, y, z;
-} uvec3;
+} DNuvec3;
 
 //A 4-dimensional integer vector
-typedef struct uvec4
+typedef struct DNuvec4
 {
 	GLuint x, y, z, w;
-} uvec4;
+} DNuvec4;
 
 //-----------------------------//
 
 //A 2x2 matrix
-typedef struct mat2 {
+typedef struct DNmat2 {
 	GLfloat m[2][2];
-} mat2;
+} DNmat2;
 
 //A 3x3 matrix
-typedef struct mat3 {
+typedef struct DNmat3 {
 	GLfloat m[3][3];
-} mat3;
+} DNmat3;
 
 //A 4x4 matrix
-typedef struct mat4 {
+typedef struct DNmat4 {
 	GLfloat m[4][4];
-} mat4;
+} DNmat4;
 
 //-----------------------------//
 
-typedef struct quat {
+typedef struct DNquat {
 	GLfloat x, y, z, w;
-} quat;
+} DNquat;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //CONSTANTS:
@@ -99,25 +99,25 @@ typedef struct quat {
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MATRIX INITIALIZERS:
 
-#define MAT2_IDENTITY (mat2){{{1.0f, 0.0f}, \
-					          {0.0f, 1.0f}}}
-#define MAT2_ZERO     (mat2){{{0.0f, 0.0f}, \
-					          {0.0f, 0.0f}}}
+#define DN_MAT2_IDENTITY (DNmat2){{{1.0f, 0.0f}, \
+					         	   {0.0f, 1.0f}}}
+#define DN_MAT2_ZERO     (DNmat2){{{0.0f, 0.0f}, \
+					          	   {0.0f, 0.0f}}}
 
-#define MAT3_IDENTITY (mat3){{{1.0f, 0.0f, 0.0f}, \
-					          {0.0f, 1.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 1.0f}}}
-#define MAT3_ZERO     (mat3){{{0.0f, 0.0f, 0.0f}, \
-					          {0.0f, 0.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 0.0f}}}
+#define DN_MAT3_IDENTITY (DNmat3){{{1.0f, 0.0f, 0.0f}, \
+					               {0.0f, 1.0f, 0.0f}, \
+					    	  	   {0.0f, 0.0f, 1.0f}}}
+#define DN_MAT3_ZERO     (DNmat3){{{0.0f, 0.0f, 0.0f}, \
+					          	   {0.0f, 0.0f, 0.0f}, \
+					    	 	   {0.0f, 0.0f, 0.0f}}}
 
-#define MAT4_IDENTITY (mat4){{{1.0f, 0.0f, 0.0f, 0.0f}, \
-					          {0.0f, 1.0f, 0.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 1.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 0.0f, 1.0f}}}
-#define MAT4_ZERO     (mat4){{{0.0f, 0.0f, 0.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 0.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 0.0f, 0.0f}, \
-					    	  {0.0f, 0.0f, 0.0f, 0.0f}}}
+#define DN_MAT4_IDENTITY (DNmat4){{{1.0f, 0.0f, 0.0f, 0.0f}, \
+					          	   {0.0f, 1.0f, 0.0f, 0.0f}, \
+					    	 	   {0.0f, 0.0f, 1.0f, 0.0f}, \
+					    	 	   {0.0f, 0.0f, 0.0f, 1.0f}}}
+#define DN_MAT4_ZERO     (DNmat4){{{0.0f, 0.0f, 0.0f, 0.0f}, \
+					    	 	   {0.0f, 0.0f, 0.0f, 0.0f}, \
+					    		   {0.0f, 0.0f, 0.0f, 0.0f}, \
+					    		   {0.0f, 0.0f, 0.0f, 0.0f}}}
 
 #endif

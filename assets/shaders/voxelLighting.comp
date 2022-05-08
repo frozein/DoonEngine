@@ -10,7 +10,8 @@ layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer //a b
 };
 
 uniform float time;      //for random seeding
-uniform int bounceLimit; //the maximum number of times a light ray can bounce
+uniform uint diffuseBounceLimit;  //the maximum number of times a diffuse light ray can bounce
+uniform uint specularBounceLimit; //the maximum number of times a specular light ray can bounce
 
 uniform vec3 sunDir;           //the vector pointing towards the sun, must be normalized
 uniform float shadowSoftness;  //how soft the shadows appear
@@ -67,7 +68,7 @@ void specular_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, vec3
 	vec3 lastPos = rayPos;    //the previous ray position
 	vec3 multiplier = albedo; //all of the hit albedos multiplied together
 
-	for(int i = 0; i < 2; i++)
+	for(int i = 0; i < specularBounceLimit; i++)
 	{
 		vec3 colorAdd;
 		float colorMult;
@@ -136,10 +137,10 @@ void diffuse_ray(ivec3 chunkPos, ivec3 localPos, vec3 normal, vec3 rayPos, Voxel
 
 	vec3 lastPos = rayPos;
 	vec3 lastDir;
-	for(int i = 0; i < bounceLimit; i++)
+	for(int i = 0; i < diffuseBounceLimit; i++)
 	{
 		vec3 dir;
-		if(i > 0 && (rand(time + bounceLimit + i) + 1) * 0.5 < hitMaterial.specular)
+		if(i > 0 && (rand(time + diffuseBounceLimit + i) + 1) * 0.5 < hitMaterial.specular)
 			dir = normalize(reflect(lastDir, hitNormal) * hitMaterial.shininess + rand_unit_sphere(time + i)); //TODO: check if this actually works i cant tell with my current example scene
 		else
 			dir = normalize(hitNormal + rand_unit_sphere(time + i)); //randomize the direction, spherical sampling

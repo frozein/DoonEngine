@@ -1,9 +1,10 @@
 #define GLFW_DLL
 
 #include "DoonEngine/math/all.h"
-#include "DoonEngine/shader.h"
-#include "DoonEngine/texture.h"
+#include "DoonEngine/utility/shader.h"
+#include "DoonEngine/utility/texture.h"
 #include "DoonEngine/voxel.h"
+#include "DoonEngine/voxelShapes.h"
 #include "DoonEngine/globals.h"
 #include <malloc.h>
 #include <stdbool.h>
@@ -12,6 +13,7 @@
 #include <math.h>
 #include <GLAD/glad.h>
 #include <GLFW/glfw3.h>
+#include <STB/stb_image.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -37,9 +39,10 @@ GLuint SCREEN_H = 1080;
 GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
-vec3 camPos =      {0.0f, 0.0f,  0.0f};
-vec3 camFront =    {0.0f, 0.0f,  1.0f};
-const vec3 camUp = {0.0f, 1.0f,  0.0f};
+DNvec3 camPos =      {0.0f, 0.0f,  0.0f};
+DNvec3 camFront =    {0.0f, 0.0f,  1.0f};
+const DNvec3 camUp = {0.0f, 1.0f,  0.0f};
+unsigned int viewMode = 0;
 
 float pitch = 0.0f;
 float yaw = 0.0f;
@@ -57,10 +60,6 @@ bool updateData = true;
 
 int main()
 {
-	VoxelModel model;
-	load_vox_file("tree.vox", &model);
-	calculate_model_normals(2, &model);
-
 	int error;
 
 	//init GLFW:
@@ -109,11 +108,11 @@ int main()
 
 	//generate shader program:
 	//---------------------------------
-	int quadShader = shader_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
+	int quadShader = DN_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
 	if(quadShader < 0)
 	{
-		ERROR_LOG("quad shader failed\n");
-		shader_program_free(quadShader);
+		DN_ERROR_LOG("quad shader failed\n");
+		DN_program_free(quadShader);
 		glfwTerminate();
 		scanf("%d", &error);
 
@@ -146,7 +145,7 @@ int main()
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
 		scanf("%d", &error);
 		return -1;
@@ -156,7 +155,7 @@ int main()
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(quadIndices), quadIndices, GL_STATIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
+		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
 		scanf("%d", &error);
 		return -1;
@@ -170,31 +169,36 @@ int main()
 
 	//generate texture:
 	//---------------------------------
-	Texture finalTex = texture_load_raw(GL_TEXTURE_2D, SCREEN_W, SCREEN_H, GL_RGBA, NULL, false);
-	texture_param_scale(finalTex, GL_LINEAR, GL_LINEAR);
-	texture_param_wrap(finalTex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+	DNtexture finalTex = DN_texture_load_raw(GL_TEXTURE_2D, SCREEN_W, SCREEN_H, GL_RGBA, NULL, false);
+	DN_set_texture_scale(finalTex, GL_LINEAR, GL_LINEAR);
+	DN_set_texture_wrap(finalTex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	if(!init_voxel_pipeline((uvec2){SCREEN_W, SCREEN_H}, finalTex, (uvec3){5, 5, 5}, 5 * 5 * 5, (uvec3){5, 5, 5}, 5 * 5 * 5, 5 * 5 * 5))
+	DNuvec3 tempMapSize = {5, 5, 5};
+	unsigned int tempMapLength = tempMapSize.x * tempMapSize.y * tempMapSize.z;
+	if(!DN_init_voxel_pipeline((DNuvec2){SCREEN_W, SCREEN_H}, finalTex, tempMapSize, tempMapLength, tempMapSize, tempMapLength, tempMapLength))
 	{
-		ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
+		DN_ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		glfwTerminate();
 		scanf("%d", &error);
 		return -1;
 	}
 
-	for(int z = 0; z < voxel_map_size().z * CHUNK_SIZE.z; z++)
-		for(int y = 0; y < voxel_map_size().y * CHUNK_SIZE.y; y++)
-			for(int x = 0; x < voxel_map_size().x * CHUNK_SIZE.x; x++)
+	//generate voxel data (for testing with sphere):
+	//---------------------------------
+	for(int z = 0; z < DN_voxel_map_size().z * DN_CHUNK_SIZE.z; z++)
+		for(int y = 0; y < DN_voxel_map_size().y * DN_CHUNK_SIZE.y; y++)
+			for(int x = 0; x < DN_voxel_map_size().x * DN_CHUNK_SIZE.x; x++)
 			{
-				int mapIndex = FLATTEN_INDEX(x / 8, y / 8, z / 8, voxel_map_size());
-				voxelLightingRequests[mapIndex] = (ivec4){x / 8, y / 8, z / 8};
-				voxelMap[mapIndex].index = mapIndex;
+				DNivec3 mapPos = {x / 8, y / 8, z / 8};
+				int mapIndex = DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size());
+				dnVoxelLightingRequests[mapIndex] = (DNivec4){mapPos.x, mapPos.y, mapPos.z};
+				dnVoxelMap[mapIndex].index = mapIndex;
 
 				/*if(vec3_distance((vec3){x, y, z}, (vec3){20.5f, 20.5f, 20.5f}) < 12.0f)
 				{
-					Voxel vox;
+					DNvoxel vox;
 					vox.material = 0;
 					vox.normal = (vec3){x - 20.5f, y - 20.5f, z - 20.5f};
 
@@ -207,19 +211,24 @@ int main()
 					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
 					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(0.0f, GAMMA)};
 
-					voxelMap[mapIndex].flag = 1;
-					voxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = voxel_to_voxelGPU(vox);
+					dnVoxelMap[mapIndex].flag = 1;
+					dnVoxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = DN_voxel_to_voxelGPU(vox);
 				}*/
 			}
-	place_model_into_world(model, (ivec3){0, 0, 0});
-
-	voxelMaterials[0].emissive = false;
-	voxelMaterials[0].opacity = 1.0f;
-	voxelMaterials[0].specular = 0.0f;
-
-	//send data to GPU (TEMPORARY):
+	
+	//load model:
 	//---------------------------------
-	send_all_data_temp();
+	DNvoxelModel model;
+	DN_load_vox_file("tree.vox", &model, 0);
+	DN_calculate_model_normals(2, &model);
+	DN_place_model_into_world(model, (DNivec3){0, 0, 0});
+
+	//set materials:
+	//---------------------------------
+	dnVoxelMaterials[0].emissive = false;
+	dnVoxelMaterials[0].opacity = 1.0f;
+	dnVoxelMaterials[0].specular = 0.0f;
+	DN_set_voxel_materials(0, 0);
 
 	//main loop:
 	//---------------------------------
@@ -259,11 +268,11 @@ int main()
 		yaw = glfwGetTime() / 3.0f * RAD_TO_DEG + 180.0f;
 		pitch = 35.0f;*/
 
-		mat3 rotate = mat4_to_mat3(mat4_rotate_euler(MAT4_IDENTITY, (vec3){pitch, yaw, 0.0f}));
+		DNmat3 rotate = mat4_to_mat3(mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){pitch, yaw, 0.0f}));
 
-		camFront       = mat3_mult_vec3(rotate, (vec3){ 0.0f, 0.0f, fov });
-		vec3 camPlaneU = mat3_mult_vec3(rotate, (vec3){-1.0f, 0.0f, 0.0f});
-		vec3 camPlaneV = mat3_mult_vec3(rotate, (vec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
+		camFront       = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
+		DNvec3 camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
+		DNvec3 camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
 
 		//stream voxel data:
 		if(updateData)
@@ -272,27 +281,27 @@ int main()
 
 			if(frameNum % lightingSplit == 0)
 			{
-				numChunksToUpdate = stream_voxel_chunks(true);
+				numChunksToUpdate = DN_stream_voxel_chunks(true, true);
 				oldTime = glfwGetTime();
 			}
 			else
-				stream_voxel_chunks(false);
+				DN_stream_voxel_chunks(false, true);
 		}
 		glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 
 		//update lighting (split over multiple frames):
 		int numThisFrame = (int)ceil((float)numChunksToUpdate / lightingSplit);
 		int offset = numThisFrame * (frameNum % lightingSplit);
-		update_voxel_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
+		DN_update_voxel_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//render voxels to texture:
-		draw_voxels(camPos, camFront, camPlaneU, camPlaneV); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		DN_draw_voxels(camPos, camFront, camPlaneU, camPlaneV, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//render final quad to the screen:
-		texture_activate(finalTex, 0);
-		shader_program_activate(quadShader);
+		DN_texture_activate(finalTex, 0);
+		DN_program_activate(quadShader);
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
 		glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
@@ -304,9 +313,9 @@ int main()
 
 	//clean up and close:
 	//---------------------------------
-	deinit_voxel_pipeline();
+	DN_deinit_voxel_pipeline();
 	glDeleteVertexArrays(1, &quadBuffer);
-	shader_program_free(quadShader);
+	DN_program_free(quadShader);
 	glfwTerminate();
 
 	scanf("%d", &error);
@@ -342,40 +351,40 @@ void mouse_pos_callback(GLFWwindow *window, double x, double y)
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 {
-	Voxel hitVoxel;
-	ivec3 hitPos;
-	ivec3 hitNormal;
+	DNvoxel hitVoxel;
+	DNivec3 hitPos;
+	DNivec3 hitNormal;
 
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-		if(step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		if(DN_step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			ivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
+			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
-			ivec3 mapPos =   {newPos.x / CHUNK_SIZE.x, newPos.y / CHUNK_SIZE.y, newPos.z / CHUNK_SIZE.z};
-			ivec3 localPos = {newPos.x % CHUNK_SIZE.x, newPos.y % CHUNK_SIZE.y, newPos.z % CHUNK_SIZE.z};
+			DNivec3 mapPos =   {newPos.x / DN_CHUNK_SIZE.x, newPos.y / DN_CHUNK_SIZE.y, newPos.z / DN_CHUNK_SIZE.z};
+			DNivec3 localPos = {newPos.x % DN_CHUNK_SIZE.x, newPos.y % DN_CHUNK_SIZE.y, newPos.z % DN_CHUNK_SIZE.z};
 
-			if(in_map_bounds(mapPos))
+			if(DN_in_voxel_map_bounds(mapPos))
 			{
-				Voxel newVox;
-				newVox.albedo = (vec3){0.0f, 0.0f, 0.0f};
+				DNvoxel newVox;
+				newVox.albedo = (DNvec3){0.0f, 0.0f, 0.0f};
 				newVox.material = 0;
 
-				unsigned int index = FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size());
+				unsigned int index = DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size());
 
-				voxelMap[index].flag = 1;
-				voxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = voxel_to_voxelGPU(newVox);
-				update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
+				dnVoxelMap[index].flag = 1;
+				dnVoxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = DN_voxel_to_voxelGPU(newVox);
+				DN_update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
 			}
 		}
 
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-		if(step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		if(DN_step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			ivec3 mapPos =   {hitPos.x / CHUNK_SIZE.x, hitPos.y / CHUNK_SIZE.y, hitPos.z / CHUNK_SIZE.z};
-			ivec3 localPos = {hitPos.x % CHUNK_SIZE.x, hitPos.y % CHUNK_SIZE.y, hitPos.z % CHUNK_SIZE.z};
+			DNivec3 mapPos =   {hitPos.x / DN_CHUNK_SIZE.x, hitPos.y / DN_CHUNK_SIZE.y, hitPos.z / DN_CHUNK_SIZE.z};
+			DNivec3 localPos = {hitPos.x % DN_CHUNK_SIZE.x, hitPos.y % DN_CHUNK_SIZE.y, hitPos.z % DN_CHUNK_SIZE.z};
 
-			voxelChunks[FLATTEN_INDEX(mapPos.x, mapPos.y, mapPos.z, voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
-			update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
+			dnVoxelChunks[DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
+			DN_update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
 		}
 }
 
@@ -414,9 +423,9 @@ void process_input(GLFWwindow *window)
 		updateData = false;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((vec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		camPos = vec3_subtract(camPos, vec3_scale(vec3_normalize((vec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		camPos = vec3_subtract(camPos, vec3_scale(vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
 		camPos = vec3_subtract(camPos, vec3_scale(vec3_normalize(vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
@@ -437,7 +446,7 @@ void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum s
 	if(severity == GL_DEBUG_SEVERITY_NOTIFICATION || type == 0x8250)
 		return;
 
-	ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+	DN_ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
         	 (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
         	  type, severity, message );
 }

@@ -5,29 +5,29 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void quat_print(quat q)
+void quat_print(DNquat q)
 {
 	vec4_print(quat_to_vec4(q));
 }
 
-quat quat_add(quat q1, quat q2)
+DNquat quat_add(DNquat q1, DNquat q2)
 {
-	return (quat){q1.x + q2.x, q1.y + q2.y, q1.z + q2.z, q1.w + q2.w};
+	return (DNquat){q1.x + q2.x, q1.y + q2.y, q1.z + q2.z, q1.w + q2.w};
 }
 
-quat quat_subtract(quat q1, quat q2)
+DNquat quat_subtract(DNquat q1, DNquat q2)
 {
-	return (quat){q1.x - q2.x, q1.y - q2.y, q1.z - q2.z, q1.w - q2.w};
+	return (DNquat){q1.x - q2.x, q1.y - q2.y, q1.z - q2.z, q1.w - q2.w};
 }
 
-quat quat_scale(quat q1, GLfloat s)
+DNquat quat_scale(DNquat q1, GLfloat s)
 {
-	return (quat){q1.x * s, q1.y * s, q1.z * s, q1.w * s};
+	return (DNquat){q1.x * s, q1.y * s, q1.z * s, q1.w * s};
 }
 
-quat quat_mult(quat q1, quat q2)
+DNquat quat_mult(DNquat q1, DNquat q2)
 {
-	quat res;
+	DNquat res;
 
     res.x = q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y;
     res.y = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x;
@@ -37,12 +37,12 @@ quat quat_mult(quat q1, quat q2)
 	return res;
 }
 
-quat quat_from_axis_angle(vec3 axis, GLfloat angle)
+DNquat quat_from_axis_angle(DNvec3 axis, GLfloat angle)
 {
-	quat res;
+	DNquat res;
 
 	angle *= 0.5f * DEG_TO_RAD;
-	vec3 normalized = vec3_normalize(axis);
+	DNvec3 normalized = vec3_normalize(axis);
 	GLfloat sine = sinf(angle);
 	res.w = cosf(angle);
 	res.x = normalized.x * sine;
@@ -52,9 +52,9 @@ quat quat_from_axis_angle(vec3 axis, GLfloat angle)
 	return res;
 }
 
-quat quat_from_euler(vec3 angles)
+DNquat quat_from_euler(DNvec3 angles)
 {
-	quat res;
+	DNquat res;
 
 	angles.x *= 0.5f * DEG_TO_RAD;
 	angles.y *= 0.5f * DEG_TO_RAD;
@@ -74,9 +74,9 @@ quat quat_from_euler(vec3 angles)
 	return res;
 }
 
-quat quat_conjugate(quat q)
+DNquat quat_conjugate(DNquat q)
 {
-	quat res = q;
+	DNquat res = q;
 	res.x = -res.x;
 	res.y = -res.y;
 	res.z = -res.z;
@@ -84,14 +84,14 @@ quat quat_conjugate(quat q)
 	return res;
 }
 
-GLfloat quat_dot(quat q1, quat q2)
+GLfloat quat_dot(DNquat q1, DNquat q2)
 {
 	return q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
 }
 
-quat quat_slerp(quat from, quat to, GLfloat a)
+DNquat quat_slerp(DNquat from, DNquat to, GLfloat a)
 {
-	quat q1, q2;
+	DNquat q1, q2;
 	GLfloat cosTheta, sinTheta, angle;
 
 	cosTheta = quat_dot(from, to);
@@ -102,7 +102,7 @@ quat quat_slerp(quat from, quat to, GLfloat a)
 
 	if (cosTheta < 0.0f) 
 	{
-		q1 = (quat){-q1.x, -q1.y, -q1.z, -q1.w};
+		q1 = (DNquat){-q1.x, -q1.y, -q1.z, -q1.w};
     	cosTheta = -cosTheta;
 	}
 
@@ -121,17 +121,17 @@ quat quat_slerp(quat from, quat to, GLfloat a)
 	return quat_scale(q1, 1.0f / sinTheta);
 }
 
-vec4 quat_to_vec4(quat q)
+DNvec4 quat_to_vec4(DNquat q)
 {
-	return (vec4){q.x, q.y, q.z, q.w};
+	return (DNvec4){q.x, q.y, q.z, q.w};
 }
 
-quat vec4_to_quat(vec4 v)
+DNquat vec4_to_quat(DNvec4 v)
 {
-	return (quat){v.x, v.y, v.z, v.w};
+	return (DNquat){v.x, v.y, v.z, v.w};
 }
 
-mat4 quat_get_mat4(quat q)
+DNmat4 quat_get_mat4(DNquat q)
 {
 	GLfloat x2  = q.x + q.x;
     GLfloat y2  = q.y + q.y;
@@ -146,7 +146,7 @@ mat4 quat_get_mat4(quat q)
     GLfloat sy2 = q.w * y2;
     GLfloat sz2 = q.w * z2;
 
-	return (mat4) {{{1 - (yy2 + zz2),  xy2 + sz2,        xz2 - sy2,        0},
+	return (DNmat4) {{{1 - (yy2 + zz2),  xy2 + sz2,        xz2 - sy2,        0},
                    {xy2 - sz2,        1 - (xx2 + zz2),  yz2 + sx2,        0},
                    {xz2 + sy2,        yz2 - sx2,        1 - (xx2 + yy2),  0},
                    {0,                0,                0,                1}}};
