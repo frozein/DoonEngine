@@ -67,7 +67,7 @@ int main()
 	glfwInit();
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-	glfwWindowHint(GLFW_RESIZABLE, GL_FALSE);
+	glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
 
 	//create and init window:
 	//---------------------------------
@@ -261,18 +261,8 @@ int main()
 		process_input(window);
 
 		//update cam direction:
-		/*camPos.x = sin(glfwGetTime() / 3.0f) * 7.0f + 5.0f;
-		camPos.y = 5.0f;
-		camPos.z = cos(glfwGetTime() / 3.0f) * 7.0f + 5.0f;
-
-		yaw = glfwGetTime() / 3.0f * RAD_TO_DEG + 180.0f;
-		pitch = 35.0f;*/
-
 		DNmat3 rotate = mat4_to_mat3(mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){pitch, yaw, 0.0f}));
-
-		camFront       = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
-		DNvec3 camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
-		DNvec3 camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * ASPECT_RATIO, 0.0f});
+		camFront = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
 
 		//stream voxel data:
 		if(updateData)
@@ -296,7 +286,7 @@ int main()
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//render voxels to texture:
-		DN_draw_voxels(camPos, camFront, camPlaneU, camPlaneV, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		DN_draw_voxels(camPos, fov, (DNvec3){pitch, yaw, 0.0f}, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
 		//render final quad to the screen:
@@ -438,7 +428,12 @@ void process_input(GLFWwindow *window)
 
 void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 {
+	const int WORKGROUP_SIZE = 16;
+	ASPECT_RATIO = (float)h / (float)w;
 	glViewport(0, 0, w, h);
+	DN_set_voxel_texture_size((DNuvec2){w, h});
+	SCREEN_W = w;
+	SCREEN_H = h;
 }
 
 void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)

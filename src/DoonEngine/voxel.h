@@ -90,7 +90,7 @@ unsigned int DN_stream_voxel_chunks(bool updateLighting, bool autoResize);
 void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLighting, DNvec3 camPos, float time);
 
 //Draws the voxels to the texture
-void DN_draw_voxels(DNvec3 camPos, DNvec3 camFront, DNvec3 camPlaneU, DNvec3 camPlaneV, unsigned int viewMode);
+void DN_draw_voxels(DNvec3 camPos, float fov, DNvec3 angle, unsigned int viewMode);
 
 //Updates the indirect lighting on every chunk currently in dnVoxelLightingRequests, up to numChunks
 void DN_update_voxel_lighting(unsigned int numChunks, unsigned int offset, DNvec3 camPos, float time);

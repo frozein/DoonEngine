@@ -46,6 +46,7 @@ DNivec4* dnVoxelLightingRequests = 0;
 DNivec4* chunkBufferLayout;
 
 const size_t halfChunkSize = sizeof(DNvoxelGPU) * 8 * 8 * 8; //CHANGE CHUNK SIZE HERE
+const int WORKGROUP_SIZE = 16;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //INITIALIZATION:
@@ -64,8 +65,10 @@ bool DN_init_voxel_pipeline(DNuvec2 tSize, DNtexture fTex, DNuvec3 mSize, unsign
 	maxChunksGPU = mChunksGPU;
 	maxLightingRequests = mLightingRequests;
 
-	//bind texture:
+	//create texture:
 	//---------------------------------
+	if(!DN_set_voxel_texture_size(tSize))
+		return false;
 	glBindImageTexture(0, finalTex.id, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	//allocate cpu-side memory:
@@ -344,8 +347,25 @@ void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLigh
 		DN_update_voxel_lighting(num, 0, camPos, time);
 }
 
-void DN_draw_voxels(DNvec3 camPos, DNvec3 camFront, DNvec3 camPlaneU, DNvec3 camPlaneV, unsigned int viewMode)
+void DN_draw_voxels(DNvec3 camPos, float fov, DNvec3 angle, unsigned int viewMode)
 {
+	float aspectRatio = (float)textureSize.y / (float)textureSize.x;
+	DNmat3 rotate = mat4_to_mat3(mat4_rotate_euler(DN_MAT4_IDENTITY, angle));
+	DNvec3 camFront = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
+	DNvec3 camPlaneU;
+	DNvec3 camPlaneV;
+
+	if(aspectRatio < 1.0f)
+	{
+		camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
+		camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * aspectRatio, 0.0f});
+	}
+	else
+	{
+		camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f / aspectRatio, 0.0f, 0.0f});
+		camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f, 0.0f});
+	}
+
 	DN_program_activate(finalProgram);
 
 	DN_program_uniform_vec3 (finalProgram, "camPos", camPos);
@@ -355,7 +375,6 @@ void DN_draw_voxels(DNvec3 camPos, DNvec3 camFront, DNvec3 camPlaneU, DNvec3 cam
 	DN_program_uniform_uint (finalProgram, "viewMode", viewMode);
 	glUniform3uiv(glGetUniformLocation(finalProgram, "mapSize"), 1, (GLuint*)&mapSize);
 
-	const int WORKGROUP_SIZE = 16;
 	glDispatchCompute(textureSize.x / WORKGROUP_SIZE, textureSize.y / WORKGROUP_SIZE, 1);
 }
 
@@ -389,7 +408,19 @@ DNuvec2 DN_voxel_texture_size()
 
 bool DN_set_voxel_texture_size(DNuvec2 size)
 {
-	return true; //TODO implement
+	size.x += WORKGROUP_SIZE - size.x % WORKGROUP_SIZE;
+	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
+
+	DN_texture_bind(finalTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		DN_ERROR_LOG("ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
+		return false;
+	}
+
+	textureSize = size;
+	return true;
 }
 
 DNuvec3 DN_voxel_map_size()
