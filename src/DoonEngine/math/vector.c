@@ -7,7 +7,7 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UTILITY FUNCTIONS:
 
-static GLfloat DN_clamp(GLfloat v, GLfloat min, GLfloat max)
+static GLfloat _DN_clamp(GLfloat v, GLfloat min, GLfloat max)
 {
 	if(v < min)
 		return min;
@@ -20,37 +20,37 @@ static GLfloat DN_clamp(GLfloat v, GLfloat min, GLfloat max)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VEC2:
 
-void vec2_print(DNvec2 v)
+void DN_vec2_print(DNvec2 v)
 {
 	printf("%f, ", v.x);
 	printf("%f\n", v.y);
 }
 
-DNvec2 vec2_add(DNvec2 v1, DNvec2 v2)
+DNvec2 DN_vec2_add(DNvec2 v1, DNvec2 v2)
 {
 	return (DNvec2){v1.x + v2.x, v1.y + v2.y};
 }
 
-DNvec2 vec2_subtract(DNvec2 v1, DNvec2 v2)
+DNvec2 DN_vec2_subtract(DNvec2 v1, DNvec2 v2)
 {
 	return (DNvec2){v1.x - v2.x, v1.y - v2.y};
 }
 
-DNvec2 vec2_mult(DNvec2 v1, DNvec2 v2)
+DNvec2 DN_vec2_mult(DNvec2 v1, DNvec2 v2)
 {
 	return (DNvec2){v1.x * v2.x, v1.y * v2.y};
 }
 
-DNvec2 vec2_scale(DNvec2 v, GLfloat s)
+DNvec2 DN_vec2_scale(DNvec2 v, GLfloat s)
 {
 	return (DNvec2){v.x * s, v.y * s};
 }
 
-DNvec2 vec2_normalize(DNvec2 v)
+DNvec2 DN_vec2_normalize(DNvec2 v)
 {
 	DNvec2 res = v;
 
-	GLfloat mag = vec2_length(v);
+	GLfloat mag = DN_vec2_length(v);
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -61,29 +61,29 @@ DNvec2 vec2_normalize(DNvec2 v)
 	return res;
 }
 
-DNvec2 vec2_clamp(DNvec2 v, GLfloat min, GLfloat max)
+DNvec2 DN_vec2_clamp(DNvec2 v, GLfloat min, GLfloat max)
 {
-	return (DNvec2){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max)};
+	return (DNvec2){_DN_clamp(v.x, min, max), _DN_clamp(v.y, min, max)};
 }
 
-DNvec2 vec2_lerp(DNvec2 from, DNvec2 to, GLfloat a)
+DNvec2 DN_vec2_lerp(DNvec2 from, DNvec2 to, GLfloat a)
 {
 	GLfloat a2 = 1.0f - a;
 
 	return (DNvec2){from.x * a2 + to.x * a, from.y * a2 + to.y * a};
 } 
 
-GLfloat vec2_length(DNvec2 v)
+GLfloat DN_vec2_length(DNvec2 v)
 {
 	return v.x * v.x + v.y * v.y;
 }
 
-GLfloat vec2_dot(DNvec2 v1, DNvec2 v2)
+GLfloat DN_vec2_dot(DNvec2 v1, DNvec2 v2)
 {
 	return v1.x * v2.x + v1.y * v2.y;
 }
 
-GLfloat vec2_distance(DNvec2 v1, DNvec2 v2)
+GLfloat DN_vec2_distance(DNvec2 v1, DNvec2 v2)
 {
 	GLfloat x = v1.x - v2.x;
 	GLfloat y = v1.y - v2.y;
@@ -94,38 +94,38 @@ GLfloat vec2_distance(DNvec2 v1, DNvec2 v2)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VEC3:
 
-void vec3_print(DNvec3 v)
+void DN_vec3_print(DNvec3 v)
 {
 	printf("%f, ", v.x);
 	printf("%f, ", v.y);
 	printf("%f\n", v.z);
 }
 
-DNvec3 vec3_add(DNvec3 v1, DNvec3 v2)
+DNvec3 DN_vec3_add(DNvec3 v1, DNvec3 v2)
 {
 	return (DNvec3){v1.x + v2.x, v1.y + v2.y, v1.z + v2.z};
 }
 
-DNvec3 vec3_subtract(DNvec3 v1, DNvec3 v2)
+DNvec3 DN_vec3_subtract(DNvec3 v1, DNvec3 v2)
 {
 	return (DNvec3){v1.x - v2.x, v1.y - v2.y, v1.z - v2.z};
 }
 
-DNvec3 vec3_mult(DNvec3 v1, DNvec3 v2)
+DNvec3 DN_vec3_mult(DNvec3 v1, DNvec3 v2)
 {
 	return (DNvec3){v1.x * v2.x, v1.y * v2.y, v1.z * v2.z};
 }
 
-DNvec3 vec3_scale(DNvec3 v, GLfloat s)
+DNvec3 DN_vec3_scale(DNvec3 v, GLfloat s)
 {
 	return (DNvec3){v.x * s, v.y * s, v.z * s};
 }
 
-DNvec3 vec3_normalize(DNvec3 v)
+DNvec3 DN_vec3_normalize(DNvec3 v)
 {
 	DNvec3 res = v;
 
-	GLfloat mag = vec3_length(v);
+	GLfloat mag = DN_vec3_length(v);
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -137,34 +137,34 @@ DNvec3 vec3_normalize(DNvec3 v)
 	return res;
 }
 
-DNvec3 vec3_clamp(DNvec3 v, GLfloat min, GLfloat max)
+DNvec3 DN_vec3_clamp(DNvec3 v, GLfloat min, GLfloat max)
 {
-	return (DNvec3){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max), DN_clamp(v.z, min, max)};
+	return (DNvec3){_DN_clamp(v.x, min, max), _DN_clamp(v.y, min, max), _DN_clamp(v.z, min, max)};
 }
 
-DNvec3 vec3_lerp(DNvec3 from, DNvec3 to, GLfloat a)
+DNvec3 DN_vec3_lerp(DNvec3 from, DNvec3 to, GLfloat a)
 {
 	GLfloat a2 = 1.0f - a;
 
 	return (DNvec3){from.x * a2 + to.x * a, from.y * a2 + to.y * a, from.z * a2 + to.z * a};
 } 
 
-DNvec3 vec3_cross(DNvec3 v1, DNvec3 v2)
+DNvec3 DN_vec3_cross(DNvec3 v1, DNvec3 v2)
 {
 	return (DNvec3){v1.y * v2.z - v1.z * v2.y, v1.z * v2.x - v1.x * v2.z, v1.x * v2.y - v1.y * v2.x};
 }
 
-GLfloat vec3_length(DNvec3 v)
+GLfloat DN_vec3_length(DNvec3 v)
 {
 	return v.x * v.x + v.y * v.y + v.z * v.z;
 }
 
-GLfloat vec3_dot(DNvec3 v1, DNvec3 v2)
+GLfloat DN_vec3_dot(DNvec3 v1, DNvec3 v2)
 {
 	return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
-GLfloat vec3_distance(DNvec3 v1, DNvec3 v2)
+GLfloat DN_vec3_distance(DNvec3 v1, DNvec3 v2)
 {
 	GLfloat x = v1.x - v2.x;
 	GLfloat y = v1.y - v2.y;
@@ -176,7 +176,7 @@ GLfloat vec3_distance(DNvec3 v1, DNvec3 v2)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VEC4:
 
-void vec4_print(DNvec4 v)
+void DN_vec4_print(DNvec4 v)
 {
 	printf("%f, ", v.x);
 	printf("%f, ", v.y);
@@ -184,31 +184,31 @@ void vec4_print(DNvec4 v)
 	printf("%f\n", v.w);
 }
 
-DNvec4 vec4_add(DNvec4 v1, DNvec4 v2)
+DNvec4 DN_vec4_add(DNvec4 v1, DNvec4 v2)
 {
 	return (DNvec4){v1.x + v2.x, v1.y + v2.y, v1.z + v2.z, v1.w + v2.w};
 }
 
-DNvec4 vec4_subtract(DNvec4 v1, DNvec4 v2)
+DNvec4 DN_vec4_subtract(DNvec4 v1, DNvec4 v2)
 {
 	return (DNvec4){v1.x - v2.x, v1.y - v2.y, v1.z - v2.z, v1.w - v2.w};
 }
 
-DNvec4 vec4_mult(DNvec4 v1, DNvec4 v2)
+DNvec4 DN_vec4_mult(DNvec4 v1, DNvec4 v2)
 {
 	return (DNvec4){v1.x * v2.x, v1.y * v2.y, v1.z * v2.z, v1.w * v2.w};
 }
 
-DNvec4 vec4_scale(DNvec4 v, GLfloat s)
+DNvec4 DN_vec4_scale(DNvec4 v, GLfloat s)
 {
 	return (DNvec4){v.x * s, v.y * s, v.z * s, v.w * s};
 }
 
-DNvec4 vec4_normalize(DNvec4 v)
+DNvec4 DN_vec4_normalize(DNvec4 v)
 {
 	DNvec4 res = v;
 
-	GLfloat mag = vec4_length(v);
+	GLfloat mag = DN_vec4_length(v);
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -221,29 +221,29 @@ DNvec4 vec4_normalize(DNvec4 v)
 	return res;
 }
 
-DNvec4 vec4_clamp(DNvec4 v, GLfloat min, GLfloat max)
+DNvec4 DN_vec4_clamp(DNvec4 v, GLfloat min, GLfloat max)
 {
-	return (DNvec4){DN_clamp(v.x, min, max), DN_clamp(v.y, min, max), DN_clamp(v.z, min, max), DN_clamp(v.w, min, max)};
+	return (DNvec4){_DN_clamp(v.x, min, max), _DN_clamp(v.y, min, max), _DN_clamp(v.z, min, max), _DN_clamp(v.w, min, max)};
 }
 
-DNvec4 vec4_lerp(DNvec4 from, DNvec4 to, GLfloat a)
+DNvec4 DN_vec4_lerp(DNvec4 from, DNvec4 to, GLfloat a)
 {
 	GLfloat a2 = 1.0f - a;
 
 	return (DNvec4){from.x * a2 + to.x * a, from.y * a2 + to.y * a, from.z * a2 + to.z * a, from.w * a2 + to.w * a};
 }
 
-GLfloat vec4_length(DNvec4 v)
+GLfloat DN_vec4_length(DNvec4 v)
 {
 	return v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
 }
 
-GLfloat vec4_dot(DNvec4 v1, DNvec4 v2)
+GLfloat DN_vec4_dot(DNvec4 v1, DNvec4 v2)
 {
 	return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
 }
 
-GLfloat vec4_distance(DNvec4 v1, DNvec4 v2)
+GLfloat DN_vec4_distance(DNvec4 v1, DNvec4 v2)
 {
 	GLfloat x = v1.x - v2.x;
 	GLfloat y = v1.y - v2.y;

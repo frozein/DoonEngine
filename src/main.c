@@ -193,10 +193,9 @@ int main()
 			{
 				DNivec3 mapPos = {x / 8, y / 8, z / 8};
 				int mapIndex = DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size());
-				dnVoxelLightingRequests[mapIndex] = (DNivec4){mapPos.x, mapPos.y, mapPos.z};
 				dnVoxelMap[mapIndex].index = mapIndex;
 
-				/*if(vec3_distance((vec3){x, y, z}, (vec3){20.5f, 20.5f, 20.5f}) < 12.0f)
+				/*if(DN_vec3_distance((vec3){x, y, z}, (vec3){20.5f, 20.5f, 20.5f}) < 12.0f)
 				{
 					DNvoxel vox;
 					vox.material = 0;
@@ -208,7 +207,7 @@ int main()
 					if(abs(vox.normal.z) > maxNormal)
 						maxNormal = abs(vox.normal.z);
 
-					vox.normal = vec3_scale(vox.normal, 1 / maxNormal);
+					vox.normal = DN_vec3_scale(vox.normal, 1 / maxNormal);
 					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(0.0f, GAMMA)};
 
 					dnVoxelMap[mapIndex].flag = 1;
@@ -261,8 +260,8 @@ int main()
 		process_input(window);
 
 		//update cam direction:
-		DNmat3 rotate = mat4_to_mat3(mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){pitch, yaw, 0.0f}));
-		camFront = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
+		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){pitch, yaw, 0.0f}));
+		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
 
 		//stream voxel data:
 		if(updateData)
@@ -413,13 +412,13 @@ void process_input(GLFWwindow *window)
 		updateData = false;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		camPos = vec3_add(camPos, vec3_scale(vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		camPos = DN_vec3_add(camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		camPos = vec3_subtract(camPos, vec3_scale(vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		camPos = DN_vec3_subtract(camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		camPos = vec3_subtract(camPos, vec3_scale(vec3_normalize(vec3_cross(camFront, camUp)), camSpeed));
+		camPos = DN_vec3_subtract(camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		camPos = vec3_add(camPos, vec3_scale(vec3_normalize(vec3_cross(camFront, camUp)), camSpeed));
+		camPos = DN_vec3_add(camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
 		camPos.y += camSpeed; 
 	if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)

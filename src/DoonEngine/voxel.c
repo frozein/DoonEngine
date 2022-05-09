@@ -350,20 +350,20 @@ void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLigh
 void DN_draw_voxels(DNvec3 camPos, float fov, DNvec3 angle, unsigned int viewMode)
 {
 	float aspectRatio = (float)textureSize.y / (float)textureSize.x;
-	DNmat3 rotate = mat4_to_mat3(mat4_rotate_euler(DN_MAT4_IDENTITY, angle));
-	DNvec3 camFront = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
+	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, angle));
+	DNvec3 camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
 	DNvec3 camPlaneU;
 	DNvec3 camPlaneV;
 
 	if(aspectRatio < 1.0f)
 	{
-		camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
-		camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * aspectRatio, 0.0f});
+		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
+		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * aspectRatio, 0.0f});
 	}
 	else
 	{
-		camPlaneU = mat3_mult_vec3(rotate, (DNvec3){-1.0f / aspectRatio, 0.0f, 0.0f});
-		camPlaneV = mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f, 0.0f});
+		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f / aspectRatio, 0.0f, 0.0f});
+		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f, 0.0f});
 	}
 
 	DN_program_activate(finalProgram);
@@ -560,7 +560,7 @@ bool DN_set_max_voxel_lighting_requests(unsigned int num)
 void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float ambientLightStrength, unsigned int diffuseBounceLimit, unsigned int specBounceLimit, float shadowSoftness)
 {
 	DN_program_activate(lightingProgram);
-	DN_program_uniform_vec3 (lightingProgram, "sunDir", vec3_normalize(sunDir));
+	DN_program_uniform_vec3 (lightingProgram, "sunDir", DN_vec3_normalize(sunDir));
 	DN_program_uniform_vec3 (lightingProgram, "sunStrength", sunStrength);
 	DN_program_uniform_float(lightingProgram, "ambientStrength", ambientLightStrength);
 	DN_program_uniform_uint (lightingProgram, "diffuseBounceLimit", diffuseBounceLimit);
@@ -587,8 +587,8 @@ static DNuvec4 _DN_decode_uint_RGBA(GLuint val);
 DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel)
 {
 	DNvoxelGPU res;
-	voxel.albedo = vec3_clamp(voxel.albedo, 0.0f, 1.0f);
-	voxel.normal = vec3_clamp(voxel.normal, -1.0f, 1.0f);
+	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
+	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
 	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
 	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), 0};
 
@@ -606,8 +606,8 @@ DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel)
 	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
 	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
 
-	res.albedo = vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
-	DNvec3 scaledNormal = vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
+	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
+	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
 	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
 	res.material = albedo.w;
 
@@ -653,7 +653,7 @@ bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNiv
 	*hitNormal = (DNivec3){-1000, -1000, -1000};
 
 	//scale to use voxel-level coordinates
-	rayPos = vec3_scale(rayPos, DN_CHUNK_SIZE.x);
+	rayPos = DN_vec3_scale(rayPos, DN_CHUNK_SIZE.x);
 
 	//utility:
 	DNvec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};

@@ -7,35 +7,35 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //Prints a quaternion to the console
-void quat_print(DNquat q);
+void DN_quat_print(DNquat q);
 
 //Returns the sum of 2 quaternions
-DNquat quat_add(DNquat q1, DNquat q2);
+DNquat DN_quat_add(DNquat q1, DNquat q2);
 //Returns the difference of 2 quaternions
-DNquat quat_subtract(DNquat q1, DNquat q2);
+DNquat DN_quat_subtract(DNquat q1, DNquat q2);
 //Returns the result of scaling a quaternion by a scalar value
-DNquat quat_scale(DNquat q1, GLfloat s);
+DNquat DN_quat_scale(DNquat q1, GLfloat s);
 //Returns the product of 2 quaternions
-DNquat quat_mult(DNquat q1, DNquat q2);
+DNquat DN_quat_mult(DNquat q1, DNquat q2);
 
 //Returns the conjugate of a quaternion
-DNquat quat_conjugate(DNquat q);
+DNquat DN_quat_conjugate(DNquat q);
 
 //Returns the quaternion representing the rotation about an axis
-DNquat quat_from_axis_angle(DNvec3 axis, GLfloat angle);
+DNquat DN_quat_from_axis_angle(DNvec3 axis, GLfloat angle);
 //Returns the quaternion representing a euler rotation
-DNquat quat_from_euler(DNvec3 angles);
+DNquat DN_quat_from_euler(DNvec3 angles);
 
 //Returns the dot product of 2 quaternions
-GLfloat quat_dot(DNquat q1, DNquat q2);
+GLfloat DN_quat_dot(DNquat q1, DNquat q2);
 //Returns the result of a spherical linear interpolation between 2 quaternions
-DNquat quat_slerp(DNquat from, DNquat to, GLfloat a);
+DNquat DN_quat_slerp(DNquat from, DNquat to, GLfloat a);
 
 //Casts a quaternion to a vector4
-DNvec4 quat_to_vec4(DNquat q);
+DNvec4 DN_quat_to_vec4(DNquat q);
 //Casts a vector4 to a quaternion
-DNquat vec4_to_quat(DNvec4 v);
+DNquat DN_vec4_to_quat(DNvec4 v);
 //Returns the 4x4 transformation matrix representing a quaternion rotation
-DNmat4 quat_get_mat4(DNquat q);
+DNmat4 DN_quat_get_mat4(DNquat q);
 
 #endif

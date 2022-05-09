@@ -10,12 +10,12 @@ static void mat_print(unsigned int n, GLfloat* m);
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAT3:
 
-void mat3_print(DNmat3 m)
+void DN_mat3_print(DNmat3 m)
 {
 	mat_print(3, &m.m[0][0]);
 }
 
-DNmat3 mat3_mult(DNmat3 m1, DNmat3 m2)
+DNmat3 DN_mat3_mult(DNmat3 m1, DNmat3 m2)
 {
 	DNmat3 res;
 
@@ -40,7 +40,7 @@ DNmat3 mat3_mult(DNmat3 m1, DNmat3 m2)
 	return res;
 }
 
-DNvec3 mat3_mult_vec3(DNmat3 m, DNvec3 v)
+DNvec3 DN_mat3_mult_vec3(DNmat3 m, DNvec3 v)
 {
 	DNvec3 res;
 
@@ -51,7 +51,7 @@ DNvec3 mat3_mult_vec3(DNmat3 m, DNvec3 v)
 	return res;
 }
 
-DNmat3 mat3_scale_total(DNmat3 m, GLfloat s)
+DNmat3 DN_mat3_scale_total(DNmat3 m, GLfloat s)
 {
 	DNmat3 res = m;
 
@@ -62,7 +62,7 @@ DNmat3 mat3_scale_total(DNmat3 m, GLfloat s)
 	return res;
 }
 
-DNmat3 mat3_transpose(DNmat3 m)
+DNmat3 DN_mat3_transpose(DNmat3 m)
 {
 	DNmat3 res;
 
@@ -79,7 +79,7 @@ DNmat3 mat3_transpose(DNmat3 m)
 	return res;
 }
 
-GLfloat mat3_det(DNmat3 mat)
+GLfloat DN_mat3_det(DNmat3 mat)
 {
 	GLfloat a = mat.m[0][0], b = mat.m[0][1], c = mat.m[0][2],
           d = mat.m[1][0], e = mat.m[1][1], f = mat.m[1][2],
@@ -88,7 +88,7 @@ GLfloat mat3_det(DNmat3 mat)
 	return a * (e * i - h * f) - d * (b * i - c * h) + g * (b * f - c * e);
 }
 
-DNmat3 mat3_inv(DNmat3 mat)
+DNmat3 DN_mat3_inv(DNmat3 mat)
 {
 	DNmat3 res;
 
@@ -109,28 +109,28 @@ DNmat3 mat3_inv(DNmat3 mat)
 
 	det = 1.0f / (a * res.m[0][0] + b * res.m[1][0] + c * res.m[2][0]);
 
-	return mat3_scale_total(res, det);
+	return DN_mat3_scale_total(res, det);
 }
 
-DNmat3 mat3_translate(DNmat3 m, DNvec2 dir)
+DNmat3 DN_mat3_translate(DNmat3 m, DNvec2 dir)
 {
 	DNmat3 translated = DN_MAT3_IDENTITY;
 	translated.m[2][0] = dir.x;
 	translated.m[2][1] = dir.y;
 
-	return mat3_mult(m, translated);
+	return DN_mat3_mult(m, translated);
 }
 
-DNmat3 mat3_scale(DNmat3 m, DNvec2 s)
+DNmat3 DN_mat3_scale(DNmat3 m, DNvec2 s)
 {
 	DNmat3 scaled = DN_MAT3_IDENTITY;
 	scaled.m[0][0] = s.x;
 	scaled.m[1][1] = s.y;
 
-	return mat3_mult(m, scaled);
+	return DN_mat3_mult(m, scaled);
 }
 
-DNmat3 mat3_rotate(DNmat3 m, GLfloat angle)
+DNmat3 DN_mat3_rotate(DNmat3 m, GLfloat angle)
 {
 	DNmat3 res;
 
@@ -147,12 +147,12 @@ DNmat3 mat3_rotate(DNmat3 m, GLfloat angle)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAT4:
 
-void mat4_print(DNmat4 m)
+void DN_mat4_print(DNmat4 m)
 {
 	mat_print(4, &m.m[0][0]);
 }
 
-DNmat4 mat4_mult(DNmat4 m1, DNmat4 m2)
+DNmat4 DN_mat4_mult(DNmat4 m1, DNmat4 m2)
 {
 	DNmat4 res;
 
@@ -186,7 +186,7 @@ DNmat4 mat4_mult(DNmat4 m1, DNmat4 m2)
 	return res;
 }
 
-DNvec4 mat4_mult_vec4(DNmat4 m, DNvec4 v)
+DNvec4 DN_mat4_mult_vec4(DNmat4 m, DNvec4 v)
 {
 	DNvec4 res;
 
@@ -198,7 +198,7 @@ DNvec4 mat4_mult_vec4(DNmat4 m, DNvec4 v)
 	return res;
 }
 
-DNmat4 mat4_scale_total(DNmat4 m, GLfloat s)
+DNmat4 DN_mat4_scale_total(DNmat4 m, GLfloat s)
 {
 	DNmat4 res = m;
 
@@ -210,7 +210,7 @@ DNmat4 mat4_scale_total(DNmat4 m, GLfloat s)
 	return res;
 }
 
-DNmat4 mat4_transpose(DNmat4 m)
+DNmat4 DN_mat4_transpose(DNmat4 m)
 {
 	DNmat4 res;
 
@@ -226,7 +226,7 @@ DNmat4 mat4_transpose(DNmat4 m)
 	return res;
 }
 
-GLfloat mat4_det(DNmat4 mat)
+GLfloat DN_mat4_det(DNmat4 mat)
 {
 	GLfloat t[6];
 	GLfloat a = mat.m[0][0], b = mat.m[0][1], c = mat.m[0][2], d = mat.m[0][3],
@@ -247,7 +247,7 @@ GLfloat mat4_det(DNmat4 mat)
          - d * (e * t[2] - f * t[4] + g * t[5]);
 }
 
-DNmat4 mat4_inv(DNmat4 mat)
+DNmat4 DN_mat4_inv(DNmat4 mat)
 {
 	DNmat4 res;
 
@@ -294,10 +294,10 @@ DNmat4 mat4_inv(DNmat4 mat)
   	det = 1.0f / (a * res.m[0][0] + b * res.m[1][0]
                 + c * res.m[2][0] + d * res.m[3][0]);
 
-  	return mat4_scale_total(res, det);
+  	return DN_mat4_scale_total(res, det);
 }
 
-DNmat3 mat4_to_mat3(DNmat4 m)
+DNmat3 DN_mat4_to_mat3(DNmat4 m)
 {
 	DNmat3 res;
 
@@ -314,37 +314,37 @@ DNmat3 mat4_to_mat3(DNmat4 m)
 	return res;
 }
 
-DNmat4 mat4_translate(DNmat4 m, DNvec3 dir)
+DNmat4 DN_mat4_translate(DNmat4 m, DNvec3 dir)
 {	
 	DNmat4 translated = DN_MAT4_IDENTITY;
 	translated.m[3][0] = dir.x;
 	translated.m[3][1] = dir.y;
 	translated.m[3][2] = dir.z;
 
-	return mat4_mult(m, translated);
+	return DN_mat4_mult(m, translated);
 }
 
-DNmat4 mat4_scale(DNmat4 m, DNvec3 s)
+DNmat4 DN_mat4_scale(DNmat4 m, DNvec3 s)
 {
 	DNmat4 scaled = DN_MAT4_IDENTITY;
 	scaled.m[0][0] = s.x;
 	scaled.m[1][1] = s.y;
 	scaled.m[2][2] = s.z;
 
-	return mat4_mult(m, scaled);
+	return DN_mat4_mult(m, scaled);
 }
 
-DNmat4 mat4_rotate(DNmat4 m, DNvec3 axis, GLfloat angle)
+DNmat4 DN_mat4_rotate(DNmat4 m, DNvec3 axis, GLfloat angle)
 {
-	return mat4_mult(m, quat_get_mat4(quat_from_axis_angle(axis, angle)));
+	return DN_mat4_mult(m, DN_quat_get_mat4(DN_quat_from_axis_angle(axis, angle)));
 }
 
-DNmat4 mat4_rotate_euler(DNmat4 m, DNvec3 angles)
+DNmat4 DN_mat4_rotate_euler(DNmat4 m, DNvec3 angles)
 {
-	return mat4_mult(m, quat_get_mat4(quat_from_euler(angles)));
+	return DN_mat4_mult(m, DN_quat_get_mat4(DN_quat_from_euler(angles)));
 }
 
-DNmat4 mat4_perspective_proj(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)
+DNmat4 DN_mat4_perspective_proj(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f)
 {
 	DNmat4 res = DN_MAT4_ZERO;
 
@@ -357,20 +357,20 @@ DNmat4 mat4_perspective_proj(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat
 	return res;
 }
 
-DNmat4 mat4_perspective_proj_from_fov(GLfloat fov, GLfloat aspect, GLfloat n, GLfloat f)
+DNmat4 DN_mat4_perspective_proj_from_fov(GLfloat fov, GLfloat aspect, GLfloat n, GLfloat f)
 {
 	GLfloat scale = tanf(fov * 0.5 * DEG_TO_RAD) * n; 
     GLfloat r = aspect * scale;
     GLfloat t = scale;
 
-	return mat4_perspective_proj(-r, r, -t, t, n, f);
+	return DN_mat4_perspective_proj(-r, r, -t, t, n, f);
 }
 
-DNmat4 mat4_lookat(DNvec3 pos, DNvec3 target, DNvec3 up)
+DNmat4 DN_mat4_lookat(DNvec3 pos, DNvec3 target, DNvec3 up)
 {
-	DNvec3 d = vec3_normalize(vec3_subtract(pos, target)); //direction
-	DNvec3 r = vec3_normalize(vec3_cross(up, d)); //right axis
-	DNvec3 u = vec3_cross(d, r); //up axis
+	DNvec3 d = DN_vec3_normalize(DN_vec3_subtract(pos, target)); //direction
+	DNvec3 r = DN_vec3_normalize(DN_vec3_cross(up, d)); //right axis
+	DNvec3 u = DN_vec3_cross(d, r); //up axis
 
 	DNmat4 RUD = DN_MAT4_IDENTITY;
 	RUD.m[0][0] = r.x;
@@ -388,7 +388,7 @@ DNmat4 mat4_lookat(DNvec3 pos, DNvec3 target, DNvec3 up)
 	translate.m[3][1] = -pos.y;
 	translate.m[3][2] = -pos.z;
 
-	return mat4_mult(RUD, translate);
+	return DN_mat4_mult(RUD, translate);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//

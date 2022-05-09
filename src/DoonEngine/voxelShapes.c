@@ -169,9 +169,9 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			if(DN_voxelGPU_to_voxel(model->voxels[iP]).material < 255)
 			{
 				DNvec3 toCenter = {xP - xC, yP - yC, zP - zC};
-				float dist = vec3_dot(toCenter, toCenter);
-				toCenter = vec3_scale(toCenter, 1.0f / dist);
-				sum = vec3_add(sum, toCenter);
+				float dist = DN_vec3_dot(toCenter, toCenter);
+				toCenter = DN_vec3_scale(toCenter, 1.0f / dist);
+				sum = DN_vec3_add(sum, toCenter);
 			}
 		}
 
@@ -184,7 +184,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 		if(fabs(sum.z) > maxNormal)
 			maxNormal = fabs(sum.z);
 
-		sum = vec3_scale(sum, -1.0f / maxNormal);
+		sum = DN_vec3_scale(sum, -1.0f / maxNormal);
 		voxC.normal = sum;
 		model->voxels[iC] = DN_voxel_to_voxelGPU(voxC);
 	}
@@ -207,7 +207,7 @@ void DN_place_model_into_world(DNvoxelModel model, DNivec3 pos)
 			{
 				int iWorld = DN_FLATTEN_INDEX(chunkPos, DN_voxel_map_size());
 				dnVoxelMap[iWorld].flag = 1;
-				dnVoxelChunks[iWorld].voxels[worldPos.x % DN_CHUNK_SIZE.x][worldPos.y % DN_CHUNK_SIZE.y][worldPos.z % DN_CHUNK_SIZE.z] = model.voxels[iModel];
+				dnVoxelChunks[dnVoxelMap[iWorld].index].voxels[worldPos.x % DN_CHUNK_SIZE.x][worldPos.y % DN_CHUNK_SIZE.y][worldPos.z % DN_CHUNK_SIZE.z] = model.voxels[iModel];
 			}
 		}
 	}
