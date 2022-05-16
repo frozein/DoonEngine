@@ -6,7 +6,7 @@ layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; //local group s
 
 layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer //a buffer that holds all of the chunks that are set to have their lighting updated
 {
-	ivec3 chunkPositions[];
+	uint chunkIndices[];
 };
 
 uniform float time;      //for random seeding
@@ -186,9 +186,9 @@ void main()
 	//TODO: COMBINE SPEC AND SHADOW RAYS
 
 	//find positions:
-	ivec3 chunkPos = chunkPositions[gl_WorkGroupID.x].xyz;
+	uint chunkIndex = chunkIndices[gl_WorkGroupID.x];
+	ivec3 chunkPos = ivec3(chunks[chunkIndex].pos.xyz);
 	ivec3 localPos = ivec3(gl_LocalInvocationID);
-	uint chunkIndex = get_map_tile(chunkPos).index;
 	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, localPos), get_indirect_light(chunkIndex, localPos));
 	Material thisMaterial = materials[thisVoxel.material];
 

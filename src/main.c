@@ -177,7 +177,7 @@ int main()
 	//---------------------------------
 	DNuvec3 tempMapSize = {5, 5, 5};
 	unsigned int tempMapLength = tempMapSize.x * tempMapSize.y * tempMapSize.z;
-	if(!DN_init_voxel_pipeline((DNuvec2){SCREEN_W, SCREEN_H}, finalTex, tempMapSize, tempMapLength, tempMapSize, tempMapLength, tempMapLength))
+	if(!DN_init_voxel_pipeline())//DN_init_voxel_pipeline((DNuvec2){SCREEN_W, SCREEN_H}, finalTex, tempMapSize, tempMapLength, tempMapSize, tempMapLength, tempMapLength))
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		glfwTerminate();
@@ -185,9 +185,30 @@ int main()
 		return -1;
 	}
 
+	DNmap* testMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, 1.0f, tempMapLength);
+
+	//load model:
+	//---------------------------------
+
+	/*for(int z = 0; z < testMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+		for(int y = 0; y < testMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
+			for(int x = 0; x < testMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
+			{
+				DNivec3 mapPos = {x / 8, y / 8, z / 8};
+				int mapIndex = DN_FLATTEN_INDEX(mapPos, testMap->mapSize);
+				testMap->map[mapIndex].index = mapIndex;
+				testMap->map[mapIndex].flag = 1;
+			}*/
+
+	DNvoxelModel model;
+	DN_load_vox_file("tree.vox", &model, 0);
+	DN_calculate_model_normals(2, &model);
+	DN_place_model_into_world(testMap, model, (DNivec3){0, 0, 0});
+	DN_sync_gpu(testMap, DN_WRITE, DN_REQUEST_NONE);
+
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
-	for(int z = 0; z < DN_voxel_map_size().z * DN_CHUNK_SIZE.z; z++)
+	/*for(int z = 0; z < DN_voxel_map_size().z * DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < DN_voxel_map_size().y * DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < DN_voxel_map_size().x * DN_CHUNK_SIZE.x; x++)
 			{
@@ -212,15 +233,8 @@ int main()
 
 					dnVoxelMap[mapIndex].flag = 1;
 					dnVoxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = DN_voxel_to_voxelGPU(vox);
-				}*/
-			}
-	
-	//load model:
-	//---------------------------------
-	DNvoxelModel model;
-	DN_load_vox_file("tree.vox", &model, 0);
-	DN_calculate_model_normals(2, &model);
-	DN_place_model_into_world(model, (DNivec3){0, 0, 0});
+				}
+			}*/
 
 	//set materials:
 	//---------------------------------
@@ -264,7 +278,7 @@ int main()
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
 
 		//stream voxel data:
-		if(updateData)
+		/*if(updateData)
 		{
 			frameNum++;
 
@@ -282,14 +296,24 @@ int main()
 		int numThisFrame = (int)ceil((float)numChunksToUpdate / lightingSplit);
 		int offset = numThisFrame * (frameNum % lightingSplit);
 		DN_update_voxel_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);*/
 
 		//render voxels to texture:
-		DN_draw_voxels(camPos, fov, (DNvec3){pitch, yaw, 0.0f}, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
-		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+		//DN_draw_voxels(camPos, fov, (DNvec3){pitch, yaw, 0.0f}, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		testMap->camPos = camPos;
+		testMap->camFOV = fov;
+		testMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
+		testMap->camViewMode = viewMode;
+
+		DN_sync_gpu(testMap, DN_READ, DN_REQUEST_LOADED);
+
+		DN_update_voxel_lighting(testMap, 0, 0, glfwGetTime());
+
+		DN_draw_voxels(testMap);
 
 		//render final quad to the screen:
-		DN_texture_activate(finalTex, 0);
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, testMap->glTextureID);
 		DN_program_activate(quadShader);
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
@@ -344,7 +368,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	DNivec3 hitPos;
 	DNivec3 hitNormal;
 
-	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+	/*if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 		if(DN_step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
 			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
@@ -374,7 +398,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 			dnVoxelChunks[DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
 			DN_update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
-		}
+		}*/
 }
 
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY)
@@ -430,7 +454,7 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 	const int WORKGROUP_SIZE = 16;
 	ASPECT_RATIO = (float)h / (float)w;
 	glViewport(0, 0, w, h);
-	DN_set_voxel_texture_size((DNuvec2){w, h});
+	//DN_set_voxel_texture_size((DNuvec2){w, h});
 	SCREEN_W = w;
 	SCREEN_H = h;
 }

@@ -21,8 +21,6 @@ struct Voxel //a single voxel
 
 	vec3 directLight;      //the direct lighting from the sun, creates shadows
 	vec3 specLight;        //the lighting caused by reflecting light rays off of the voxel
-
-	uint visible;          //whether or not the voxel was visible to the camera last frame
 };
 
 struct CompressedVoxel //a compressed voxel
@@ -35,6 +33,12 @@ struct CompressedVoxel //a compressed voxel
 
 struct Chunk //a chunk of voxels
 {
+	uvec4 pos;
+	
+	uint updated;
+	uint numVoxels;
+	uvec2 padding;
+
 	//NOTE: can't use "CHUNK_SIZE" const for the size since some gpus dont allow it in a struct
 	CompressedVoxel voxels[8][8][8]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
 	vec4 indirectLight[8][8][8];
@@ -148,7 +152,6 @@ Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight) //decompr
 	res.indirectSamples = indirectLight.w;
 	res.directLight = vec3(directLight.xyz) * 0.00392156862;
 	res.specLight = vec3(specLight.xyz) * 0.00392156862;
-	res.visible = directLight.w;
 
 	return res;
 }
@@ -242,16 +245,12 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 					colorMult *= 1.0 - material.opacity;
 					if(addSpec)
 						colorAdd += voxel.specLight * material.specular;
-					
-					//set the visibility to true:
-					//atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				}
 			}
 			else
 			{
-				//return the position and set the visibility of the voxel to true
+				//return the position
 				chunkPos = mapPos;
-				//atomicExchange(chunks[chunk].voxels[mapPos.x][mapPos.y][mapPos.z].directLight, encode_uint_RGBA(uvec4(round(voxel.directLight * 255), 1)));
 				return true;
 			}
 

@@ -190,7 +190,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 	}
 }
 
-void DN_place_model_into_world(DNvoxelModel model, DNivec3 pos)
+void DN_place_model_into_world(DNmap* map, DNvoxelModel model, DNivec3 pos)
 {
 	for(int x = 0; x < model.size.x; x++)
 	for(int y = 0; y < model.size.y; y++)
@@ -203,11 +203,15 @@ void DN_place_model_into_world(DNvoxelModel model, DNivec3 pos)
 			DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
 			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE.x, worldPos.y / DN_CHUNK_SIZE.y, worldPos.z / DN_CHUNK_SIZE.z};
 
-			if(DN_in_voxel_map_bounds(chunkPos))
+			if(DN_in_map_bounds(map, chunkPos))
 			{
-				int iWorld = DN_FLATTEN_INDEX(chunkPos, DN_voxel_map_size());
-				dnVoxelMap[iWorld].flag = 1;
-				dnVoxelChunks[dnVoxelMap[iWorld].index].voxels[worldPos.x % DN_CHUNK_SIZE.x][worldPos.y % DN_CHUNK_SIZE.y][worldPos.z % DN_CHUNK_SIZE.z] = model.voxels[iModel];
+				int iWorld = DN_FLATTEN_INDEX(chunkPos, map->mapSize);
+				if(map->map[iWorld].flag == 0)
+				{
+					DN_add_chunk(map, chunkPos);
+				}
+				//map->map[iWorld].flag = 1;
+				map->chunks[map->map[iWorld].index].voxels[worldPos.x % DN_CHUNK_SIZE.x][worldPos.y % DN_CHUNK_SIZE.y][worldPos.z % DN_CHUNK_SIZE.z] = model.voxels[iModel];
 			}
 		}
 	}

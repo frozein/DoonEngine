@@ -6,6 +6,11 @@
 #include "math/common.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//SHAPES:
+
+
+
+//--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:
 
 //a voxel model, not placed into the world
@@ -24,6 +29,6 @@ void DN_free_model(DNvoxelModel model);
 void DN_calculate_model_normals(unsigned int radius, DNvoxelModel* model);
 
 //Places a model into the world
-void DN_place_model_into_world(DNvoxelModel model, DNivec3 pos);
+void DN_place_model_into_world(DNmap* map, DNvoxelModel model, DNivec3 pos);
 
 #endif
