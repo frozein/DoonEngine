@@ -52,7 +52,7 @@ bool DN_init_voxel_pipeline()
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, materialBuffer);
 
-	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(DNivec4) * maxLightingRequests))
+	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(DNuvec4) * maxLightingRequests))
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
 		return false;
@@ -154,7 +154,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, floa
 	for(int i = 0; i < numChunks; i++)
 		_DN_clear_chunk(map, i);
 
-	map->lightingRequests = DN_MALLOC(sizeof(GLuint) * numChunks);
+	map->lightingRequests = DN_MALLOC(sizeof(DNuvec4) * numChunks);
 	if(!map->lightingRequests)
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE CPU MEMORY FOR LIGHTING REQUESTS\n");
@@ -290,7 +290,9 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 		unsigned int maxIndex = map->mapSize.x * map->mapSize.y * map->mapSize.z;
 		for(int i = 0; i < maxIndex; i++)
 		{
-			if(requests != DN_REQUEST_NONE && gpuMap[i].flag == 1 && (requests == DN_REQUEST_LOADED || gpuMap[i].visible == 1))
+			DNvoxelChunkHandle cell = (op == DN_READ_WRITE) ? map->map[i] : gpuMap[i]; //if we are going to upload a new map, use data from that new map instead of old data
+
+			if(requests != DN_REQUEST_NONE && cell.flag == 1 && (requests == DN_REQUEST_LOADED || cell.visible == 1))
 			{
 				if(map->numLightingRequest >= map->lightingRequestCap)
 				{
@@ -300,7 +302,7 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 						break;
 				}
 
-				map->lightingRequests[map->numLightingRequest++] = gpuMap[i].index;
+				map->lightingRequests[map->numLightingRequest++].x = cell.index;
 			}
 
 			gpuMap[i].visible = 0;
@@ -581,8 +583,8 @@ void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num,
 		}
 		maxLightingRequests = newSize;
 	}
-	else
-		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, num * sizeof(GLuint), &map->lightingRequests[offset]);
+
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, num * sizeof(DNuvec4), &map->lightingRequests[offset]);
 
 	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", time);
@@ -618,7 +620,7 @@ bool DN_set_max_chunks(DNmap* map, unsigned int num)
 
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 {
-	GLuint* newRequests = DN_REALLOC(map->lightingRequests, sizeof(GLuint) * num);
+	DNuvec4* newRequests = DN_REALLOC(map->lightingRequests, sizeof(DNuvec4) * num);
 
 	if(!newRequests)
 	{

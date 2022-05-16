@@ -204,7 +204,7 @@ int main()
 	DN_load_vox_file("tree.vox", &model, 0);
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_world(testMap, model, (DNivec3){0, 0, 0});
-	DN_sync_gpu(testMap, DN_WRITE, DN_REQUEST_NONE);
+	DN_sync_gpu(testMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
@@ -305,10 +305,8 @@ int main()
 		testMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
 		testMap->camViewMode = viewMode;
 
-		DN_sync_gpu(testMap, DN_READ, DN_REQUEST_LOADED);
-
+		//DN_sync_gpu(testMap, DN_READ, DN_REQUEST_VISIBLE);
 		DN_update_voxel_lighting(testMap, 0, 0, glfwGetTime());
-
 		DN_draw_voxels(testMap);
 
 		//render final quad to the screen:

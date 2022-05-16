@@ -96,7 +96,7 @@ typedef struct DNmap
 	//data:
 	DNvoxelChunkHandle* map; 		 //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNvoxelChunk* chunks; 	 		 //READ-WRITE | A pointer to the array of chunks that the map has
-	GLuint* lightingRequests;        //READ-WRITE | A pointer to an array of chunk indices, signifies which chunks will have their lighting updated when DN_update_lighting() is called
+	DNuvec4* lightingRequests;       //READ-WRITE | A pointer to an array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
 
 	//camera parameters:
 	DNvec3 camPos; 			  		 //READ-WRITE | The camera's position relative to this map, in DNchunks
