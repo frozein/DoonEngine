@@ -91,6 +91,9 @@ void DN_deinit_voxel_pipeline()
 
 DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, float streamIndex, unsigned int minChunks)
 {
+	if(streamIndex < 1.0f)
+		DN_ERROR_LOG("WARNING - STREAMINDEX CANNOT BE LESS THAN 1... USING 1 INSTEAD\n");
+
 	//allocate structure:
 	//---------------------------------
 	DNmap* map = DN_MALLOC(sizeof(DNmap));
@@ -206,7 +209,7 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos)
 {
 	if(!DN_in_map_bounds(map, pos))
 	{
-		DN_ERROR_LOG("ERROR - OUT OF BOUNDS POSITION TO REMOVE\n");
+		DN_ERROR_LOG("ERROR - OUT OF BOUNDS POSITION TO ADD\n");
 		return 0;
 	}
 
@@ -222,7 +225,6 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos)
 			map->map[mapIndex].flag = 1;
 
 			map->chunks[i].pos = (DNuvec4){pos.x, pos.y, pos.z, 1};
-			map->chunks[i].updated = true;
 			map->nextChunk = (i == map->chunkCap - 1) ? (0) : (i + 1);
 
 			return i;
@@ -252,7 +254,6 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos)
 	map->map[mapIndex].flag = 1;
 
 	map->chunks[i].pos = (DNuvec4){pos.x, pos.y, pos.z, 1};
-	map->chunks[i].updated = true;
 	map->nextChunk = (i == map->chunkCap - 1) ? (0) : (i + 1);
 
 	return i;
@@ -328,7 +329,10 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 			{
 				DNvoxelChunk chunk = map->chunks[i];
 				if(chunk.pos.w == 1 && chunk.updated)
+				{
 					glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(DNvoxelChunk), halfChunkSize, &map->chunks[i]);
+					map->chunks[i].updated = 0;
+				}
 			}
 		}
 		else //resize and reupload buffer if a new size is needed:
@@ -804,60 +808,107 @@ void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float a
 	DN_program_uniform_vec3 (finalProgram, "sunStrength", sunStrength);
 }*/
 
-void DN_set_voxel_materials(DNmaterialHandle min, DNmaterialHandle max)
+void DN_set_voxel_materials(DNmaterialHandle min, unsigned int num)
 {
+	if(min + num > DN_MAX_VOXEL_MATERIALS)
+	{
+		DN_ERROR_LOG("ERROR - TRYING TO SET OUT OF BOUNDS MATERIALS\n");
+		return;
+	}
+
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelMaterial) * (max - min + 1), &dnVoxelMaterials[min]);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelMaterial) * num, &dnVoxelMaterials[min]);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//GENERAL UTILITY:
+//MAP UTILITY:
 
-static GLuint _DN_encode_uint_RGBA(DNuvec4 val);
-static DNuvec4 _DN_decode_uint_RGBA(GLuint val);
-
-DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel)
-{
-	DNvoxelGPU res;
-	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
-	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
-	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
-	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.mask & 0xFF};
-
-	res.albedo = _DN_encode_uint_RGBA(albedo);
-	res.normal = _DN_encode_uint_RGBA(normal);
-	res.directLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, (voxel.mask >> 8) & 0xFF});
-	res.specLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, 0});
-
-	return res;
-}
-
-DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel)
-{
-	DNvoxel res;
-	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
-	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
-	DNuvec4 directLight = _DN_decode_uint_RGBA(voxel.directLight);
-
-	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
-	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
-	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
-	res.material = albedo.w;
-	res.mask = normal.w | (directLight.w << 8);
-
-	return res;
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-
-bool DN_in_map_bounds(DNmap* map, DNivec3 pos) //returns whether a position is in bounds in the map
+bool DN_in_map_bounds(DNmap* map, DNivec3 pos)
 {
 	return pos.x < map->mapSize.x && pos.y < map->mapSize.y && pos.z < map->mapSize.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
-bool DN_in_chunk_bounds(DNivec3 pos) //returns whether a position is in bounds in a chunk
+bool DN_in_chunk_bounds(DNivec3 pos)
 {
 	return pos.x < DN_CHUNK_SIZE.x && pos.y < DN_CHUNK_SIZE.y && pos.z < DN_CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+}
+
+DNvoxel DN_get_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
+{
+	return DN_voxelGPU_to_voxel(DN_get_compressed_voxel(map, chunkPos, localPos));
+}
+
+DNvoxelGPU DN_get_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
+{
+	return map->chunks[map->map[DN_FLATTEN_INDEX(chunkPos, map->mapSize)].index].voxels[localPos.x][localPos.y][localPos.z];
+}
+
+void DN_set_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxel voxel)
+{
+	DN_set_compressed_voxel(map, chunkPos, localPos, DN_voxel_to_voxelGPU(voxel));
+}
+
+void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxelGPU voxel)
+{
+	//add new chunk if the requested chunk doesn't yet exist:
+	unsigned int mapIndex = DN_FLATTEN_INDEX(chunkPos, map->mapSize);
+	if(map->map[mapIndex].flag == 0)
+		DN_add_chunk(map, chunkPos);
+	
+	unsigned int chunkIndex = map->map[mapIndex].index;
+
+	//change number of voxels in map:
+	unsigned int oldMat = map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo & 0xFF;
+	unsigned int newMat = voxel.albedo & 0xFF;
+
+	if(oldMat == 255 && newMat < 255) //if old voxel was empty and new one is not, increment the number of voxels
+		map->chunks[chunkIndex].numVoxels++;
+	else if(oldMat < 255 && newMat == 255) //if old voxel was not empty and new one is, decrement the number of voxels
+	{
+		map->chunks[chunkIndex].numVoxels--;
+
+		//check if the chunk should be removed:
+		if(map->chunks[chunkIndex].numVoxels <= 0)
+		{
+			DN_remove_chunk(map, chunkPos);
+			return;
+		}
+	}
+
+	//actually set new voxel:
+	map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z] = voxel;
+	map->chunks[chunkIndex].updated = 1;
+}
+
+void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
+{
+	//change number of voxels in map (only if old voxel was solid)
+	unsigned int chunkIndex = map->map[DN_FLATTEN_INDEX(chunkPos, map->mapSize)].index;
+	if(map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo & 0xFF < 255)
+	{
+		map->chunks[chunkIndex].numVoxels--;
+
+		//remove chunk if no more voxels exist:
+		if(map->chunks[chunkIndex].numVoxels <= 0)
+		{
+			DN_remove_chunk(map, chunkPos);
+			return;
+		}
+	}
+
+	//clear voxel:
+	map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX; 
+}
+
+bool DN_does_chunk_exist(DNmap* map, DNivec3 pos)
+{
+	return map->map[DN_FLATTEN_INDEX(pos, map->mapSize)].flag == 1;
+}
+
+bool DN_does_voxel_exist(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
+{
+	unsigned int material = DN_get_compressed_voxel(map, chunkPos, localPos).albedo & 0xFF;
+	return material < 255;
 }
 
 /*DNvoxelChunkHandle DN_get_voxel_chunk_handle(DNivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
@@ -875,14 +926,14 @@ bool DN_does_voxel_exist(unsigned int chunk, DNivec3 localPos) //returns true if
 	DNvoxelGPU voxel = DN_get_voxel(chunk, localPos);
 	unsigned int material = voxel.albedo & 0xFF;
 	return material < 255;
-}
+}*/
 
 static int sign(float num)
 {
 	return (num > 0.0f) ? 1 : ((num < 0.0f) ? -1 : 0);
 }
 
-bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal)
+bool DN_step_voxel_map(DNmap* map, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal)
 {
 	*hitNormal = (DNivec3){-1000, -1000, -1000};
 
@@ -907,23 +958,23 @@ bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNiv
 	while(numSteps < maxSteps)
 	{
 		//check if in bounds:
-		DNivec3 mapPos = {pos.x / DN_CHUNK_SIZE.x, pos.y / DN_CHUNK_SIZE.y, pos.z / DN_CHUNK_SIZE.z};
+		DNivec3 chunkPos;
+		DNivec3 localPos;
+		DN_separate_position(pos, &chunkPos, &localPos);
+
 		if(pos.x < 0)
-			mapPos.x--;
+			chunkPos.x--;
 		if(pos.y < 0)
-			mapPos.y--;
+			chunkPos.y--;
 		if(pos.z < 0)
-			mapPos.z--;
+			chunkPos.z--;
 
-		if(DN_in_voxel_map_bounds(mapPos))
+		if(DN_in_map_bounds(map, chunkPos))
 		{
-			DNvoxelChunkHandle mapTile = DN_get_voxel_chunk_handle(mapPos);
-			DNivec3 localPos = {pos.x % DN_CHUNK_SIZE.x, pos.y % DN_CHUNK_SIZE.y, pos.z % DN_CHUNK_SIZE.z};
-
 			//check if voxel exists:
-			if(mapTile.flag == 1 && DN_does_voxel_exist(mapTile.index, localPos))
+			if(DN_does_chunk_exist(map, chunkPos) && DN_does_voxel_exist(map, chunkPos, localPos))
 			{
-				*hitVoxel = DN_voxelGPU_to_voxel(DN_get_voxel(mapTile.index, localPos));
+				*hitVoxel = DN_get_voxel(map, chunkPos, localPos);
 				*hitPos = pos;
 				return true;
 			}
@@ -961,43 +1012,15 @@ bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNiv
 	}
 
 	return false;
-}*/
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-//STATIC UTIL FUNCTIONS:
-
-static bool _DN_gen_shader_storage_buffer(unsigned int* dest, size_t size)
-{
-	unsigned int buffer;
-	glGenBuffers(1, &buffer);
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, size, NULL, GL_DYNAMIC_DRAW); //allocate
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{	
-		glDeleteBuffers(1, &buffer);
-		return false;
-	}
-
-	//glBindBufferBase(GL_SHADER_STORAGE_BUFFER, binding, buffer); //bind to 0th index buffer binding, also defined in the shader
-
-	*dest = buffer;
-
-	return true;
 }
 
-static void _DN_clear_chunk(DNmap* map, unsigned int index)
-{
-	map->chunks[index].pos = (DNuvec4){0, 0, 0, 0};
-	map->chunks[index].updated = false;
-	map->chunks[index].numVoxels = 0;
+//--------------------------------------------------------------------------------------------------------------------------------//
+//GENERAL UTILITY:
 
-	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
-		for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
-			for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
-			{
-				map->chunks[index].voxels[x][y][z].albedo = UINT32_MAX;
-				map->chunks[index].indirectLight[x][y][z] = (DNvec4){0, 0, 0, 0};
-			}
+void DN_separate_position(DNivec3 pos, DNivec3* chunkPos, DNivec3* localPos)
+{
+	*chunkPos = (DNivec3){pos.x / DN_CHUNK_SIZE.x, pos.y / DN_CHUNK_SIZE.y, pos.z / DN_CHUNK_SIZE.z};
+	*localPos = (DNivec3){pos.x % DN_CHUNK_SIZE.x, pos.y % DN_CHUNK_SIZE.y, pos.z % DN_CHUNK_SIZE.z};
 }
 
 static GLuint _DN_encode_uint_RGBA(DNuvec4 val)
@@ -1017,4 +1040,71 @@ static DNuvec4 _DN_decode_uint_RGBA(GLuint val)
 	res.z = (val >> 8) & 0xFF;
 	res.w = (val) & 0xFF;
 	return res;
+}
+
+DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel)
+{
+	DNvoxelGPU res;
+	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
+	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
+	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
+	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.mask & 0xFF};
+
+	res.albedo = _DN_encode_uint_RGBA(albedo);
+	res.normal = _DN_encode_uint_RGBA(normal);
+	res.directLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, (voxel.mask >> 8) & 0xFF});
+	res.specLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, 0});
+
+	return res;
+}
+
+DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel)
+{
+	DNvoxel res;
+	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
+	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
+	DNuvec4 directLight = _DN_decode_uint_RGBA(voxel.directLight);
+
+	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
+	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
+	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
+	res.material = albedo.w;
+	res.mask = normal.w | (directLight.w << 8);
+
+	return res;
+}
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//STATIC UTIL FUNCTIONS:
+
+static bool _DN_gen_shader_storage_buffer(unsigned int* dest, size_t size)
+{
+	unsigned int buffer;
+	glGenBuffers(1, &buffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer); //bind
+	glBufferData(GL_SHADER_STORAGE_BUFFER, size, NULL, GL_DYNAMIC_DRAW); //allocate
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{	
+		glDeleteBuffers(1, &buffer);
+		return false;
+	}
+
+	*dest = buffer;
+
+	return true;
+}
+
+static void _DN_clear_chunk(DNmap* map, unsigned int index)
+{
+	map->chunks[index].pos = (DNuvec4){0, 0, 0, 0};
+	map->chunks[index].updated = false;
+	map->chunks[index].numVoxels = 0;
+
+	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
+		for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
+			for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+			{
+				map->chunks[index].voxels[x][y][z].albedo = UINT32_MAX;
+				map->chunks[index].indirectLight[x][y][z] = (DNvec4){0, 0, 0, 0};
+			}
 }

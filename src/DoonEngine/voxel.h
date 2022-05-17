@@ -215,16 +215,8 @@ bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
 //Sets the voxel lighting parameters, controls how the scene looks overall
 //void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float ambientLightStrength, unsigned int diffuseBounceLimit, unsigned int specBounceLimit, float shadowSoftness);
 
-//Sends all of the materials in the given range (inclusive), needed to see materials visually updated
-void DN_set_voxel_materials(DNmaterialHandle min, DNmaterialHandle max);
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-//GENERAL UTILITY:
-
-//Compresses a voxel
-DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel);
-//Decompresses a voxel
-DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel);
+//Uploads materials from dnMaterials to the gpu so their effects can be visually seen
+void DN_set_voxel_materials(DNmaterialHandle min, unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:
@@ -233,14 +225,36 @@ DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel);
 bool DN_in_map_bounds(DNmap* map, DNivec3 pos);
 //Returns whether or not a given chunk position is inside the chunk bounds
 bool DN_in_chunk_bounds(DNivec3 pos);
-//Returns the map tile at the given map position. DOESN'T DO ANY BOUNDS CHECKING
-//DNvoxelChunkHandle DN_get_voxel_chunk_handle(DNivec3 pos);
-//Returns the voxel at the given chunk position. DOESN'T DO ANY BOUNDS CHECKING
-//DNvoxelGPU DN_get_voxel(unsigned int chunkIndex, DNivec3 pos); //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
-//Returns whether or not the voxel at the given chunk position is solid 
-//bool DN_does_voxel_exist(unsigned int chunkIndex, DNivec3 localPos);
+
+//Returns a voxel from the map. Does NOT do any bounds checking. Does NOT check if the requested chunk is loaded.
+DNvoxel DN_get_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
+//Identical to DN_get_voxel(), but returns a compressed voxel instead. Does NOT do any bounds checking. Does NOT check if the requested chunk is loaded.
+DNvoxelGPU DN_get_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
+
+//Sets a voxel in the map, may cause memory allocations. Does NOT do any bounds checking.
+void DN_set_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxel voxel);
+//Identical to DN_set_voxel(), but allows you to pass in a compressed voxel instead. Does NOT do any bounds checking.
+void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxelGPU voxel);
+//Removes a voxel from the map. Does NOT do any bounds checking.
+void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
+
+//Returns true if the chunk at the given position is loaded, false otherwise. Does NOT do any bounds checking.
+bool DN_does_chunk_exist(DNmap* map, DNivec3 pos);
+//Returns true if the voxel at the given position is not empty, false otherwise. Does NOT do any bounds checking. Does NOT check if the requested chunk is loaded.
+bool DN_does_voxel_exist(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
 
 //Casts a ray into the voxel map and returns whether or not a voxel was hit. If one was hit, data about it is stored in the pointer parameters
-//bool DN_step_voxel_map(DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
+bool DN_step_voxel_map(DNmap* map, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//GENERAL UTILITY:
+
+//Separates a global position into a chunk and local position. chunkPos = pos / CHUNK_SIZE, localPos = pos % CHUNK_SIZE
+void DN_separate_position(DNivec3 pos, DNivec3* chunkPos, DNivec3* localPos);
+
+//Compresses a voxel
+DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel);
+//Decompresses a voxel
+DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel);
 
 #endif

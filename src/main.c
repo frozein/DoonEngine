@@ -186,24 +186,17 @@ int main()
 	}
 
 	DNmap* testMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, 1.0f, tempMapLength);
+	testMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 
 	//load model:
 	//---------------------------------
-
-	/*for(int z = 0; z < testMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
-		for(int y = 0; y < testMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
-			for(int x = 0; x < testMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
-			{
-				DNivec3 mapPos = {x / 8, y / 8, z / 8};
-				int mapIndex = DN_FLATTEN_INDEX(mapPos, testMap->mapSize);
-				testMap->map[mapIndex].index = mapIndex;
-				testMap->map[mapIndex].flag = 1;
-			}*/
-
 	DNvoxelModel model;
 	DN_load_vox_file("tree.vox", &model, 0);
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_world(testMap, model, (DNivec3){0, 0, 0});
+
+	//sync with gpu:
+	//---------------------------------
 	DN_sync_gpu(testMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 
 	//generate voxel data (for testing with sphere):
@@ -241,7 +234,7 @@ int main()
 	dnVoxelMaterials[0].emissive = false;
 	dnVoxelMaterials[0].opacity = 1.0f;
 	dnVoxelMaterials[0].specular = 0.0f;
-	DN_set_voxel_materials(0, 0);
+	DN_set_voxel_materials(0, 1);
 
 	//main loop:
 	//---------------------------------

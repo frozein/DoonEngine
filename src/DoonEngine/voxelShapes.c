@@ -170,6 +170,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			{
 				DNvec3 toCenter = {xP - xC, yP - yC, zP - zC};
 				float dist = DN_vec3_dot(toCenter, toCenter);
+				dist *= dist; //reduces artifacts at the cost of some smoothness
 				toCenter = DN_vec3_scale(toCenter, 1.0f / dist);
 				sum = DN_vec3_add(sum, toCenter);
 			}
@@ -205,13 +206,8 @@ void DN_place_model_into_world(DNmap* map, DNvoxelModel model, DNivec3 pos)
 
 			if(DN_in_map_bounds(map, chunkPos))
 			{
-				int iWorld = DN_FLATTEN_INDEX(chunkPos, map->mapSize);
-				if(map->map[iWorld].flag == 0)
-				{
-					DN_add_chunk(map, chunkPos);
-				}
-				//map->map[iWorld].flag = 1;
-				map->chunks[map->map[iWorld].index].voxels[worldPos.x % DN_CHUNK_SIZE.x][worldPos.y % DN_CHUNK_SIZE.y][worldPos.z % DN_CHUNK_SIZE.z] = model.voxels[iModel];
+				DNivec3 localPos = {worldPos.x % DN_CHUNK_SIZE.x, worldPos.y % DN_CHUNK_SIZE.y, worldPos.z % DN_CHUNK_SIZE.z};
+				DN_set_compressed_voxel(map, chunkPos, localPos, model.voxels[iModel]);
 			}
 		}
 	}
