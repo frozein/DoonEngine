@@ -14,6 +14,9 @@
 //the maximum material index that can be used:
 #define DN_MAX_VOXEL_MATERIALS 256
 
+//flattens a 3D vector position into a 1D array index given the dimensions of the array
+#define DN_FLATTEN_INDEX(p, s) (p.x) + (s.x) * ((p.y) + (p.z) * (s.y))
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //a single voxel
@@ -141,6 +144,15 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, floa
 void DN_delete_map(DNmap* map);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
+//DRAWING:
+
+//Draws the voxels to the texture
+void DN_draw_voxels(DNmap* map);
+
+//Updates the lighting on every chunk currently in a map's lightingRequests. If desired, you can supply an offset and maximum number of chunks to update, otherwise, set these parameters to 0. The current time must also be supplied
+void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num, float time);
+
+//--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:
 
 //Call in order to allocate space for a chunk. Should be called whenever a chunk in a non-streamable map is no longer empty (flag was 0). Returns the index to the new chunk.
@@ -152,68 +164,19 @@ void DN_remove_chunk(DNmap* map, DNivec3 pos);
 void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//UPDATING/DRAWING:
+//MAP SETTINGS:
 
-//Updates all of the GPU-side voxel memory, if autoResize is true, this will automatically resize the gpu-side chunkBuffer and max lighting requests to fit the number needed
-//unsigned int DN_stream_voxel_chunks(bool updateLighting, bool autoResize);
-//Sets a single chunk to be updated on the GPU. Call when a chunk has been edited. camPos is needed so lighting can be updated instantly (if bool is set)
-//void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLighting, DNvec3 camPos, float time);
-
-//Draws the voxels to the texture
-void DN_draw_voxels(DNmap* map);
-
-//Updates the lighting on every chunk currently in a map's lightingRequests. If desired, you can supply an offset and maximum number of chunks to update, otherwise, set these parameters to 0. The current time must also be supplied
-void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num, float time);
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-//CPU-SIDE MAP SETTINGS:
-
-//Returns the current texture size. Returns true on success, false on failure
-//DNuvec2 DN_voxel_texture_size();
 //Sets the current texture size. Returns true on success, false on failure
-//bool DN_set_voxel_texture_size(DNuvec2 size);
+bool DN_set_voxel_texture_size(DNmap* map, DNuvec2 size);
 
-//Returns the current map size (in chunks)
-//DNuvec3 DN_voxel_map_size();
 //Sets the current map size (in chunks). Returns true on success, false on failure
-//bool DN_set_voxel_map_size(DNuvec3 size);
-
-//Returns the current maximum number of chunks
-//unsigned int DN_max_voxel_chunks();
-//Returns the current number of chunks in use
-//unsigned int DN_current_voxel_chunks();
+bool DN_set_voxel_map_size(DNmap* map, DNuvec3 size);
 
 //Sets the current maximum number of chunks. Returns true on success, false on failure
 bool DN_set_max_chunks(DNmap* map, unsigned int num);
 
 //Sets the current maximum number of lighting updates the map can hold at once. Returns true on success, false on failure
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
-
-//Returns whether or not auto resize is enabled for 
-//bool DN_voxel_auto_chunk_resize();
-
-//void DN_set_voxel_auto_chunk_resize();
-
-//--------------------------------------------------------------------------------------------------------------------------------//
-//GPU-SIDE MAP SETTINGS:
-
-//Returns the current map size on the GPU (in chunks)
-//DNuvec3 DN_voxel_map_size_gpu();
-//Sets the current map size on the GPU (in chunks). Returns true on success, false on failure
-//bool DN_set_voxel_map_size_gpu(DNuvec3 size);
-
-//Returns the current maximum number of chunks the GPU can store at once
-//unsigned int DN_max_voxel_chunks_gpu();
-//Sets the current maximum number of chunks the GPU can store at once. Returns true on success, false on failure
-//bool DN_set_max_voxel_chunks_gpu(unsigned int num);
-
-//Returns the current maximum number of lighting updates the GPU can process at once (in chunks)
-//unsigned int DN_max_voxel_lighting_requests();
-//Sets the current maximum number of lighting updates the GPU can process at once (in chunks). Returns true on success, false on failure
-//bool DN_set_max_voxel_lighting_requests(unsigned int num);
-
-//Sets the voxel lighting parameters, controls how the scene looks overall
-//void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float ambientLightStrength, unsigned int diffuseBounceLimit, unsigned int specBounceLimit, float shadowSoftness);
 
 //Uploads materials from dnMaterials to the gpu so their effects can be visually seen
 void DN_set_voxel_materials(DNmaterialHandle min, unsigned int num);
@@ -251,6 +214,9 @@ bool DN_step_voxel_map(DNmap* map, DNvec3 rayDir, DNvec3 rayPos, unsigned int ma
 
 //Separates a global position into a chunk and local position. chunkPos = pos / CHUNK_SIZE, localPos = pos % CHUNK_SIZE
 void DN_separate_position(DNivec3 pos, DNivec3* chunkPos, DNivec3* localPos);
+
+//Returns the camera's direction given its orientation (expressed as {pitch, yaw, roll}).
+DNvec3 DN_cam_dir(DNvec3 orient);
 
 //Compresses a voxel
 DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel);

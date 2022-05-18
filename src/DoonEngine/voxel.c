@@ -200,6 +200,7 @@ void DN_delete_map(DNmap* map)
 
 	DN_FREE(map->map);
 	DN_FREE(map->chunks);
+	DN_FREE(map);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -483,27 +484,6 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests)
 	return numChunksToUpdate;
 }*/
 
-/*void DN_update_voxel_chunk(DNivec3* positions, unsigned int num, bool updateLighting, DNvec3 camPos, float time)
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer);
-
-	for(int i = 0; i < num; i++)
-		for(int j = 0; j < maxChunksGPU; j++)
-		{
-			DNivec3 pos = positions[i];
-			DNivec4 bufferPos = chunkBufferLayout[j];
-			if(bufferPos.x == pos.x && bufferPos.y == pos.y && bufferPos.z == pos.z)
-			{
-				glBufferSubData(GL_SHADER_STORAGE_BUFFER, j * sizeof(DNvoxelChunk), halfChunkSize, &dnVoxelChunks[DN_FLATTEN_INDEX(pos, mapSize)]);
-				dnVoxelLightingRequests[i] = (DNivec4){pos.x, pos.y, pos.z, 0};
-				break;
-			}
-		}
-
-	if(updateLighting)
-		DN_update_voxel_lighting(num, 0, camPos, time);
-}*/
-
 void DN_draw_voxels(DNmap* map)
 {
 	float aspectRatio = (float)map->textureSize.y / (float)map->textureSize.x;
@@ -545,23 +525,6 @@ void DN_draw_voxels(DNmap* map)
 
 void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num, float time)
 {
-	/*if(numChunks > maxLightingRequests)
-	{
-		DN_ERROR_LOG("WARNING - NUM CHUNKS REQUESTED TO BE UPDATED IS GREATER THAN THE MAXIMUM, UPDATING THE MAX NUMBER INSTEAD\n");
-		numChunks = maxLightingRequests;
-	}
-
-	DN_program_activate(lightingProgram);
-	DN_program_uniform_vec3 (lightingProgram, "camPos", camPos);
-	DN_program_uniform_float(lightingProgram, "time", time);
-
-	glUniform3uiv(glGetUniformLocation(lightingProgram, "mapSize"), 1, (GLuint*)&mapSize);
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNivec4) * numChunks, &dnVoxelLightingRequests[offset]);
-
-	glDispatchCompute(numChunks, 1, 1);*/
-
 	glUseProgram(lightingProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
@@ -579,7 +542,7 @@ void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num,
 			newSize *= 2;
 
 		DN_ERROR_LOG("NOTE - RESIZING LIGHTING REQUESTS BUFFER TO ACCOMODATE %zi REQUESTS\n", newSize);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, newSize * sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, newSize * sizeof(DNuvec4), NULL, GL_DYNAMIC_DRAW);
 		if(glGetError() == GL_OUT_OF_MEMORY)
 		{
 			DN_ERROR_LOG("ERROR - FAILED TO RESIZE LIGHTING REQUESTS BUFFER\n");
@@ -605,7 +568,74 @@ void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num,
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//CPU-SIDE MAP SETTINGS:
+//MAP SETTINGS:
+
+bool DN_set_voxel_texture_size(DNmap* map, DNuvec2 size)
+{
+	size.x += WORKGROUP_SIZE - size.x % WORKGROUP_SIZE;
+	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
+
+	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		DN_ERROR_LOG("ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
+		return false;
+	}
+
+	map->textureSize = size;
+	return true;
+}
+
+bool DN_set_voxel_map_size(DNmap* map, DNuvec3 size)
+{
+	//allocate new map:
+	DNvoxelChunkHandle* newMap = DN_MALLOC(sizeof(DNvoxelChunkHandle) * size.x * size.y * size.z);
+	if(!newMap)
+	{
+		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
+		return false;
+	}
+
+	//loop over and copy map data:
+	for(int z = 0; z < size.z; z++)
+		for(int y = 0; y < size.y; y++)
+			for(int x = 0; x < size.x; x++)
+			{
+				DNivec3 pos = {x, y, z};
+
+				int oldIndex = DN_FLATTEN_INDEX(pos, map->mapSize);
+				int newIndex = DN_FLATTEN_INDEX(pos, size);
+
+				newMap[newIndex] = DN_in_map_bounds(map, pos) ? map->map[oldIndex] : (DNvoxelChunkHandle){0};
+			}
+
+	DN_FREE(map->map);
+	map->map = newMap;
+	map->mapSize = size;
+
+	//remove chunks that are no longer indexed:
+	for(int i = 0; i < map->chunkCap; i++)
+	{
+		DNuvec4 pos = map->chunks[i].pos;
+		if(pos.w == 0)
+			continue;
+
+		if(!DN_in_map_bounds(map, (DNivec3){pos.x, pos.y, pos.z}))
+			_DN_clear_chunk(map, i);
+	}
+
+	//allocate new gpu buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNvoxelChunkHandle) * size.x * size.y * size.z, map->map, GL_DYNAMIC_DRAW);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		DN_ERROR_LOG("ERROR - UNABLE TO RESIZE MAP BUFFER\n");
+		return false;
+	}
+
+	return true;
+}
 
 bool DN_set_max_chunks(DNmap* map, unsigned int num)
 {
@@ -637,176 +667,8 @@ bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 	return true;
 }
 
-/*DNuvec2 DN_voxel_texture_size()
-{
-	return textureSize;
-}
-
-bool DN_set_voxel_texture_size(DNuvec2 size)
-{
-	size.x += WORKGROUP_SIZE - size.x % WORKGROUP_SIZE;
-	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
-
-	DN_texture_bind(finalTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
-		return false;
-	}
-
-	textureSize = size;
-	return true;
-}
-
-DNuvec3 DN_voxel_map_size()
-{
-	return mapSize;
-}
-
-bool DN_set_voxel_map_size(DNuvec3 size)
-{
-	DNvoxelChunkHandle* newMap = DN_MALLOC(sizeof(DNvoxelChunkHandle) * size.x * size.y * size.z);
-	if(!newMap)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
-		return false;
-	}	
-
-	int oldMaxIndex = mapSize.x * mapSize.y * mapSize.z;
-	for(int z = 0; z < size.z; z++)
-		for(int y = 0; y < size.y; y++)
-			for(int x = 0; x < size.x; x++)
-			{
-				int oldIndex = x + mapSize.x * (y + z * mapSize.y);
-				int newIndex = x + size.x * (y + z * size.y);
-
-				newMap[newIndex].flag  = oldIndex < oldMaxIndex ? dnVoxelMap[oldIndex].flag  : 0;
-			}
-
-	DN_FREE(dnVoxelMap);
-	dnVoxelMap = newMap;
-	mapSize = size;
-	return true;
-}
-
-unsigned int DN_max_voxel_chunks()
-{
-	return maxChunks;
-}
-
-unsigned int DN_current_voxel_chunks()
-{
-	return 0; //TODO implement
-}
-
-bool DN_set_max_voxel_chunks(unsigned int num)
-{
-	dnVoxelChunks = DN_REALLOC(dnVoxelChunks, sizeof(DNvoxelChunk) * num);
-	if(!dnVoxelChunks)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL CHUNKS\n");
-		return false;
-	}
-
-	maxChunks = num;
-	return true;
-}*/
-
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU-SIDE MAP SETTINGS:
-
-/*DNuvec3 DN_voxel_map_size_gpu()
-{
-	return mapSizeGPU;
-}
-
-bool DN_set_voxel_map_size_gpu(DNuvec3 size)
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, mapBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNivec4) * size.x * size.y * size.x, NULL, GL_DYNAMIC_DRAW); //allocate
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{	
-		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL MAP BUFFER\n");
-		return false;
-	}
-
-	mapSizeGPU = size;
-	return true;
-}
-
-unsigned int DN_max_voxel_chunks_gpu()
-{
-	return maxChunksGPU;
-}
-
-bool DN_set_max_voxel_chunks_gpu(unsigned int num)
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, chunkBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNvoxelChunk) * num, NULL, GL_DYNAMIC_DRAW); //allocate
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{	
-		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL CHUNK BUFFER\n");
-		return false;
-	}
-
-	chunkBufferLayout = DN_REALLOC(chunkBufferLayout, sizeof(DNivec4) * num);
-	if(!chunkBufferLayout)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE MEMORY FOR VOXEL MATERIALS");
-		return false;
-	}
-
-	if(num > maxChunksGPU)
-	{
-		for(int i = num - maxChunksGPU; i < num; i++)
-			chunkBufferLayout[i] = (DNivec4){-1, -1, -1, -1};
-	}
-
-	maxChunksGPU = num;
-	return true;
-}
-
-unsigned int DN_max_voxel_lighting_requests()
-{
-	return maxLightingRequests;
-}
-
-bool DN_set_max_voxel_lighting_requests(unsigned int num)
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer); //bind
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNivec4) * num, NULL, GL_DYNAMIC_DRAW); //allocate
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{	
-		DN_ERROR_LOG("ERROR - FAILED TO RESIZE VOXEL LIGHTING REQUEST BUFFER\n");
-		return false;
-	}
-
-	dnVoxelLightingRequests = DN_REALLOC(dnVoxelLightingRequests, sizeof(DNivec4) * num);
-	if(!dnVoxelLightingRequests)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO REALLOCATE VOXEL LIGHTING REQUESTS\n");
-		return false;
-	}
-
-	maxLightingRequests = num;
-	return true;
-}
-
-void DN_set_voxel_lighting_parameters(DNvec3 sunDir, DNvec3 sunStrength, float ambientLightStrength, unsigned int diffuseBounceLimit, unsigned int specBounceLimit, float shadowSoftness)
-{
-	DN_program_activate(lightingProgram);
-	DN_program_uniform_vec3 (lightingProgram, "sunDir", DN_vec3_normalize(sunDir));
-	DN_program_uniform_vec3 (lightingProgram, "sunStrength", sunStrength);
-	DN_program_uniform_float(lightingProgram, "ambientStrength", ambientLightStrength);
-	DN_program_uniform_uint (lightingProgram, "diffuseBounceLimit", diffuseBounceLimit);
-	DN_program_uniform_uint (lightingProgram, "specularBounceLimit", specBounceLimit);
-	DN_program_uniform_float(lightingProgram, "shadowSoftness", shadowSoftness);
-
-	DN_program_activate(finalProgram);
-	DN_program_uniform_float(finalProgram, "ambientStrength", ambientLightStrength);
-	DN_program_uniform_vec3 (finalProgram, "sunStrength", sunStrength);
-}*/
 
 void DN_set_voxel_materials(DNmaterialHandle min, unsigned int num)
 {
@@ -884,7 +746,7 @@ void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
 {
 	//change number of voxels in map (only if old voxel was solid)
 	unsigned int chunkIndex = map->map[DN_FLATTEN_INDEX(chunkPos, map->mapSize)].index;
-	if(map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo & 0xFF < 255)
+	if(DN_does_voxel_exist(map, chunkPos, localPos))
 	{
 		map->chunks[chunkIndex].numVoxels--;
 
@@ -898,6 +760,7 @@ void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
 
 	//clear voxel:
 	map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX; 
+	map->chunks[chunkIndex].updated = 1;
 }
 
 bool DN_does_chunk_exist(DNmap* map, DNivec3 pos)
@@ -910,23 +773,6 @@ bool DN_does_voxel_exist(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
 	unsigned int material = DN_get_compressed_voxel(map, chunkPos, localPos).albedo & 0xFF;
 	return material < 255;
 }
-
-/*DNvoxelChunkHandle DN_get_voxel_chunk_handle(DNivec3 pos) //returns the value of the map at a position DOESNT DO ANY BOUNDS CHECKING
-{
-	return dnVoxelMap[DN_FLATTEN_INDEX(pos, mapSize)];
-}
-
-DNvoxelGPU DN_get_voxel(unsigned int chunk, DNivec3 pos) //returns the voxel of a chunk at a position DOESNT DO ANY BOUNDS CHECKING
-{
- 	return dnVoxelChunks[chunk].voxels[pos.x][pos.y][pos.z];
-}
-
-bool DN_does_voxel_exist(unsigned int chunk, DNivec3 localPos) //returns true if the voxel at the position is solid (not empty)
-{
-	DNvoxelGPU voxel = DN_get_voxel(chunk, localPos);
-	unsigned int material = voxel.albedo & 0xFF;
-	return material < 255;
-}*/
 
 static int sign(float num)
 {
@@ -1021,6 +867,12 @@ void DN_separate_position(DNivec3 pos, DNivec3* chunkPos, DNivec3* localPos)
 {
 	*chunkPos = (DNivec3){pos.x / DN_CHUNK_SIZE.x, pos.y / DN_CHUNK_SIZE.y, pos.z / DN_CHUNK_SIZE.z};
 	*localPos = (DNivec3){pos.x % DN_CHUNK_SIZE.x, pos.y % DN_CHUNK_SIZE.y, pos.z % DN_CHUNK_SIZE.z};
+}
+
+DNvec3 DN_cam_dir(DNvec3 orient)
+{
+	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, orient));
+	return DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 }
 
 static GLuint _DN_encode_uint_RGBA(DNuvec4 val)

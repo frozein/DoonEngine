@@ -33,6 +33,9 @@ void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum s
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+//map:
+DNmap* activeMap;
+
 //screen dimensions:
 GLuint SCREEN_W = 1920;
 GLuint SCREEN_H = 1080;
@@ -46,9 +49,10 @@ unsigned int viewMode = 0;
 
 float pitch = 0.0f;
 float yaw = 0.0f;
+float fov = 0.8f;
+
 float lastX = 400.0f, lastY = 300.0f;
 bool firstMouse = true;
-float fov = 0.8f;
 
 float deltaTime = 0.0f;
 
@@ -185,19 +189,20 @@ int main()
 		return -1;
 	}
 
-	DNmap* testMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, 1.0f, tempMapLength);
-	testMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
+	DNmap* treeMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, 1.0f, tempMapLength);
+	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
+	activeMap = treeMap;
 
 	//load model:
 	//---------------------------------
 	DNvoxelModel model;
 	DN_load_vox_file("tree.vox", &model, 0);
 	DN_calculate_model_normals(2, &model);
-	DN_place_model_into_world(testMap, model, (DNivec3){0, 0, 0});
+	DN_place_model_into_world(treeMap, model, (DNivec3){0, 0, 0});
 
 	//sync with gpu:
 	//---------------------------------
-	DN_sync_gpu(testMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
@@ -293,18 +298,18 @@ int main()
 
 		//render voxels to texture:
 		//DN_draw_voxels(camPos, fov, (DNvec3){pitch, yaw, 0.0f}, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
-		testMap->camPos = camPos;
-		testMap->camFOV = fov;
-		testMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
-		testMap->camViewMode = viewMode;
+		treeMap->camPos = camPos;
+		treeMap->camFOV = fov;
+		treeMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
+		treeMap->camViewMode = viewMode;
 
-		//DN_sync_gpu(testMap, DN_READ, DN_REQUEST_VISIBLE);
-		DN_update_voxel_lighting(testMap, 0, 0, glfwGetTime());
-		DN_draw_voxels(testMap);
+		//DN_sync_gpu(treeMap, DN_READ, DN_REQUEST_VISIBLE);
+		DN_update_voxel_lighting(treeMap, 0, 0, glfwGetTime());
+		DN_draw_voxels(treeMap);
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, testMap->glTextureID);
+		glBindTexture(GL_TEXTURE_2D, treeMap->glTextureID);
 		DN_program_activate(quadShader);
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
@@ -317,6 +322,7 @@ int main()
 
 	//clean up and close:
 	//---------------------------------
+	DN_delete_map(treeMap);
 	DN_deinit_voxel_pipeline();
 	glDeleteVertexArrays(1, &quadBuffer);
 	DN_program_free(quadShader);
@@ -359,37 +365,36 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	DNivec3 hitPos;
 	DNivec3 hitNormal;
 
-	/*if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-		if(DN_step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+		if(DN_step_voxel_map(activeMap, DN_cam_dir(activeMap->camOrient), camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
 			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
-			DNivec3 mapPos =   {newPos.x / DN_CHUNK_SIZE.x, newPos.y / DN_CHUNK_SIZE.y, newPos.z / DN_CHUNK_SIZE.z};
-			DNivec3 localPos = {newPos.x % DN_CHUNK_SIZE.x, newPos.y % DN_CHUNK_SIZE.y, newPos.z % DN_CHUNK_SIZE.z};
+			DNivec3 mapPos;
+			DNivec3 localPos;
+			DN_separate_position(newPos, &mapPos, &localPos);
 
-			if(DN_in_voxel_map_bounds(mapPos))
+			if(DN_in_map_bounds(activeMap, mapPos))
 			{
 				DNvoxel newVox;
 				newVox.albedo = (DNvec3){0.0f, 0.0f, 0.0f};
 				newVox.material = 0;
 
-				unsigned int index = DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size());
-
-				dnVoxelMap[index].flag = 1;
-				dnVoxelChunks[index].voxels[localPos.x][localPos.y][localPos.z] = DN_voxel_to_voxelGPU(newVox);
-				DN_update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
+				DN_set_voxel(activeMap, mapPos, localPos, newVox);
+				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 			}
 		}
 
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-		if(DN_step_voxel_map(camFront, camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		if(DN_step_voxel_map(activeMap, DN_cam_dir(activeMap->camOrient), camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			DNivec3 mapPos =   {hitPos.x / DN_CHUNK_SIZE.x, hitPos.y / DN_CHUNK_SIZE.y, hitPos.z / DN_CHUNK_SIZE.z};
-			DNivec3 localPos = {hitPos.x % DN_CHUNK_SIZE.x, hitPos.y % DN_CHUNK_SIZE.y, hitPos.z % DN_CHUNK_SIZE.z};
+			DNivec3 mapPos;
+			DNivec3 localPos;
+			DN_separate_position(hitPos, &mapPos, &localPos);
 
-			dnVoxelChunks[DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size())].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX;
-			DN_update_voxel_chunk(&mapPos, 1, true, camPos, glfwGetTime());
-		}*/
+			DN_remove_voxel(activeMap, mapPos, localPos);
+			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+		}
 }
 
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY)
@@ -445,7 +450,7 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 	const int WORKGROUP_SIZE = 16;
 	ASPECT_RATIO = (float)h / (float)w;
 	glViewport(0, 0, w, h);
-	//DN_set_voxel_texture_size((DNuvec2){w, h});
+	DN_set_voxel_texture_size(activeMap, (DNuvec2){w, h});
 	SCREEN_W = w;
 	SCREEN_H = h;
 }
