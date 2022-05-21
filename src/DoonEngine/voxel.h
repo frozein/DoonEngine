@@ -40,9 +40,11 @@ typedef struct DNvoxelGPU
 //a chunk of voxels, as stored on the GPU
 typedef struct DNvoxelChunk
 {
-	DNuvec4 pos;
+	//TODO: make these GLbools
 
-	GLuint updated;
+	DNivec3 pos;
+	GLuint used; //true or false, uint just for alignment
+	GLuint updated; //true or false, uint just for alignment
 	GLuint numVoxels;
 	DNuvec2 padding;
 
@@ -53,7 +55,7 @@ typedef struct DNvoxelChunk
 //a handle to a voxel chunk, along with some meta-data
 typedef struct DNvoxelChunkHandle
 {
-	GLuint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
+	GLuint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
 	GLuint visible;  //whether or not the voxel is visible to the camera
 	GLuint lastUsed; //the time since the chunk was last used
 	GLuint index;    //the index of the chunk (cpu or gpu side depending on where the handle came from)
@@ -90,16 +92,17 @@ typedef struct DNmap
 	DNuvec3 mapSize; 	    		 //READ ONLY | The size, in DNchunks, of the map
 	DNuvec2 textureSize; 			 //READ ONLY | The size, in pixels, of the texture that the map renders to
 	unsigned int chunkCap;			 //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
+	unsigned int chunkCapGPU; 		 //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
 	unsigned int nextChunk;			 //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
 	unsigned int numLightingRequest; //READ ONLY | The number of chunks to have their lighting updated
 	unsigned int lightingRequestCap; //READ ONLY | The maximum number of chunks that can be stored in lightingRequests
 	bool streamable;				 //READ ONLY | Whether or not this map supports dynamically streaming chunks to the GPU, reducing VRAM usage while reducing performance
-	float streamIndex;				 //READ ONLY | If the map is streamable, specifies how many chunks, in relation to the number of visible chunks, must be stored. For example, if 100 chunks are currently being used by the GPU, and this value is set to 1.5, 150 chunks will be stored on the GPU. Higher values may increase perforance at the cost of VRAM
 
 	//data:
 	DNvoxelChunkHandle* map; 		 //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNvoxelChunk* chunks; 	 		 //READ-WRITE | A pointer to the array of chunks that the map has
 	DNuvec4* lightingRequests;       //READ-WRITE | A pointer to an array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
+	DNivec4* gpuChunkLayout;		 //READ ONLY  | A pointer to an array representing the chunk layout on the GPU, only used for streamable maps. The first 3 components represent what map position the chunk is located at and the 4th component is a bool representing whether the chunk is used or not.
 
 	//camera parameters:
 	DNvec3 camPos; 			  		 //READ-WRITE | The camera's position relative to this map, in DNchunks
@@ -139,7 +142,7 @@ bool DN_init_voxel_pipeline();
 void DN_deinit_voxel_pipeline();
 
 //Creates a new DNmap with the specified parameters. For streamable chunks, minChunks determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. Returns NULL if the map creation failed in any way
-DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, float streamIndex, unsigned int minChunks);
+DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsigned int minChunks);
 //Deletes a DNmap, should be called whenever a map is no longer needed to avoid memory leaks
 void DN_delete_map(DNmap* map);
 

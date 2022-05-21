@@ -33,8 +33,8 @@ struct CompressedVoxel //a compressed voxel
 
 struct Chunk //a chunk of voxels
 {
-	uvec4 pos;
-	
+	ivec3 pos;
+	uint used;	
 	uint updated;
 	uint numVoxels;
 	uvec2 padding;
@@ -46,7 +46,7 @@ struct Chunk //a chunk of voxels
 
 struct ChunkHandle //a handle to a Chunk
 {
-	uint flag;     //0 = does not exist, 1 = exists and loaded, 2 = exists and unloaded, 3 = exists, unloaded, and requested
+	uint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
 	uint visible;  //whether or not the chunk is visible to the camera
 	uint lastUsed; //the time since the chunk was last used
 	uint index;    //the index of the chunk in the chunk buffer
@@ -282,7 +282,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 	{
 		//check if a solid chunk has been hit:
 		ChunkHandle mapTile = get_map_tile(mapPos);
-		if (mapTile.flag == 1)
+		if (mapTile.flag == 2)
 		{
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
@@ -304,13 +304,10 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 				return true;
 			}
 		}
-		else if(mapTile.flag > 1)
+		else if(mapTile.flag != 0)
 		{
 			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-
-			if(map[index].flag != 3)
-				map[index].flag = 3;
-
+			map[index].flag = 3;
 			return false;
 		}
 

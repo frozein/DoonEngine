@@ -189,9 +189,12 @@ int main()
 		return -1;
 	}
 
-	DNmap* treeMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, 1.0f, tempMapLength);
+	DNmap* treeMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, tempMapLength);
 	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-	activeMap = treeMap;
+
+	DNmap* sphereMap = DN_create_map((DNuvec3){30, 30, 30}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 1024);
+	sphereMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
+	activeMap = sphereMap;
 
 	//load model:
 	//---------------------------------
@@ -200,39 +203,41 @@ int main()
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_world(treeMap, model, (DNivec3){0, 0, 0});
 
-	//sync with gpu:
-	//---------------------------------
-	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+
+	//TODO WHEN I GET BACK TO WORKING: FIX CHUNKDATA USED, CREATE SECOND ARRAY OF CHUNKDATA FOR GPU-SIDE
 
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
-	/*for(int z = 0; z < DN_voxel_map_size().z * DN_CHUNK_SIZE.z; z++)
-		for(int y = 0; y < DN_voxel_map_size().y * DN_CHUNK_SIZE.y; y++)
-			for(int x = 0; x < DN_voxel_map_size().x * DN_CHUNK_SIZE.x; x++)
+	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+		for(int y = 0; y < sphereMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
+			for(int x = 0; x < sphereMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
 			{
-				DNivec3 mapPos = {x / 8, y / 8, z / 8};
-				int mapIndex = DN_FLATTEN_INDEX(mapPos, DN_voxel_map_size());
-				dnVoxelMap[mapIndex].index = mapIndex;
-
-				/*if(DN_vec3_distance((vec3){x, y, z}, (vec3){20.5f, 20.5f, 20.5f}) < 12.0f)
+				if(DN_vec3_distance((DNvec3){x, y, z}, (DNvec3){116.0f, 116.0f, 116.0f}) < 116.0f)
 				{
 					DNvoxel vox;
 					vox.material = 0;
-					vox.normal = (vec3){x - 20.5f, y - 20.5f, z - 20.5f};
+					vox.normal = (DNvec3){x - 116.0f, y - 116.0f, z - 116.0f};
 
-					float maxNormal = abs(vox.normal.x);
-					if(abs(vox.normal.y) > maxNormal)
-						maxNormal = abs(vox.normal.y);
-					if(abs(vox.normal.z) > maxNormal)
-						maxNormal = abs(vox.normal.z);
+					float maxNormal = fabs(vox.normal.x);
+					if(fabs(vox.normal.y) > maxNormal)
+						maxNormal = fabs(vox.normal.y);
+					if(fabs(vox.normal.z) > maxNormal)
+						maxNormal = fabs(vox.normal.z);
 
-					vox.normal = DN_vec3_scale(vox.normal, 1 / maxNormal);
-					vox.albedo = (vec3){pow(1.0f, GAMMA), pow(1.0f, GAMMA), pow(0.0f, GAMMA)};
+					vox.normal = DN_vec3_scale(vox.normal, 1.0f / maxNormal);
+					vox.albedo = (DNvec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
-					dnVoxelMap[mapIndex].flag = 1;
-					dnVoxelChunks[mapIndex].voxels[x % 8][y % 8][z % 8] = DN_voxel_to_voxelGPU(vox);
+					DNivec3 chunkPos;
+					DNivec3 localPos;
+					DN_separate_position((DNivec3){x, y, z}, &chunkPos, &localPos);
+					DN_set_voxel(sphereMap, chunkPos, localPos, vox);
 				}
-			}*/
+			}
+
+	//sync with gpu:
+	//---------------------------------
+	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+	DN_sync_gpu(sphereMap, DN_WRITE, DN_REQUEST_NONE);
 
 	//set materials:
 	//---------------------------------
@@ -297,19 +302,19 @@ int main()
 		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);*/
 
 		//render voxels to texture:
-		//DN_draw_voxels(camPos, fov, (DNvec3){pitch, yaw, 0.0f}, viewMode); //TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
-		treeMap->camPos = camPos;
-		treeMap->camFOV = fov;
-		treeMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
-		treeMap->camViewMode = viewMode;
+		//TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
+		activeMap->camPos = camPos;
+		activeMap->camFOV = fov;
+		activeMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
+		activeMap->camViewMode = viewMode;
 
-		//DN_sync_gpu(treeMap, DN_READ, DN_REQUEST_VISIBLE);
-		DN_update_voxel_lighting(treeMap, 0, 0, glfwGetTime());
-		DN_draw_voxels(treeMap);
+		DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
+		DN_update_voxel_lighting(activeMap, 0, 0, glfwGetTime());
+		DN_draw_voxels(activeMap);
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, treeMap->glTextureID);
+		glBindTexture(GL_TEXTURE_2D, activeMap->glTextureID);
 		DN_program_activate(quadShader);
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
@@ -447,6 +452,8 @@ void process_input(GLFWwindow *window)
 
 void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 {
+	printf("hello\n");
+
 	const int WORKGROUP_SIZE = 16;
 	ASPECT_RATIO = (float)h / (float)w;
 	glViewport(0, 0, w, h);
