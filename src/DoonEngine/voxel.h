@@ -24,7 +24,7 @@ typedef struct DNvoxel
 {
 	DNvec3 albedo; //the color
 	DNvec3 normal; //the normal
-	GLuint material; //the material index
+	uint8_t material; //the material index
 	uint16_t mask; //allows you to give each voxel an identifier, perhaps to determine what object it is a part of
 } DNvoxel;
 
@@ -102,7 +102,7 @@ typedef struct DNmap
 	DNvoxelChunkHandle* map; 		 //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNvoxelChunk* chunks; 	 		 //READ-WRITE | A pointer to the array of chunks that the map has
 	DNuvec4* lightingRequests;       //READ-WRITE | A pointer to an array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
-	DNivec4* gpuChunkLayout;		 //READ ONLY  | A pointer to an array representing the chunk layout on the GPU, only used for streamable maps. The first 3 components represent what map position the chunk is located at and the 4th component is a bool representing whether the chunk is used or not.
+	DNivec3* gpuChunkLayout;		 //READ ONLY  | A pointer to an array representing the chunk layout on the GPU, only used for streamable maps. Represents the position in the map that each chunk is.
 
 	//camera parameters:
 	DNvec3 camPos; 			  		 //READ-WRITE | The camera's position relative to this map, in DNchunks
@@ -177,6 +177,8 @@ bool DN_set_voxel_map_size(DNmap* map, DNuvec3 size);
 
 //Sets the current maximum number of chunks. Returns true on success, false on failure
 bool DN_set_max_chunks(DNmap* map, unsigned int num);
+//Sets the current macimum number of chunks on the GPU. Returns true on success, false on failure
+bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
 
 //Sets the current maximum number of lighting updates the map can hold at once. Returns true on success, false on failure
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);

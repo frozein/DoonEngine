@@ -203,9 +203,6 @@ int main()
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_world(treeMap, model, (DNivec3){0, 0, 0});
 
-
-	//TODO WHEN I GET BACK TO WORKING: FIX CHUNKDATA USED, CREATE SECOND ARRAY OF CHUNKDATA FOR GPU-SIDE
-
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
 	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
@@ -386,7 +383,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				newVox.material = 0;
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
-				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+				if(activeMap->streamable)
+					DN_sync_gpu(activeMap, DN_WRITE, DN_REQUEST_NONE);
+				else
+					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 			}
 		}
 
@@ -398,7 +398,10 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			DN_separate_position(hitPos, &mapPos, &localPos);
 
 			DN_remove_voxel(activeMap, mapPos, localPos);
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+			if(activeMap->streamable)
+				DN_sync_gpu(activeMap, DN_WRITE, DN_REQUEST_NONE);
+			else
+				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
 		}
 }
 
