@@ -17,7 +17,7 @@
 typedef struct DNvoxelModel
 {
 	DNuvec3 size;
-	DNvoxelGPU* voxels;
+	DNcompressedVoxel* voxels;
 } DNvoxelModel;
 
 //Loads a model from a magicaVoxel file (.vox). Returns true on success, false on failure

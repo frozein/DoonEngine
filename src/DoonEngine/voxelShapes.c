@@ -108,7 +108,7 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model, DNmaterialHandle ma
 	}
 
 	size_t modelSize = model->size.x * model->size.y * model->size.z;
-	model->voxels = DN_MALLOC(modelSize * sizeof(DNvoxelGPU));
+	model->voxels = DN_MALLOC(modelSize * sizeof(DNcompressedVoxel));
 	for(int i = 0; i < modelSize; i++)
 		model->voxels[i].albedo = UINT32_MAX;
 
@@ -125,7 +125,7 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model, DNmaterialHandle ma
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 		DNivec3 pos2 = {pos.x, pos.z, pos.y};
-		model->voxels[DN_FLATTEN_INDEX(pos2, model->size)] = DN_voxel_to_voxelGPU(vox); //have to invert z and y because magicavoxel has z as the up axis
+		model->voxels[DN_FLATTEN_INDEX(pos2, model->size)] = DN_compress_voxel(vox); //have to invert z and y because magicavoxel has z as the up axis
 	}
 
 	return true;
@@ -146,7 +146,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 
 		DNivec3 center = {xC, yC, zC};
 		int iC = DN_FLATTEN_INDEX(center, model->size);
-		DNvoxel voxC = DN_voxelGPU_to_voxel(model->voxels[iC]);
+		DNvoxel voxC = DN_decompress_voxel(model->voxels[iC]);
 		if(voxC.material == 255)
 			continue;
 
@@ -166,7 +166,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			if(iP == iC)
 				continue;
 
-			if(DN_voxelGPU_to_voxel(model->voxels[iP]).material < 255)
+			if(DN_decompress_voxel(model->voxels[iP]).material < 255)
 			{
 				DNvec3 toCenter = {xP - xC, yP - yC, zP - zC};
 				float dist = DN_vec3_dot(toCenter, toCenter);
@@ -187,7 +187,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 
 		sum = DN_vec3_scale(sum, -1.0f / maxNormal);
 		voxC.normal = sum;
-		model->voxels[iC] = DN_voxel_to_voxelGPU(voxC);
+		model->voxels[iC] = DN_compress_voxel(voxC);
 	}
 }
 
@@ -199,7 +199,7 @@ void DN_place_model_into_world(DNmap* map, DNvoxelModel model, DNivec3 pos)
 	{
 		DNivec3 curPos = {x, y, z};
 		int iModel = DN_FLATTEN_INDEX(curPos, model.size);
-		if(DN_voxelGPU_to_voxel(model.voxels[iModel]).material < 255)
+		if(DN_decompress_voxel(model.voxels[iModel]).material < 255)
 		{
 			DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
 			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE.x, worldPos.y / DN_CHUNK_SIZE.y, worldPos.z / DN_CHUNK_SIZE.z};

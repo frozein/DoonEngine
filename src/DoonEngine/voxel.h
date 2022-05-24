@@ -29,16 +29,16 @@ typedef struct DNvoxel
 } DNvoxel;
 
 //a single voxel, as stored on the GPU
-typedef struct DNvoxelGPU
+typedef struct DNcompressedVoxel
 {
 	GLuint albedo;         //compressed
 	GLuint normal;         //compressed
 	GLuint directLight;    //compressed
 	GLuint specLight;      //compressed
-} DNvoxelGPU;
+} DNcompressedVoxel;
 
 //a chunk of voxels, as stored on the GPU
-typedef struct DNvoxelChunk
+typedef struct DNchunk
 {
 	//TODO: make these GLbools
 
@@ -48,21 +48,21 @@ typedef struct DNvoxelChunk
 	GLuint numVoxels;
 	DNuvec2 padding;
 
-	DNvoxelGPU voxels[8][8][8]; //CHUNK SIZE = 8
+	DNcompressedVoxel voxels[8][8][8]; //CHUNK SIZE = 8
 	DNvec4 indirectLight[8][8][8];
-} DNvoxelChunk;
+} DNchunk;
 
 //a handle to a voxel chunk, along with some meta-data
-typedef struct DNvoxelChunkHandle
+typedef struct DNchunkHandle
 {
 	GLuint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
 	GLuint visible;  //whether or not the voxel is visible to the camera
 	GLuint lastUsed; //the time since the chunk was last used
 	GLuint index;    //the index of the chunk (cpu or gpu side depending on where the handle came from)
-} DNvoxelChunkHandle;
+} DNchunkHandle;
 
 //material properties for a voxel
-typedef struct DNvoxelMaterial
+typedef struct DNmaterial
 {
 	GLuint emissive;
 
@@ -73,10 +73,10 @@ typedef struct DNvoxelMaterial
 	GLuint shininess;
 
 	DNvec3 fill; //needed for alignment
-} DNvoxelMaterial;
+} DNmaterial;
 
 typedef unsigned char DNmaterialHandle;
-extern DNvoxelMaterial* dnVoxelMaterials;
+extern DNmaterial* dnMaterials;
 
 //A structure representing a voxel map, both on the CPU and the GPU
 typedef struct DNmap
@@ -99,8 +99,8 @@ typedef struct DNmap
 	bool streamable;				 //READ ONLY | Whether or not this map supports dynamically streaming chunks to the GPU, reducing VRAM usage while reducing performance
 
 	//data:
-	DNvoxelChunkHandle* map; 		 //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
-	DNvoxelChunk* chunks; 	 		 //READ-WRITE | A pointer to the array of chunks that the map has
+	DNchunkHandle* map; 		 //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
+	DNchunk* chunks; 	 		 //READ-WRITE | A pointer to the array of chunks that the map has
 	DNuvec4* lightingRequests;       //READ-WRITE | A pointer to an array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
 	DNivec3* gpuChunkLayout;		 //READ ONLY  | A pointer to an array representing the chunk layout on the GPU, only used for streamable maps. Represents the position in the map that each chunk is.
 
@@ -137,9 +137,9 @@ typedef enum DNmemOp
 //INITIALIZATION:
 
 //Initializes the entire voxel rendering pipeline. MUST BE CALLED BEFORE ANY OF THE OTHER FUNCTIONS. Returns true on success, false on failure
-bool DN_init_voxel_pipeline();
+bool DN_init();
 //Completely cleans up and deinitializes the voxel pipeline
-void DN_deinit_voxel_pipeline();
+void DN_quit();
 
 //Creates a new DNmap with the specified parameters. For streamable chunks, minChunks determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. Returns NULL if the map creation failed in any way
 DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsigned int minChunks);
@@ -150,10 +150,10 @@ void DN_delete_map(DNmap* map);
 //DRAWING:
 
 //Draws the voxels to the texture
-void DN_draw_voxels(DNmap* map);
+void DN_draw(DNmap* map);
 
 //Updates the lighting on every chunk currently in a map's lightingRequests. If desired, you can supply an offset and maximum number of chunks to update, otherwise, set these parameters to 0. The current time must also be supplied
-void DN_update_voxel_lighting(DNmap* map, unsigned int offset, unsigned int num, float time);
+void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float time);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:
@@ -170,10 +170,10 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests);
 //MAP SETTINGS:
 
 //Sets the current texture size. Returns true on success, false on failure
-bool DN_set_voxel_texture_size(DNmap* map, DNuvec2 size);
+bool DN_set_texture_size(DNmap* map, DNuvec2 size);
 
 //Sets the current map size (in chunks). Returns true on success, false on failure
-bool DN_set_voxel_map_size(DNmap* map, DNuvec3 size);
+bool DN_set_map_size(DNmap* map, DNuvec3 size);
 
 //Sets the current maximum number of chunks. Returns true on success, false on failure
 bool DN_set_max_chunks(DNmap* map, unsigned int num);
@@ -184,7 +184,7 @@ bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
 
 //Uploads materials from dnMaterials to the gpu so their effects can be visually seen
-void DN_set_voxel_materials(DNmaterialHandle min, unsigned int num);
+void DN_set_materials(DNmaterialHandle min, unsigned int num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:
@@ -197,12 +197,12 @@ bool DN_in_chunk_bounds(DNivec3 pos);
 //Returns a voxel from the map. Does NOT do any bounds checking. Does NOT check if the requested chunk is loaded.
 DNvoxel DN_get_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
 //Identical to DN_get_voxel(), but returns a compressed voxel instead. Does NOT do any bounds checking. Does NOT check if the requested chunk is loaded.
-DNvoxelGPU DN_get_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
+DNcompressedVoxel DN_get_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
 
 //Sets a voxel in the map, may cause memory allocations. Does NOT do any bounds checking.
 void DN_set_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxel voxel);
 //Identical to DN_set_voxel(), but allows you to pass in a compressed voxel instead. Does NOT do any bounds checking.
-void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNvoxelGPU voxel);
+void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNcompressedVoxel voxel);
 //Removes a voxel from the map. Does NOT do any bounds checking.
 void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
 
@@ -212,7 +212,7 @@ bool DN_does_chunk_exist(DNmap* map, DNivec3 pos);
 bool DN_does_voxel_exist(DNmap* map, DNivec3 chunkPos, DNivec3 localPos);
 
 //Casts a ray into the voxel map and returns whether or not a voxel was hit. If one was hit, data about it is stored in the pointer parameters
-bool DN_step_voxel_map(DNmap* map, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
+bool DN_step_map(DNmap* map, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GENERAL UTILITY:
@@ -224,8 +224,8 @@ void DN_separate_position(DNivec3 pos, DNivec3* chunkPos, DNivec3* localPos);
 DNvec3 DN_cam_dir(DNvec3 orient);
 
 //Compresses a voxel
-DNvoxelGPU DN_voxel_to_voxelGPU(DNvoxel voxel);
+DNcompressedVoxel DN_compress_voxel(DNvoxel voxel);
 //Decompresses a voxel
-DNvoxel DN_voxelGPU_to_voxel(DNvoxelGPU voxel);
+DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel);
 
 #endif
