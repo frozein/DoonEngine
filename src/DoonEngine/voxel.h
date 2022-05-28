@@ -85,6 +85,7 @@ typedef struct DNmap
 	
 	//opengl handles:
 	GLuint glTextureID;     		 //READ ONLY | The openGL texture ID, use glActivate() with this to render it
+	GLuint glPositionTextureID;		 //new
 	GLuint glMapBufferID;   		 //READ ONLY | The openGL buffer ID for the map buffer on the GPU
 	GLuint glChunkBufferID;			 //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
 

@@ -62,7 +62,7 @@ bool DN_init()
 
 	//load shaders:
 	//---------------------------------
-	int lighting = DN_compute_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
+	int lighting = 0;//DN_compute_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
 	int final    = DN_compute_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
 
 	if(lighting < 0 || final < 0)
@@ -103,6 +103,15 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glGenTextures(1, &map->glPositionTextureID);
+	glBindTexture(GL_TEXTURE_2D, map->glPositionTextureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32UI, textureSize.x, textureSize.y, 0, GL_RGBA_INTEGER, GL_UNSIGNED_INT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
@@ -571,12 +580,14 @@ void DN_draw(DNmap* map)
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, map->glPositionTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
 
 	DN_program_uniform_vec3 (finalProgram, "camPos", map->camPos);
 	DN_program_uniform_vec3 (finalProgram, "camDir", camFront);
 	DN_program_uniform_vec3 (finalProgram, "camPlaneU", camPlaneU);
 	DN_program_uniform_vec3 (finalProgram, "camPlaneV", camPlaneV);
 	DN_program_uniform_vec3 (finalProgram, "sunStrength", map->sunStrength);
+	DN_program_uniform_vec3 (finalProgram, "sunDir", DN_vec3_normalize(map->sunDir));
 	DN_program_uniform_uint (finalProgram, "viewMode", map->camViewMode);
 	DN_program_uniform_float(finalProgram, "ambientStrength", map->ambientLightStrength);
 	glUniform3uiv(glGetUniformLocation(finalProgram, "mapSize"), 1, (GLuint*)&map->mapSize);

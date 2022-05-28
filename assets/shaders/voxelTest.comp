@@ -1,0 +1,21 @@
+//INCLUDES "voxelShared.comp"
+#version 430 core
+
+layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
+layout(rgba32f, binding = 0) uniform image2D colorOutput; //the output texture
+layout(rgba32ui, binding = 1) uniform uimage2D positionOutput;
+
+void main()
+{
+	vec3 color;
+
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	uvec3 position = imageLoad(positionOutput, coords).xyz;
+
+	if(position == uvec3(0xFFFFFFFF))
+        color = vec3(0.0);
+    else   
+        color = vec3(position) / (mapSize * CHUNK_SIZE);
+
+	imageStore(colorOutput, coords, vec4(color, 1.0));
+}

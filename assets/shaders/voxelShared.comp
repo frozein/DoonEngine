@@ -294,7 +294,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 			{
 				vec3 voxelPos = mapPos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
-				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
+				rayPos += rayDir * (intersection.x - EPSILON); //add so that new pos is inside the voxel
 
 				uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
 
