@@ -18,13 +18,13 @@ GLuint lightingRequestBuffer = 0;
 GLuint materialBuffer = 0;
 GLprogram lightingProgram = 0;
 GLprogram finalProgram = 0;
+GLprogram testProgram = 0;
 
 DNmaterial* dnMaterials = 0;
 
 unsigned int maxLightingRequests = 1024;
 
 const size_t VOXEL_DATA_SIZE = sizeof(DNvoxel) * 8 * 8 * 8;
-const size_t LIGHTING_DATA_SIZE = sizeof(DNvec4) * 8 * 8 * 8;
 const int WORKGROUP_SIZE = 16;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -64,8 +64,9 @@ bool DN_init()
 	//---------------------------------
 	int lighting = 0;//DN_compute_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
 	int final    = DN_compute_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
+	int test	 = DN_compute_program_load("shaders/voxelTest.comp"	   , "shaders/voxelShared.comp");
 
-	if(lighting < 0 || final < 0)
+	if(lighting < 0 || final < 0 || test < 0)
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
 		return false;
@@ -73,6 +74,7 @@ bool DN_init()
 
 	lightingProgram = lighting;
 	finalProgram = final;
+	testProgram = test;
 
 	//return:
 	//---------------------------------
@@ -109,7 +111,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 
 	glGenTextures(1, &map->glPositionTextureID);
 	glBindTexture(GL_TEXTURE_2D, map->glPositionTextureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32UI, textureSize.x, textureSize.y, 0, GL_RGBA_INTEGER, GL_UNSIGNED_INT, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32I, textureSize.x, textureSize.y, 0, GL_RGBA_INTEGER, GL_INT, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
@@ -380,7 +382,6 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 	{
 		map->map[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag != 0 ? 1 : 0;
 		voxelMapGPU[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag;
-		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, (maxTimeIndex + 1) * sizeof(DNchunk) - LIGHTING_DATA_SIZE, LIGHTING_DATA_SIZE, map->chunks[map->map[maxTimeMapIndex].index].indirectLight);
 	}
 
 	voxelMapGPU[mapIndex].flag = 2; //set the new tile's flag to loaded
@@ -482,7 +483,7 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 				DNchunk chunk = map->chunks[i];
 				if(chunk.used && chunk.updated)
 				{
-					glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(DNchunk), VOXEL_DATA_SIZE, &chunk);
+					glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(DNchunk), sizeof(DNchunk), &chunk);
 					map->chunks[i].updated = 0;
 					map->map[DN_FLATTEN_INDEX(chunk.pos, map->mapSize)].flag = 2;
 				}
@@ -580,7 +581,7 @@ void DN_draw(DNmap* map)
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, map->glPositionTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32UI);
+	glBindImageTexture(1, map->glPositionTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32I);
 
 	DN_program_uniform_vec3 (finalProgram, "camPos", map->camPos);
 	DN_program_uniform_vec3 (finalProgram, "camDir", camFront);
@@ -595,6 +596,14 @@ void DN_draw(DNmap* map)
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+
+	if(map->camViewMode != 1)
+	{
+		glUseProgram(testProgram);
+		glUniform3uiv(glGetUniformLocation(testProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
+		glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
+		glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
+	}
 }
 
 void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float time)
@@ -1042,8 +1051,5 @@ static void _DN_clear_chunk(DNmap* map, unsigned int index)
 	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
-			{
 				map->chunks[index].voxels[x][y][z].albedo = UINT32_MAX;
-				map->chunks[index].indirectLight[x][y][z] = (DNvec4){0, 0, 0, 0};
-			}
 }

@@ -4,7 +4,7 @@
 
 layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
 layout(rgba32f, binding = 0) uniform image2D colorOutput; //the output texture
-layout(rgba32ui, binding = 1) uniform uimage2D positionOutput;
+layout(rgba32i, binding = 1) uniform iimage2D positionOutput;
 
 uniform vec3 camPos;    //the camera's position
 uniform vec3 camDir;    //the direction the camera is pointing
@@ -53,7 +53,8 @@ void main()
 	vec3 finalColorAdd;     //added to the final color to account for transparency
 	float finalColorMult;   //multiplied with the final color to account for transparency
 	vec3 finalColor;        //the final color that gets written to the texture
-	uvec3 position = uvec3(0xFFFFFFFF);
+	ivec3 voxelPosition = ivec3(0xFFFFFFFF);
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 
 	//calculate ray position and direction:
 	vec2 screenPos;
@@ -70,25 +71,61 @@ void main()
 	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
 	{
 		finalColor = sky_color(normalize(rayDir));
+		imageStore(colorOutput, coords, vec4(finalColor, 1.0));
 	}
 	else //if the map is hit, step through it
 	{
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
 
-		if(step_map(rayDir, invRayDir, rayPos, false, true, finalVoxel, finalColorAdd, finalColorMult))
+		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, voxelPosition, finalColorAdd, finalColorMult)) //if hit, calculate lighting
 		{
-			finalMaterial = materials[finalVoxel.material];
-			finalVoxel.specLight     *= finalMaterial.specular;
-			finalVoxel.indirectLight *= 1.0 - finalMaterial.specular;
-			finalVoxel.directLight   *= 1.0 - finalMaterial.specular;
+			//get positions of hit voxel:
+			ivec3 chunkPos = voxelPosition / ivec3(CHUNK_SIZE);
+			ivec3 localPos = voxelPosition % ivec3(CHUNK_SIZE);
 
-			finalColor = pow(finalVoxel.albedo, vec3(INV_GAMMA));
+			//reset lighting if needed:
+			uint prev = atomicOr(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].normal, 0xFF);
+			if((prev & 0xFF) == 0)
+			{
+				atomicExchange(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, 0); //reset everything to 0
+				atomicExchange(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, 0);
+			}
 
-			position = uvec3((rayPos + 2 * EPSILON * rayDir) * CHUNK_SIZE);
+			//LIGHTING HERE:
+
+			finalColor = finalVoxel.albedo;
+
 			vec3 newSunDir = normalize(sunDir * 3 + rand_unit_sphere(2 * screenPos.x + screenPos.y));
-			if(step_map(newSunDir, 1 / newSunDir, rayPos, false, false, finalVoxel, finalColorAdd, finalColorMult))
+			ivec3 tempPos;
+			vec3 newPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
+			newPos += (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * finalVoxel.normal;
+			if(step_map(newSunDir, 1 / newSunDir, newPos, true, finalVoxel, tempPos, finalColorAdd, finalColorMult))
 				finalColor *= 0.5;
+
+			finalColor = pow(finalColor, vec3(INV_GAMMA));
+
+			if(viewMode == 1)
+				imageStore(colorOutput, coords, vec4(finalColor, 1.0));
+
+			//END LIGHTING
+
+			//compress color down to 1 byte per component
+			ivec3 writeColor = ivec3(finalColor * 255);
+			writeColor &= 0xFF;
+
+			//try to add to the sample count:
+			int num = atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, (1 << 16)) / (1 << 16);
+			if(num < 255) //if below max samples, add color to sum:
+			{
+				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, writeColor.x);
+				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, (writeColor.y << 16));
+				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, writeColor.z);
+			}
+			else //if ablove max samples, subtract to get back to max: 
+				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, -(1 << 16));
+
+			imageStore(colorOutput, coords, vec4(finalColor, 1.0));
 
 			/*switch(viewMode)
 			{
@@ -129,24 +166,20 @@ void main()
 				break;
 			}
 			}*/
-
-			uvec3 mapPos = uvec3(floor(rayPos));
-			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-
-			if(map[index].visible == 0)
-				map[index].visible = 1;
 		}
 		else
 		{
+			voxelPosition = ivec3(0xFFFFFFFF);
 			finalColor = sky_color(normalize(rayDir));
 
 			if(viewMode == 0)
 				finalColor = finalColor * finalColorMult + finalColorAdd;
+
+			imageStore(colorOutput, coords, vec4(finalColor, 1.0));
 		}
 	}
 
 	//store final color to texture:
-	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	//imageStore(colorOutput, coords, vec4(finalColor, 1.0));
-	imageStore(positionOutput, coords, uvec4(position, 0));
+	imageStore(positionOutput, coords, ivec4(voxelPosition, 0));
 }

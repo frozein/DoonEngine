@@ -49,7 +49,6 @@ typedef struct DNchunk
 	DNuvec2 padding;
 
 	DNcompressedVoxel voxels[8][8][8]; //CHUNK SIZE = 8
-	DNvec4 indirectLight[8][8][8];
 } DNchunk;
 
 //a handle to a voxel chunk, along with some meta-data
