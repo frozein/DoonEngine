@@ -2,9 +2,6 @@
 #version 430 core
 #define INV_GAMMA 0.4545 //for gamma correction (1 / 2.2)
 
-layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
-layout(rgba32f, binding = 0) restrict writeonly uniform image2D colorOutput; //the output texture
-layout(rgba32i, binding = 1) restrict writeonly uniform iimage2D positionOutput;
 uniform sampler2D blueNoise;
 
 uniform vec3 camPos;    //the camera's position
@@ -12,39 +9,125 @@ uniform vec3 camDir;    //the direction the camera is pointing
 uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
 uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
 
-uniform vec3 sunDir;
-
-uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
-
+uniform vec3 sunDir; 		   //the vector that points towards the sun
+uniform uint viewMode;  	   //determines what gets written to the final texture. 0 = normal view, 1 = per-pixel view, 2 = albedo, 3 = normals
 uniform float ambientStrength; //the minimum light that every voxel receives
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-float rand(float seed) //returns a random float between -1 and 1
+vec3 ray_BRDF(Voxel vox, int noiseOffset)
 {
-    return fract(sin(seed) * 43758.5453) * 2.0 - 1.0;
+	//TODO: find a better way to sample the blue noise, maybe make a const array? also, pre-normalize the texture
+
+	vec3 randUnitSphere = texelFetch(blueNoise, ivec2((gl_GlobalInvocationID + noiseOffset) % 64), 0).xyz * 2.0 - 1.0;
+	return normalize(vox.normal + normalize(randUnitSphere));
 }
 
-vec2 rand2(float seed) //returns a vec2 of random floats between -1 and 1
+vec3 shadow_ray(vec3 rayPos, int noiseOffset)
 {
-	return vec2(rand(seed), rand(seed * 2.0));
+	//calculate jittered sun direction by adding random value:
+	//---------------------------------
+	vec3 shadowJitter = texelFetch(blueNoise, ivec2((gl_GlobalInvocationID + noiseOffset) % 64), 0).xyz * 2.0 - 1.0;
+	vec3 jitteredSunDir = normalize(sunDir * 10 + shadowJitter);
+
+	//declare variables needed to step through map:
+	//---------------------------------
+	Voxel vox;
+	ivec3 voxelPos;
+	vec3 colorAdd;
+	float colorMult;
+
+	//step through the map, return the sun's strength if nothing is hit
+	//---------------------------------
+	if(step_map(jitteredSunDir, 1 / jitteredSunDir, rayPos, true, vox, voxelPos, colorAdd, colorMult))
+		return vec3(0.0);
+	else
+		return vec3(0.6);
 }
 
-vec3 rand3(float seed) //returns a vec3 of random floats between -1 and 1
+vec3 get_lighting(Voxel voxel, ivec3 voxelPos)
 {
-	return vec3(rand(seed), rand(seed * 2.0), rand(seed * 3.0));
-}
+	//declare variables:
+	//---------------------------------
+	vec3 tcol = vec3(0.0); //total lighting color, what is returned
+	vec3 fcol = vec3(1.0); //the the color multiplied to everything, all of the albedos multiplied together
 
-vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
-{
-	while(true)
+	vec3 colorAdd;   //for transparency
+	float colorMult; //for transparency
+
+	vec3 rayDir; //the direction the ray points
+	vec3 rayPos; //the ray's origin position
+
+	//cast rays, bounce multiple times:
+	//---------------------------------
+	for(int i = 0; i < 3; i++)
 	{
-		vec3 point = rand3(seed++);
-		if(dot(point, point) >= 1.0)
-			continue;
+		//if i = 0, the ray has already been cast by the calling function, so skip
+		if(i != 0)
+		{
+			//if no voxel is hit, return a little bit of light to account for atmospheric scattering
+			if(!step_map(rayDir, 1 / rayDir, rayPos, true, voxel, voxelPos, colorAdd, colorMult))
+			{
+				tcol += fcol * max(dot(rayDir, sunDir), 0.0) * 0.5;
+				break;
+			}
+		}
 
-		return point;
+		//calculate new ray position and direction:
+		//---------------------------------
+		rayPos = vec3(voxelPos) * INV_CHUNK_SIZE + HALF_INV_CHUNK_SIZE;
+		rayPos += (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * voxel.normal;
+
+		rayDir = ray_BRDF(voxel, (i + 1) * 10);
+
+		//calculate direct lighting and add to total:
+		//---------------------------------
+		vec3 dcol = shadow_ray(rayPos, i);
+
+		fcol *= voxel.albedo;
+		tcol += fcol * dcol;
 	}
+
+	//return:
+	//---------------------------------
+	return tcol;
+}
+
+void sum_lighting(Voxel voxel, ivec3 voxelPos)
+{
+	//calculate the map and chunk positions:
+	//---------------------------------
+	ivec3 mapPos   = voxelPos / CHUNK_SIZE;
+	ivec3 chunkPos = voxelPos % CHUNK_SIZE;
+
+	//reset lighting if needed:
+	//---------------------------------
+	uint reset = atomicOr(chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].normal, 0xFF);
+	if((reset & 0xFF) == 0)
+	{
+		chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingUpper = 0;
+		chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingLower = 0;
+	}
+
+	//calculate color:
+	//---------------------------------
+	vec3 color = pow(get_lighting(voxel, voxelPos), vec3(INV_GAMMA));
+
+	//compress color down to 1 byte per component
+	//---------------------------------
+	ivec3 writeColor = ivec3(color * 255);
+	writeColor &= 0xFF;
+
+	//try to add to the sample count:
+	//---------------------------------
+	int num = atomicAdd(chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingUpper, (1 << 16)) / (1 << 16);
+	if(num < 255) //if below max samples, add color to sum:
+	{
+		atomicAdd(chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingUpper, writeColor.x);
+		atomicAdd(chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingLower, (writeColor.y << 16) + writeColor.z);
+	}
+	else //if ablove max samples, subtract to get back to max: 
+		atomicAdd(chunks[get_map_tile(mapPos).index].voxels[chunkPos.x][chunkPos.y][chunkPos.z].lightingUpper, -(1 << 16));
 }
 
 void main()
@@ -55,7 +138,7 @@ void main()
 	float finalColorMult;   //multiplied with the final color to account for transparency
 	vec3 finalColor;        //the final color that gets written to the texture
 	ivec3 voxelPosition = ivec3(0xFFFFFFFF);
-	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	ivec2 textureCoords = ivec2(gl_GlobalInvocationID.xy);
 
 	//calculate ray position and direction:
 	vec2 screenPos;
@@ -72,7 +155,7 @@ void main()
 	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
 	{
 		finalColor = sky_color(normalize(rayDir));
-		imageStore(colorOutput, coords, vec4(finalColor, 1.0));
+		imageStore(colorOutput, textureCoords, vec4(finalColor, 1.0));
 	}
 	else //if the map is hit, step through it
 	{
@@ -81,91 +164,31 @@ void main()
 
 		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, voxelPosition, finalColorAdd, finalColorMult)) //if hit, calculate lighting
 		{
-			//get positions of hit voxel:
-			ivec3 chunkPos = voxelPosition / ivec3(CHUNK_SIZE);
-			ivec3 localPos = voxelPosition % ivec3(CHUNK_SIZE);
-
-			//reset lighting if needed:
-			uint prev = atomicOr(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].normal, 0xFF);
-			if((prev & 0xFF) == 0)
+			switch(viewMode)
 			{
-				chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight = 0;
-				chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight = 0;
-			}
-
-			//LIGHTING HERE:
-
-			finalColor = finalVoxel.albedo;
-			vec3 jitter = texelFetch(blueNoise, ivec2(gl_GlobalInvocationID % 64), 0).xyz * 2.0 - 1.0;
-			vec3 newSunDir = normalize(sunDir * 3 + jitter);
-			ivec3 tempPos;
-			vec3 newPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
-			newPos += (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * finalVoxel.normal;
-			if(step_map(newSunDir, 1 / newSunDir, newPos, true, finalVoxel, tempPos, finalColorAdd, finalColorMult))
-				finalColor *= 0.5;
-
-			finalColor = pow(finalColor, vec3(INV_GAMMA));
-
-			if(viewMode == 1)
-				imageStore(colorOutput, coords, vec4(finalColor, 1.0));
-
-			//END LIGHTING
-
-			//compress color down to 1 byte per component
-			ivec3 writeColor = ivec3(finalColor * 255);
-			writeColor &= 0xFF;
-
-			//try to add to the sample count:
-			int num = atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, (1 << 16)) / (1 << 16);
-			if(num < 255) //if below max samples, add color to sum:
+			case 0:
 			{
-				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, writeColor.x);
-				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, (writeColor.y << 16) + writeColor.z);
-			}
-			else //if ablove max samples, subtract to get back to max: 
-				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, -(1 << 16));
-
-			imageStore(colorOutput, coords, vec4(finalColor, 1.0));
-
-			/*switch(viewMode)
-			{
-			case 0: //total lighting
-			{	
-				vec3 solidColor;
-				if(finalMaterial.emissive == 1)
-					solidColor = finalVoxel.albedo;
-				else
-					solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalVoxel.albedo + finalVoxel.specLight;
-
-				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
+				sum_lighting(finalVoxel, voxelPosition);
 				break;
 			}
-			case 1: //albedo
+			case 1:
 			{
-				finalColor = pow(finalVoxel.albedo, vec3(INV_GAMMA));
+				vec3 color = pow(get_lighting(finalVoxel, voxelPosition), vec3(INV_GAMMA));
+				imageStore(colorOutput, textureCoords, vec4(color, 1.0));
 				break;
 			}
-			case 2: //direct light
+			case 2:
 			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.directLight, vec3(INV_GAMMA));
+				vec3 color = pow(finalVoxel.albedo, vec3(INV_GAMMA));
+				imageStore(colorOutput, textureCoords, vec4(color, 1.0));
 				break;
 			}
-			case 3: //indirect light
+			case 3:
 			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.indirectLight, vec3(INV_GAMMA));
+				imageStore(colorOutput, textureCoords, vec4(abs(finalVoxel.normal), 1.0));
 				break;
 			}
-			case 4: //specular light
-			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalVoxel.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
-				break;
 			}
-			case 5: //normal
-			{
-				finalColor = vec3(abs(finalVoxel.normal));
-				break;
-			}
-			}*/
 		}
 		else
 		{
@@ -175,11 +198,10 @@ void main()
 			if(viewMode == 0)
 				finalColor = finalColor * finalColorMult + finalColorAdd;
 
-			imageStore(colorOutput, coords, vec4(finalColor, 1.0));
+			imageStore(colorOutput, textureCoords, vec4(finalColor, 1.0));
 		}
 	}
 
 	//store final color to texture:
-	//imageStore(colorOutput, coords, vec4(finalColor, 1.0));
-	imageStore(positionOutput, coords, ivec4(voxelPosition, 0));
+	imageStore(positionOutput, textureCoords, ivec4(voxelPosition, 0));
 }

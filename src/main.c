@@ -432,10 +432,6 @@ void process_input(GLFWwindow *window)
 		viewMode = 2;
 	if(glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
 		viewMode = 3;
-	if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
-		viewMode = 4;
-	if(glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
-		viewMode = 5;
 
 	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
 		updateData = true;

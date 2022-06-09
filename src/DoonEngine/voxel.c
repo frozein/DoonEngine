@@ -624,7 +624,7 @@ void DN_draw(DNmap* map)
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 
-	if(map->camViewMode != 1)
+	if(map->camViewMode == 0)
 	{
 		glUseProgram(testProgram);
 		glUniform3uiv(glGetUniformLocation(testProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
