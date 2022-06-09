@@ -3,8 +3,9 @@
 #define INV_GAMMA 0.4545 //for gamma correction (1 / 2.2)
 
 layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
-layout(rgba32f, binding = 0) uniform image2D colorOutput; //the output texture
-layout(rgba32i, binding = 1) uniform iimage2D positionOutput;
+layout(rgba32f, binding = 0) restrict writeonly uniform image2D colorOutput; //the output texture
+layout(rgba32i, binding = 1) restrict writeonly uniform iimage2D positionOutput;
+uniform sampler2D blueNoise;
 
 uniform vec3 camPos;    //the camera's position
 uniform vec3 camDir;    //the direction the camera is pointing
@@ -88,15 +89,15 @@ void main()
 			uint prev = atomicOr(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].normal, 0xFF);
 			if((prev & 0xFF) == 0)
 			{
-				atomicExchange(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, 0); //reset everything to 0
-				atomicExchange(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, 0);
+				chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight = 0;
+				chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight = 0;
 			}
 
 			//LIGHTING HERE:
 
 			finalColor = finalVoxel.albedo;
-
-			vec3 newSunDir = normalize(sunDir * 3 + rand_unit_sphere(2 * screenPos.x + screenPos.y));
+			vec3 jitter = texelFetch(blueNoise, ivec2(gl_GlobalInvocationID % 64), 0).xyz * 2.0 - 1.0;
+			vec3 newSunDir = normalize(sunDir * 3 + jitter);
 			ivec3 tempPos;
 			vec3 newPos = INV_CHUNK_SIZE * localPos + chunkPos + HALF_INV_CHUNK_SIZE;
 			newPos += (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * finalVoxel.normal;
@@ -119,8 +120,7 @@ void main()
 			if(num < 255) //if below max samples, add color to sum:
 			{
 				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, writeColor.x);
-				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, (writeColor.y << 16));
-				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, writeColor.z);
+				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].specLight, (writeColor.y << 16) + writeColor.z);
 			}
 			else //if ablove max samples, subtract to get back to max: 
 				atomicAdd(chunks[get_map_tile(chunkPos).index].voxels[localPos.x][localPos.y][localPos.z].directLight, -(1 << 16));

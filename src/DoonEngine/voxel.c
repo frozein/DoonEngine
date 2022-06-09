@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <string.h>
 #include "math/all.h"
+#include <STB/stb_image.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GLOBAL STATE:
@@ -19,6 +20,7 @@ GLuint materialBuffer = 0;
 GLprogram lightingProgram = 0;
 GLprogram finalProgram = 0;
 GLprogram testProgram = 0;
+GLuint blueNoiseTexture = 0;
 
 DNmaterial* dnMaterials = 0;
 
@@ -75,6 +77,29 @@ bool DN_init()
 	lightingProgram = lighting;
 	finalProgram = final;
 	testProgram = test;
+
+	//load blue noise texture:
+	//---------------------------------
+	stbi_set_flip_vertically_on_load(true);
+
+	int w, h, nChannels;
+	unsigned char* rawImage = stbi_load("blueNoise.png", &w, &h, &nChannels, 0);
+	if(!rawImage)
+	{
+		DN_ERROR_LOG("ERROR - FAILED TO LOAD BLUE NOISE TEXTURE\n");
+		return false;
+	}
+
+	glGenTextures(1, &blueNoiseTexture);
+	glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rawImage);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+	stbi_image_free(rawImage);
 
 	//return:
 	//---------------------------------
@@ -582,6 +607,8 @@ void DN_draw(DNmap* map)
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	glBindImageTexture(1, map->glPositionTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32I);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, blueNoiseTexture);
 
 	DN_program_uniform_vec3 (finalProgram, "camPos", map->camPos);
 	DN_program_uniform_vec3 (finalProgram, "camDir", camFront);
