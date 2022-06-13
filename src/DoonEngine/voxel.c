@@ -371,7 +371,8 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 	{
 		map->map[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag != 0 ? 1 : 0;
 		voxelMapGPU[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag;
-		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, (maxTimeIndex + 1) * sizeof(DNchunk) - LIGHTING_DATA_SIZE, LIGHTING_DATA_SIZE, map->chunks[map->map[maxTimeMapIndex].index].indirectLight);
+		//glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, (maxTimeIndex + 1) * sizeof(DNchunk) - LIGHTING_DATA_SIZE, LIGHTING_DATA_SIZE, map->chunks[map->map[maxTimeMapIndex].index].indirectLight);
+		//TODO: decide if i want this feature back or not
 	}
 
 	voxelMapGPU[mapIndex].flag = 2; //set the new tile's flag to loaded
@@ -796,8 +797,8 @@ void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNc
 	unsigned int chunkIndex = map->map[mapIndex].index;
 
 	//change number of voxels in map:
-	unsigned int oldMat = map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo & 0xFF;
-	unsigned int newMat = voxel.albedo & 0xFF;
+	unsigned int oldMat = map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight & 0xFF;
+	unsigned int newMat = voxel.indirectLight & 0xFF;
 
 	if(oldMat == 255 && newMat < 255) //if old voxel was empty and new one is not, increment the number of voxels
 		map->chunks[chunkIndex].numVoxels++;
@@ -835,7 +836,7 @@ void DN_remove_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
 	}
 
 	//clear voxel:
-	map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].albedo = UINT32_MAX; 
+	map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight = UINT32_MAX; 
 	map->chunks[chunkIndex].updated = 1;
 }
 
@@ -846,7 +847,7 @@ bool DN_does_chunk_exist(DNmap* map, DNivec3 pos)
 
 bool DN_does_voxel_exist(DNmap* map, DNivec3 chunkPos, DNivec3 localPos)
 {
-	unsigned int material = DN_get_compressed_voxel(map, chunkPos, localPos).albedo & 0xFF;
+	unsigned int material = DN_get_compressed_voxel(map, chunkPos, localPos).normal & 0xFF;
 	return material < 255;
 }
 
@@ -973,15 +974,9 @@ static DNuvec4 _DN_decode_uint_RGBA(GLuint val)
 DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 {
 	DNcompressedVoxel res;
-	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
 	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
-	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), voxel.material};
-	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.mask & 0xFF};
-
-	res.albedo = _DN_encode_uint_RGBA(albedo);
+	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.material};
 	res.normal = _DN_encode_uint_RGBA(normal);
-	res.directLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, (voxel.mask >> 8) & 0xFF});
-	res.specLight = _DN_encode_uint_RGBA((DNuvec4){0, 0, 0, 0});
 
 	return res;
 }
@@ -989,15 +984,11 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel)
 {
 	DNvoxel res;
-	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
 	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
-	DNuvec4 directLight = _DN_decode_uint_RGBA(voxel.directLight);
 
-	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
 	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
 	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
-	res.material = albedo.w;
-	res.mask = normal.w | (directLight.w << 8);
+	res.material = normal.w;
 
 	return res;
 }
@@ -1027,12 +1018,10 @@ static void _DN_clear_chunk(DNmap* map, unsigned int index)
 	map->chunks[index].used = false;
 	map->chunks[index].updated = false;
 	map->chunks[index].numVoxels = 0;
+	map->chunks[index].numIndirectSamples = 0;
 
 	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
-			{
-				map->chunks[index].voxels[x][y][z].albedo = UINT32_MAX;
-				map->chunks[index].indirectLight[x][y][z] = (DNvec4){0, 0, 0, 0};
-			}
+				map->chunks[index].voxels[x][y][z].normal = UINT32_MAX;
 }

@@ -194,9 +194,9 @@ int main()
 	treeMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, tempMapLength);
 	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 
-	sphereMap = DN_create_map((DNuvec3){30, 30, 30}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 1024);
+	sphereMap = DN_create_map((DNuvec3){10, 3, 10}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 128);
 	sphereMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-	activeMap = treeMap;
+	activeMap = sphereMap;
 
 	//load model:
 	//---------------------------------
@@ -207,7 +207,7 @@ int main()
 
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
-	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+	/*for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < sphereMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < sphereMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
 			{
@@ -231,7 +231,120 @@ int main()
 					DN_separate_position((DNivec3){x, y, z}, &chunkPos, &localPos);
 					DN_set_voxel(sphereMap, chunkPos, localPos, vox);
 				}
+			}*/
+
+	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+		for(int y = 0; y < sphereMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
+			for(int x = 0; x < sphereMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
+			{
+				DNvoxel vox;
+
+				if(y == 6 || y == 7)
+				{
+					vox.material = 0;
+					vox.normal = y == 7 ? (DNvec3){0.0, 1.0, 0.0} : (DNvec3){0.0, -1.0, 0.0};
+				}
+				else if(x >= 78 && y > 7)
+				{
+					vox.material = 1;
+					vox.normal = (DNvec3){-1.0, 0.0, 0.0};
+				}
+				else if(z >= 78 && y > 7)
+				{
+					vox.material = 1;
+					vox.normal = (DNvec3){0.0, 0.0, -1.0};
+				}
+				else
+					continue;
+
+				DN_set_voxel(sphereMap, (DNivec3){x / 8, y / 8, z / 8}, (DNivec3){x % 8, y % 8, z % 8}, vox);
 			}
+
+	DNuvec3 spherePositions[8] = {(DNuvec3){10, 14, 12}, (DNuvec3){11, 14, 35}, (DNuvec3){32, 14, 17}, (DNuvec3){55, 14, 13}, (DNuvec3){53, 14, 34}, (DNuvec3){28, 14, 45}, (DNuvec3){20, 14, 65}, (DNuvec3){55, 14, 60}};
+	for(int i = 0; i < 8; i++)
+	{
+		DNuvec3 pos = spherePositions[i];
+
+		for(int x = pos.x - 6; x <= pos.x + 6; x++)
+			for(int y = pos.y - 6; y <= pos.y + 6; y++)
+				for(int z = pos.z - 6; z <= pos.z + 6; z++)
+				{
+					DNvoxel vox;
+
+					float distance = DN_vec3_distance((DNvec3){pos.x, pos.y, pos.z}, (DNvec3){x, y, z});
+					if(distance >= 7.0f)
+						continue;
+
+					vox.material = i + 2;
+					vox.normal = (DNvec3){x - (int)pos.x, y - (int)pos.y, z - (int)pos.z};
+
+					float maxNormal = abs(vox.normal.x);
+					if(abs(vox.normal.y) > maxNormal)
+						maxNormal = abs(vox.normal.y);
+					if(abs(vox.normal.z) > maxNormal)
+						maxNormal = abs(vox.normal.z);
+
+					vox.normal = DN_vec3_scale(vox.normal, 1 / maxNormal);
+
+					DN_set_voxel(sphereMap, (DNivec3){x / 8, y / 8, z / 8}, (DNivec3){x % 8, y % 8, z % 8}, vox);
+				}
+	}
+
+	//--------------//
+
+	dnMaterials[0].albedo = (DNvec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
+	dnMaterials[0].emissive = false;
+	dnMaterials[0].specular = 0;
+	dnMaterials[0].opacity = 1.0f;
+
+	dnMaterials[1].albedo = (DNvec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
+	dnMaterials[1].emissive = false;
+	dnMaterials[1].specular = 1.0f;
+	dnMaterials[1].opacity = 1.0f;
+	dnMaterials[1].reflectSky = true;
+	dnMaterials[1].shininess = 100;
+
+	dnMaterials[2].albedo = (DNvec3){pow(0.8784f, GAMMA), pow(0.3607f, GAMMA), pow(0.3607f, GAMMA)};
+	dnMaterials[2].emissive = false;
+	dnMaterials[2].specular = 0.0f;
+	dnMaterials[2].opacity = 1.0f;
+
+	dnMaterials[3].albedo = (DNvec3){pow(0.1f, GAMMA), pow(0.1f, GAMMA), pow(1.0f, GAMMA)};
+	dnMaterials[3].emissive = false;
+	dnMaterials[3].specular = 0.7f;
+	dnMaterials[3].opacity = 1.0f;
+	dnMaterials[3].reflectSky = false;
+	dnMaterials[3].shininess = 3;
+
+	dnMaterials[4].albedo = (DNvec3){pow(0.224f, GAMMA), pow(0.831f, GAMMA), pow(0.718f, GAMMA)};
+	dnMaterials[4].emissive = true;
+	dnMaterials[4].specular = 0.0f;
+	dnMaterials[4].opacity = 1.0f;
+
+	dnMaterials[5].albedo = (DNvec3){1.0f, 1.0f, 1.0f};
+	dnMaterials[5].emissive = true;
+	dnMaterials[5].specular = 0.0f;
+	dnMaterials[5].opacity = 1.0f;
+
+	dnMaterials[6].albedo = (DNvec3){pow(0.569f, GAMMA), pow(0.224f, GAMMA), pow(0.831f, GAMMA)};
+	dnMaterials[6].emissive = false;
+	dnMaterials[6].specular = 0.0f;
+	dnMaterials[6].opacity = 0.5f;
+
+	dnMaterials[7].albedo = (DNvec3){pow(0.8392f, GAMMA), pow(0.8314f, GAMMA), pow(0.2588f, GAMMA)};
+	dnMaterials[7].emissive = false;
+	dnMaterials[7].specular = 0.0f;
+	dnMaterials[7].opacity = 0.5f;
+
+	dnMaterials[8].albedo = (DNvec3){pow(0.8196f, GAMMA), pow(0.4549f, GAMMA), pow(0.1961f, GAMMA)};
+	dnMaterials[8].emissive = true;
+	dnMaterials[8].specular = 0.0f;
+	dnMaterials[8].opacity = 1.0f;
+
+	dnMaterials[9].albedo = (DNvec3){pow(0.306f, GAMMA), pow(0.831f, GAMMA), pow(0.224f, GAMMA)};
+	dnMaterials[9].emissive = false;
+	dnMaterials[9].specular = 0;
+	dnMaterials[9].opacity = 1.0f;
 
 	//sync with gpu:
 	//---------------------------------
@@ -240,10 +353,7 @@ int main()
 
 	//set materials:
 	//---------------------------------
-	dnMaterials[0].emissive = false;
-	dnMaterials[0].opacity = 1.0f;
-	dnMaterials[0].specular = 0.0f;
-	DN_set_materials(0, 1);
+	DN_set_materials(0, 10);
 
 	//main loop:
 	//---------------------------------
@@ -382,7 +492,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			if(DN_in_map_bounds(activeMap, mapPos))
 			{
 				DNvoxel newVox;
-				newVox.albedo = (DNvec3){0.0f, 0.0f, 0.0f};
 				newVox.material = 0;
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);

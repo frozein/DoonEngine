@@ -12,23 +12,20 @@ uniform uvec3 mapSize;
 
 struct Voxel //a single voxel
 {
-	vec3 albedo;           //the "base color" of the voxel
 	vec3 normal;           //the direction the voxel points (for lighting calculation)
 	uint material;         //the index of this voxel's material
 
-	vec3 indirectLight;    //the diffuse lighting of the voxel, caused by multiple light ray bounces
-	float indirectSamples; //the cumulative number of diffuse lighting rays that have been cast for this voxel
-
 	vec3 directLight;      //the direct lighting from the sun, creates shadows
 	vec3 specLight;        //the lighting caused by reflecting light rays off of the voxel
+	vec3 indirectLight;    //the diffuse lighting of the voxel, caused by multiple light ray bounces
 };
 
 struct CompressedVoxel //a compressed voxel
 {
-	uint albedo;
 	uint normal;
 	uint directLight;
 	uint specLight;
+	uint indirectLight;
 };
 
 struct Chunk //a chunk of voxels
@@ -37,11 +34,11 @@ struct Chunk //a chunk of voxels
 	uint used;	
 	uint updated;
 	uint numVoxels;
-	uvec2 padding;
+	uint numIndirectSamples;
+	uint padding;
 
 	//NOTE: can't use "CHUNK_SIZE" const for the size since some gpus dont allow it in a struct
 	CompressedVoxel voxels[8][8][8]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
-	vec4 indirectLight[8][8][8];
 };
 
 struct ChunkHandle //a handle to a Chunk
@@ -54,6 +51,8 @@ struct ChunkHandle //a handle to a Chunk
 
 struct Material
 {
+	vec3 albedo;     //the "base color" of the material
+
 	uint emissive;   //whether or not the voxel emits light
 
 	float opacity;   //the opacity of the voxel
@@ -123,35 +122,33 @@ CompressedVoxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk 
 	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
 }
 
-vec4 get_indirect_light(uint chunk, ivec3 pos)
-{
-	return chunks[chunk].indirectLight[pos.x][pos.y][pos.z];
-}
-
 bool does_voxel_exist(uint chunk, ivec3 localPos) //returns true if the voxel at the position is solid (not empty)
 {
 	CompressedVoxel voxel = get_voxel(chunk, localPos);
-	uint material = voxel.albedo & 0xFF;
+	uint material = voxel.normal & 0xFF;
 	return material < 255;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-Voxel decompress_voxel(CompressedVoxel compressed, vec4 indirectLight) //decompresses an entire voxel
+Voxel decompress_voxel(CompressedVoxel compressed) //decompresses an entire voxel
 {
-	uvec4 albedo 		= decode_uint_RGBA(compressed.albedo);
-	uvec4 normal 		= decode_uint_RGBA(compressed.normal);
-	uvec4 directLight   = decode_uint_RGBA(compressed.directLight);
-	uvec4 specLight 	= decode_uint_RGBA(compressed.specLight);
-
 	Voxel res;
-	res.albedo = vec3(albedo.xyz) * 0.00392156862;
-	res.normal = (vec3(normal.xyz) * 0.00392156862 - 0.5) * 2.0;
-	res.material = albedo.w;
-	res.indirectLight = indirectLight.xyz;
-	res.indirectSamples = indirectLight.w;
-	res.directLight = vec3(directLight.xyz) * 0.00392156862;
-	res.specLight = vec3(specLight.xyz) * 0.00392156862;
+
+	uvec4 normalRead 		= decode_uint_RGBA(compressed.normal);
+	uvec4 directLightRead   = decode_uint_RGBA(compressed.directLight);
+	uvec4 specLightRead 	= decode_uint_RGBA(compressed.specLight);
+	uvec4 indirectLightRead = decode_uint_RGBA(compressed.indirectLight);
+
+	uvec3 indirectUpper = uvec3(specLightRead.z, indirectLightRead.x, indirectLightRead.z) << 8;
+	uvec3 indirectLower = uvec3(specLightRead.w, indirectLightRead.y, indirectLightRead.w);
+	vec3 indirectLight = vec3(indirectUpper | indirectLower);
+
+	res.normal = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
+	res.material = normalRead.w;
+	res.indirectLight = vec3(indirectLight * 0.0000152590219);
+	res.directLight = vec3(directLightRead.xyz) * 0.00392156862;
+	res.specLight = vec3(directLightRead.w, specLightRead.xy) * 0.00392156862;
 
 	return res;
 }
@@ -232,16 +229,15 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 		if (does_voxel_exist(chunk, mapPos) && !ignoreFirst)
 		{
 			//decompress the voxel and find its material:
-			CompressedVoxel compressed = get_voxel(chunk, mapPos);
-			voxel = decompress_voxel(compressed, get_indirect_light(chunk, mapPos));
+			voxel = decompress_voxel(get_voxel(chunk, mapPos));
 			Material material = materials[voxel.material];
 
-			if(material.opacity < 1.0)
+			if(material.opacity < 1.0 && voxel.material < 255)
 			{
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
-				if(lastVox != compressed.albedo)
+				if(lastVox != voxel.material)
 				{
-					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
+					colorAdd += colorMult * material.opacity * material.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
 					if(addSpec)
 						colorAdd += voxel.specLight * material.specular;
@@ -254,7 +250,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 				return true;
 			}
 
-			lastVox = compressed.albedo;
+			lastVox = voxel.material;
 		}
 		else
 			lastVox = 255;

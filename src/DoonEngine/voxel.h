@@ -22,19 +22,17 @@
 //a single voxel
 typedef struct DNvoxel
 {
-	DNvec3 albedo; //the color
 	DNvec3 normal; //the normal
 	uint8_t material; //the material index
-	uint16_t mask; //allows you to give each voxel an identifier, perhaps to determine what object it is a part of
 } DNvoxel;
 
 //a single voxel, as stored on the GPU
 typedef struct DNcompressedVoxel
 {
-	GLuint albedo;         //compressed
 	GLuint normal;         //compressed
 	GLuint directLight;    //compressed
 	GLuint specLight;      //compressed
+	GLuint indirectLight;  //compressed
 } DNcompressedVoxel;
 
 //a chunk of voxels, as stored on the GPU
@@ -46,10 +44,10 @@ typedef struct DNchunk
 	GLuint used; //true or false, uint just for alignment
 	GLuint updated; //true or false, uint just for alignment
 	GLuint numVoxels;
-	DNuvec2 padding;
+	GLuint numIndirectSamples;
+	GLuint padding;
 
 	DNcompressedVoxel voxels[8][8][8]; //CHUNK SIZE = 8
-	DNvec4 indirectLight[8][8][8];
 } DNchunk;
 
 //a handle to a voxel chunk, along with some meta-data
@@ -64,6 +62,8 @@ typedef struct DNchunkHandle
 //material properties for a voxel
 typedef struct DNmaterial
 {
+	DNvec3 albedo;
+
 	GLuint emissive;
 
 	GLfloat opacity;
@@ -71,8 +71,6 @@ typedef struct DNmaterial
 	GLfloat specular;
 	GLuint reflectSky;
 	GLuint shininess;
-
-	DNvec3 fill; //needed for alignment
 } DNmaterial;
 
 typedef unsigned char DNmaterialHandle;
