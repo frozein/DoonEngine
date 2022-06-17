@@ -79,6 +79,13 @@ layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer
 	Material materials[256];
 };
 
+uniform uint maxChunkRequests;
+layout(std140, binding = 4) restrict buffer chunkRequestBuffer
+{
+	int numChunkRequests;
+	ivec3 chunkRequests[];
+};
+
 uniform vec3 sunStrength;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -303,7 +310,16 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 		else if(mapTile.flag != 0)
 		{
 			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-			map[index].flag = 3;
+			uint lastFlag = atomicExchange(map[index].flag, 3);
+			if(lastFlag != 3)
+			{
+				uint lastCount = atomicAdd(numChunkRequests, 1);
+				if(lastCount >= maxChunkRequests)
+					atomicAdd(numChunkRequests, -1);
+				else
+					chunkRequests[lastCount] = mapPos;
+			}
+
 			return false;
 		}
 

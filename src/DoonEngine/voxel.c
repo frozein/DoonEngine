@@ -797,8 +797,8 @@ void DN_set_compressed_voxel(DNmap* map, DNivec3 chunkPos, DNivec3 localPos, DNc
 	unsigned int chunkIndex = map->map[mapIndex].index;
 
 	//change number of voxels in map:
-	unsigned int oldMat = map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].indirectLight & 0xFF;
-	unsigned int newMat = voxel.indirectLight & 0xFF;
+	unsigned int oldMat = map->chunks[chunkIndex].voxels[localPos.x][localPos.y][localPos.z].normal & 0xFF;
+	unsigned int newMat = voxel.normal & 0xFF;
 
 	if(oldMat == 255 && newMat < 255) //if old voxel was empty and new one is not, increment the number of voxels
 		map->chunks[chunkIndex].numVoxels++;
