@@ -587,22 +587,32 @@ void DN_draw(DNmap* map)
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float time)
+void DN_update_lighting(DNmap* map, unsigned int split, float time)
 {
 	glUseProgram(lightingProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
-	num = num == 0 ? map->numLightingRequest : num;
-	if(offset + num > map->lightingRequestCap)
-		num = map->lightingRequestCap - offset;
-
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 
-	if(num > maxLightingRequests)
+	static unsigned int frameNum = 0;
+	static float oldTime = 0.0;
+	frameNum++;
+	if(frameNum > split)
+	{
+		frameNum = 0;
+		oldTime = time;
+	}
+
+	int numThisFrame = (int)ceil((float)map->numLightingRequest / split);
+	int offset = numThisFrame * (frameNum % split);
+	offset = min(offset, map->numLightingRequest - numThisFrame);
+	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
+
+	if(numThisFrame > maxLightingRequests)
 	{
 		size_t newSize = maxLightingRequests;
-		while(newSize < num)
+		while(newSize < numThisFrame)
 			newSize *= 2;
 
 		DN_ERROR_LOG("NOTE - RESIZING LIGHTING REQUESTS BUFFER TO ACCOMODATE %zi REQUESTS\n", newSize);
@@ -615,7 +625,7 @@ void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float
 		maxLightingRequests = newSize;
 	}
 
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, num * sizeof(DNuvec4), &map->lightingRequests[offset]);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, numThisFrame * sizeof(DNuvec4), &map->lightingRequests[offset]);
 
 	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", time);
@@ -627,7 +637,7 @@ void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float
 	DN_program_uniform_float(lightingProgram, "ambientStrength", map->ambientLightStrength);
 	glUniform3uiv(glGetUniformLocation(lightingProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
-	glDispatchCompute(num, 1, 1);
+	glDispatchCompute(numThisFrame, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 

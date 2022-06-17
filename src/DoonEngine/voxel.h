@@ -151,7 +151,7 @@ void DN_delete_map(DNmap* map);
 void DN_draw(DNmap* map);
 
 //Updates the lighting on every chunk currently in a map's lightingRequests. If desired, you can supply an offset and maximum number of chunks to update, otherwise, set these parameters to 0. The current time must also be supplied
-void DN_update_lighting(DNmap* map, unsigned int offset, unsigned int num, float time);
+void DN_update_lighting(DNmap* map, unsigned int split, float time);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:

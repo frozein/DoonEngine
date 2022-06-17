@@ -389,29 +389,7 @@ int main()
 		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){pitch, yaw, 0.0f}));
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, fov });
 
-		//stream voxel data:
-		/*if(updateData)
-		{
-			frameNum++;
-
-			if(frameNum % lightingSplit == 0)
-			{
-				numChunksToUpdate = DN_stream_voxel_chunks(true, true);
-				oldTime = glfwGetTime();
-			}
-			else
-				DN_stream_voxel_chunks(false, true);
-		}
-		glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
-
-		//update lighting (split over multiple frames):
-		int numThisFrame = (int)ceil((float)numChunksToUpdate / lightingSplit);
-		int offset = numThisFrame * (frameNum % lightingSplit);
-		DN_update_lighting(numThisFrame, min(offset, numChunksToUpdate - numThisFrame), camPos, oldTime);
-		glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);*/
-
 		//render voxels to texture:
-		//TODO: FIGURE OUT HOW TO PROPERLY STREAM DATA
 		activeMap->camPos = camPos;
 		activeMap->camFOV = fov;
 		activeMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
@@ -420,7 +398,7 @@ int main()
 		if(activeMap->streamable && updateData)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
 		DN_draw(activeMap);
-		DN_update_lighting(activeMap, 0, 0, glfwGetTime());
+		DN_update_lighting(activeMap, 2, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
