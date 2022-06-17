@@ -12,8 +12,6 @@ uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
 
 uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
 
-uniform float ambientStrength; //the minimum light that every voxel receives
-
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 void main()
@@ -45,11 +43,11 @@ void main()
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
 
-		if(step_map(rayDir, invRayDir, rayPos, false, false, finalVoxel, finalColorAdd, finalColorMult))
+		if(step_map(rayDir, invRayDir, rayPos, false, finalVoxel, finalColorAdd, finalColorMult))
 		{
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight     *= finalMaterial.specular;
-			finalVoxel.indirectLight *= 1.0 - finalMaterial.specular;
+			finalVoxel.diffuseLight  *= 1.0 - finalMaterial.specular;
 			finalVoxel.directLight   *= 1.0 - finalMaterial.specular;
 
 			switch(viewMode)
@@ -57,10 +55,10 @@ void main()
 			case 0: //total lighting
 			{	
 				vec3 solidColor;
-				if(finalMaterial.emissive == 1)
+				if(finalMaterial.emissive)
 					solidColor = finalMaterial.albedo;
 				else
-					solidColor = (finalVoxel.directLight + finalVoxel.indirectLight + ambientStrength) * finalMaterial.albedo + finalVoxel.specLight;
+					solidColor = (finalVoxel.directLight + finalVoxel.diffuseLight + ambientStrength) * finalMaterial.albedo + finalVoxel.specLight;
 
 				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
 				break;
@@ -72,17 +70,17 @@ void main()
 			}
 			case 2: //direct light
 			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalMaterial.albedo : finalVoxel.directLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.directLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 3: //indirect light
 			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalMaterial.albedo : finalVoxel.indirectLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.diffuseLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 4: //specular light
 			{
-				finalColor = pow(finalMaterial.emissive == 1 ? finalMaterial.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 5: //normal

@@ -2,7 +2,6 @@
 
 #include "DoonEngine/math/all.h"
 #include "DoonEngine/utility/shader.h"
-#include "DoonEngine/utility/texture.h"
 #include "DoonEngine/voxel.h"
 #include "DoonEngine/voxelShapes.h"
 #include "DoonEngine/globals.h"
@@ -175,15 +174,19 @@ int main()
 
 	//generate texture:
 	//---------------------------------
-	DNtexture finalTex = DN_texture_load_raw(GL_TEXTURE_2D, SCREEN_W, SCREEN_H, GL_RGBA, NULL, false);
-	DN_set_texture_scale(finalTex, GL_LINEAR, GL_LINEAR);
-	DN_set_texture_wrap(finalTex, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE, GL_CLAMP_TO_EDGE);
+	GLuint finalTexture;
+	glGenTextures(1, &finalTexture);
+	glBindTexture(GL_TEXTURE_2D, finalTexture);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	//initialize voxel pipeline:
 	//---------------------------------
-	DNuvec3 tempMapSize = {5, 5, 5};
-	unsigned int tempMapLength = tempMapSize.x * tempMapSize.y * tempMapSize.z;
-	if(!DN_init())//DN_init((DNuvec2){SCREEN_W, SCREEN_H}, finalTex, tempMapSize, tempMapLength, tempMapSize, tempMapLength, tempMapLength))
+	if(!DN_init())
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		glfwTerminate();
@@ -191,7 +194,7 @@ int main()
 		return -1;
 	}
 
-	treeMap = DN_create_map(tempMapSize, (DNuvec2){SCREEN_W, SCREEN_H}, false, tempMapLength);
+	treeMap = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
 	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 
 	sphereMap = DN_create_map((DNuvec3){10, 3, 10}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 128);
@@ -201,7 +204,7 @@ int main()
 	//load model:
 	//---------------------------------
 	DNvoxelModel model;
-	DN_load_vox_file("tree.vox", &model, 0);
+	DN_load_vox_file("tree.vox", &model);
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_world(treeMap, model, (DNivec3){0, 0, 0});
 
@@ -292,56 +295,56 @@ int main()
 
 	//--------------//
 
-	dnMaterials[0].albedo = (DNvec3){pow(0.8588f, GAMMA), pow(0.7922f, GAMMA), pow(0.6118f, GAMMA)};
+	dnMaterials[0].albedo = DN_vec3_pow((DNvec3){0.8588f, 0.7922f, 0.6118f}, GAMMA);
 	dnMaterials[0].emissive = false;
 	dnMaterials[0].specular = 0;
 	dnMaterials[0].opacity = 1.0f;
 
-	dnMaterials[1].albedo = (DNvec3){pow(0.9f, GAMMA), pow(0.9f, GAMMA), pow(0.9f, GAMMA)};
+	dnMaterials[1].albedo = DN_vec3_pow((DNvec3){0.9f, 0.9f, 0.9f}, GAMMA);
 	dnMaterials[1].emissive = false;
 	dnMaterials[1].specular = 1.0f;
 	dnMaterials[1].opacity = 1.0f;
 	dnMaterials[1].reflectType = 1;
 	dnMaterials[1].shininess = 100;
 
-	dnMaterials[2].albedo = (DNvec3){pow(0.8784f, GAMMA), pow(0.3607f, GAMMA), pow(0.3607f, GAMMA)};
+	dnMaterials[2].albedo = DN_vec3_pow((DNvec3){0.8784f, 0.3607f, 0.3607f}, GAMMA);
 	dnMaterials[2].emissive = false;
 	dnMaterials[2].specular = 0.0f;
 	dnMaterials[2].opacity = 1.0f;
 
-	dnMaterials[3].albedo = (DNvec3){pow(0.1f, GAMMA), pow(0.1f, GAMMA), pow(1.0f, GAMMA)};
+	dnMaterials[3].albedo = DN_vec3_pow((DNvec3){0.1f, 0.1f, 1.0f}, GAMMA);
 	dnMaterials[3].emissive = false;
 	dnMaterials[3].specular = 0.7f;
 	dnMaterials[3].opacity = 1.0f;
 	dnMaterials[3].reflectType = 0;
 	dnMaterials[3].shininess = 3;
 
-	dnMaterials[4].albedo = (DNvec3){pow(0.224f, GAMMA), pow(0.831f, GAMMA), pow(0.718f, GAMMA)};
+	dnMaterials[4].albedo = DN_vec3_pow((DNvec3){0.224f, 0.831f, 0.718f}, GAMMA);
 	dnMaterials[4].emissive = true;
 	dnMaterials[4].specular = 0.0f;
 	dnMaterials[4].opacity = 1.0f;
 
-	dnMaterials[5].albedo = (DNvec3){1.0f, 1.0f, 1.0f};
+	dnMaterials[5].albedo = DN_vec3_pow((DNvec3){1.0f, 1.0f, 1.0f}, GAMMA);
 	dnMaterials[5].emissive = true;
 	dnMaterials[5].specular = 0.0f;
 	dnMaterials[5].opacity = 1.0f;
 
-	dnMaterials[6].albedo = (DNvec3){pow(0.569f, GAMMA), pow(0.224f, GAMMA), pow(0.831f, GAMMA)};
+	dnMaterials[6].albedo = DN_vec3_pow((DNvec3){0.569f, 0.224f, 0.831f}, GAMMA);
 	dnMaterials[6].emissive = false;
 	dnMaterials[6].specular = 0.0f;
 	dnMaterials[6].opacity = 0.5f;
 
-	dnMaterials[7].albedo = (DNvec3){pow(0.8392f, GAMMA), pow(0.8314f, GAMMA), pow(0.2588f, GAMMA)};
+	dnMaterials[7].albedo = DN_vec3_pow((DNvec3){0.8392f, 0.8314f, 0.2588f}, GAMMA);
 	dnMaterials[7].emissive = false;
 	dnMaterials[7].specular = 0.0f;
 	dnMaterials[7].opacity = 0.5f;
 
-	dnMaterials[8].albedo = (DNvec3){pow(0.8196f, GAMMA), pow(0.4549f, GAMMA), pow(0.1961f, GAMMA)};
+	dnMaterials[8].albedo = DN_vec3_pow((DNvec3){0.8196f, 0.4549f, 0.1961f}, GAMMA);
 	dnMaterials[8].emissive = true;
 	dnMaterials[8].specular = 0.0f;
 	dnMaterials[8].opacity = 1.0f;
 
-	dnMaterials[9].albedo = (DNvec3){pow(0.306f, GAMMA), pow(0.831f, GAMMA), pow(0.224f, GAMMA)};
+	dnMaterials[9].albedo = DN_vec3_pow((DNvec3){0.306f, 0.831f, 0.224f}, GAMMA);
 	dnMaterials[9].emissive = false;
 	dnMaterials[9].specular = 0;
 	dnMaterials[9].opacity = 1.0f;
@@ -398,7 +401,7 @@ int main()
 		if(activeMap->streamable && updateData)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
 		DN_draw(activeMap);
-		DN_update_lighting(activeMap, 2, glfwGetTime());
+		DN_update_lighting(activeMap, 2, 5, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
@@ -471,6 +474,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			{
 				DNvoxel newVox;
 				newVox.material = 0;
+				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
 				if(activeMap->streamable)

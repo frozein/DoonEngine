@@ -21,7 +21,7 @@ typedef struct DNvoxelModel
 } DNvoxelModel;
 
 //Loads a model from a magicaVoxel file (.vox). Returns true on success, false on failure
-bool DN_load_vox_file(const char* path, DNvoxelModel* model, DNmaterialHandle material);
+bool DN_load_vox_file(const char* path, DNvoxelModel* model);
 //Frees the memory for a model
 void DN_free_model(DNvoxelModel model);
 

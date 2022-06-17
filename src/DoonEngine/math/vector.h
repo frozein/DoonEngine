@@ -17,6 +17,8 @@ DNvec2 DN_vec2_subtract(DNvec2 v1, DNvec2 v2);
 DNvec2 DN_vec2_mult(DNvec2 v1, DNvec2 v2);
 //Returns the the result of scaling a vector2 by a scalar value
 DNvec2 DN_vec2_scale(DNvec2 v, GLfloat s);
+//Returns the result of taking each component to a power
+DNvec2 DN_vec2_pow(DNvec2 v, GLfloat s);
 
 //Returns a normalized vector2
 DNvec2 DN_vec2_normalize(DNvec2 v);
@@ -46,6 +48,8 @@ DNvec3 DN_vec3_subtract(DNvec3 v1, DNvec3 v2);
 DNvec3 DN_vec3_mult(DNvec3 v1, DNvec3 v2);
 //Returns the the result of scaling a vector3 by a scalar value
 DNvec3 DN_vec3_scale(DNvec3 v, GLfloat s);
+//Returns the result of taking each component to a power
+DNvec3 DN_vec3_pow(DNvec3 v, GLfloat s);
 
 //Returns a normalized vector3
 DNvec3 DN_vec3_normalize(DNvec3 v);
@@ -77,6 +81,8 @@ DNvec4 DN_vec4_subtract(DNvec4 v1, DNvec4 v2);
 DNvec4 DN_vec4_mult(DNvec4 v1, DNvec4 v2);
 //Returns the the result of scaling a vector4 by a scalar value
 DNvec4 DN_vec4_scale(DNvec4 v, GLfloat s);
+//Returns the result of taking each component to a power
+DNvec4 DN_vec4_pow(DNvec4 v, GLfloat s);
 
 //Returns a normalized vector4
 DNvec4 DN_vec4_normalize(DNvec4 v);

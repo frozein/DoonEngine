@@ -1,6 +1,6 @@
 //----------------------------------------------------------BEGIN-SHARED----------------------------------------------------------//
 
-#define CHUNK_SIZE uvec3(8, 8, 8) //size of each individual chunk
+#define CHUNK_SIZE ivec3(8, 8, 8) //size of each individual chunk
 #define INV_CHUNK_SIZE vec3(0.125, 0.125, 0.125) //1 / CHUNK_SIZE, precomputed
 #define HALF_INV_CHUNK_SIZE vec3(0.0625, 0.0625, 0.0625) //1 / 2 * CHUNK_SIZE, precomputed
 
@@ -12,33 +12,32 @@ uniform uvec3 mapSize;
 
 struct Voxel //a single voxel
 {
-	vec3 normal;           //the direction the voxel points (for lighting calculation)
-	uint material;         //the index of this voxel's material
+	vec3 normal;       //the direction the voxel points (for lighting calculation)
+	uint material;     //the index of this voxel's material
 
-	vec3 directLight;      //the direct lighting from the sun, creates shadows
-	vec3 specLight;        //the lighting caused by reflecting light rays off of the voxel
-	vec3 indirectLight;    //the diffuse lighting of the voxel, caused by multiple light ray bounces
+	vec3 directLight;  //the direct lighting from the sun, creates shadows
+	vec3 specLight;    //the lighting caused by reflecting light rays off of the voxel
+	vec3 diffuseLight; //the diffuse lighting of the voxel, caused by multiple light ray bounces
 };
 
 struct CompressedVoxel //a compressed voxel
 {
-	uint normal;
-	uint directLight;
-	uint specLight;
-	uint indirectLight;
+	uint normal;       //layout: normal.x (8 bits)        | normal.y (8 bits)      | normal.z (8 bits)        | material index (8 bits)
+	uint directLight;  //layout: directLight.x (8 bits)   | directLight.y (8 bits) | directLight.z (8 bits)   | specLight.x (8 bits)
+	uint specLight;    //layout: specLight.y (8 bits)     | specLight.z (8 bits)   | diffuseLight.x (16 bits)
+	uint diffuseLight; //layout: diffuseLight.y (16 bits)                          | diffuseLight.z (16 bits)
 };
 
 struct Chunk //a chunk of voxels
 {
-	ivec3 pos;
-	uint used;	
-	uint updated;
-	uint numVoxels;
-	uint numIndirectSamples;
+	ivec3 pos; 				 //the position within the map
+	uint used; 				 //not used
+	uint updated; 			 //not used
+	uint numVoxels; 		 //not used
+	uint numIndirectSamples; //the number of diffuse lighting samples this chunk has taken
 	uint padding;
 
-	//NOTE: can't use "CHUNK_SIZE" const for the size since some gpus dont allow it in a struct
-	CompressedVoxel voxels[8][8][8]; //the voxels and chunks are separate so as to limit the amount of data that must be sent from the CPU
+	CompressedVoxel voxels[8][8][8]; //the grid of voxels
 };
 
 struct ChunkHandle //a handle to a Chunk
@@ -51,15 +50,12 @@ struct ChunkHandle //a handle to a Chunk
 
 struct Material
 {
-	vec3 albedo;     //the "base color" of the material
-
-	uint emissive;   //whether or not the voxel emits light
-
-	float opacity;   //the opacity of the voxel
-
-	float specular;  //what percentage of rays are specular, the other percent are diffuse
+	vec3 albedo;      //the "base color" of the material, the proportion of light reflected
+	bool emissive;    //whether or not the voxel emits light
+	float opacity;    //the opacity of the voxel
+	float specular;   //what percentage of rays are specular, the other percent are diffuse
 	uint reflectType; //only applies to specular voxels. whether or not they will reflect the sky color
-	uint shininess;  //the greater the number, the closer the specular rays are to perfect reflection
+	uint shininess;   //the greater the number, the closer the specular rays are to perfect reflection
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -79,7 +75,8 @@ layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer
 	Material materials[256];
 };
 
-uniform vec3 sunStrength;
+uniform vec3 sunStrength;     //the amount of light the sun emits
+uniform vec3 ambientStrength; //the minimum light that every voxel receives
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -138,17 +135,17 @@ Voxel decompress_voxel(CompressedVoxel compressed) //decompresses an entire voxe
 	uvec4 normalRead 		= decode_uint_RGBA(compressed.normal);
 	uvec4 directLightRead   = decode_uint_RGBA(compressed.directLight);
 	uvec4 specLightRead 	= decode_uint_RGBA(compressed.specLight);
-	uvec4 indirectLightRead = decode_uint_RGBA(compressed.indirectLight);
+	uvec4 diffuseLightRead  = decode_uint_RGBA(compressed.diffuseLight);
 
-	uvec3 indirectUpper = uvec3(specLightRead.z, indirectLightRead.x, indirectLightRead.z) << 8;
-	uvec3 indirectLower = uvec3(specLightRead.w, indirectLightRead.y, indirectLightRead.w);
-	vec3 indirectLight = vec3(indirectUpper | indirectLower);
+	uvec3 diffuseUpper = uvec3(specLightRead.z, diffuseLightRead.x, diffuseLightRead.z) << 8;
+	uvec3 diffuseLower = uvec3(specLightRead.w, diffuseLightRead.y, diffuseLightRead.w);
+	vec3 diffuseLight  = vec3(diffuseUpper | diffuseLower);
 
-	res.normal = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
-	res.material = normalRead.w;
-	res.indirectLight = vec3(indirectLight * 0.0000152590219);
-	res.directLight = vec3(directLightRead.xyz) * 0.00392156862;
-	res.specLight = vec3(directLightRead.w, specLightRead.xy) * 0.00392156862;
+	res.normal       = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
+	res.material     = normalRead.w;
+	res.diffuseLight = vec3(diffuseLight * 0.0000152590219);
+	res.directLight  = vec3(directLightRead.xyz) * 0.00392156862;
+	res.specLight    = vec3(directLightRead.w, specLightRead.xy) * 0.00392156862;
 
 	return res;
 }
@@ -214,22 +211,22 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uint lastVox = 255;
+uint lastVox = 255; //used for transparent voxels
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, bool addSpec, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
 {
-	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
+	ivec3 pos = ivec3(floor(rayPos));    //the position within the chunk
 	vec3 deltaDist = abs(invRayDir);     //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
-	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+	vec3 sideDist = (sign(rayDir) * (pos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 
-	while(in_chunk_bounds(mapPos))
+	while(in_chunk_bounds(pos))
 	{
 		//check if a solid voxel has been hit:
-		if (does_voxel_exist(chunk, mapPos) && !ignoreFirst)
+		if (does_voxel_exist(chunk, pos) && !ignoreFirst)
 		{
 			//decompress the voxel and find its material:
-			voxel = decompress_voxel(get_voxel(chunk, mapPos));
+			voxel = decompress_voxel(get_voxel(chunk, pos));
 			Material material = materials[voxel.material];
 
 			if(material.opacity < 1.0 && voxel.material < 255)
@@ -239,14 +236,12 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 				{
 					colorAdd += colorMult * material.opacity * material.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
-					if(addSpec)
-						colorAdd += voxel.specLight * material.specular;
 				}
 			}
 			else
 			{
 				//return the position
-				chunkPos = mapPos;
+				chunkPos = pos;
 				return true;
 			}
 
@@ -256,43 +251,43 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 			lastVox = 255;
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+		iterate_DDA(deltaDist, rayStep, sideDist, pos);
 		ignoreFirst = false;
 	}
 
 	return false;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, bool addSpec, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	colorAdd = vec3(0.0); //added to the final color to account for transparency
 	colorMult = 1.0;      //multiplied with the final color to account for transparency
 
-	ivec3 mapPos = ivec3(floor(rayPos)); //the position in the voxel map
+	ivec3 pos = ivec3(floor(rayPos));    //the position within the map
 	vec3 deltaDist = abs(invRayDir);     //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
-	vec3 sideDist = (sign(rayDir) * (mapPos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
+	vec3 sideDist = (sign(rayDir) * (pos - rayPos) + (sign(rayDir) * 0.5) + 0.5) * deltaDist; //the total distance the ray has to travel to reach one additional unit in each direction (accounts for starting position as well)
 	vec3 updatedRayDir = (abs(rayDir) + EPSILON) * sign(rayDir); //to reduce noise
 
-	while(in_map_bounds(mapPos))
+	while(in_map_bounds(pos))
 	{
 		//check if a solid chunk has been hit:
-		ChunkHandle mapTile = get_map_tile(mapPos);
+		ChunkHandle mapTile = get_map_tile(pos);
 		if (mapTile.flag == 2)
 		{
-			vec2 intersection = intersect_AABB(invRayDir, rayPos, mapPos, mapPos + 1.0); //find exactly where the ray intersects
+			vec2 intersection = intersect_AABB(invRayDir, rayPos, pos, pos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
 				rayPos += updatedRayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			if(step_chunk(mapTile.index, rayDir, invRayDir, (rayPos - mapPos) * CHUNK_SIZE, ignoreFirst, addSpec, voxel, chunkPos, colorAdd, colorMult))
+			if(step_chunk(mapTile.index, rayDir, invRayDir, (rayPos - pos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos, colorAdd, colorMult))
 			{
-				vec3 voxelPos = mapPos + chunkPos * INV_CHUNK_SIZE;
+				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
 
-				uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+				uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 
 				if(map[index].lastUsed > 0)
 					map[index].lastUsed = 0;
@@ -302,13 +297,13 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 		}
 		else if(mapTile.flag == 1)
 		{
-			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 			map[index].flag = 3;
 			return false;
 		}
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, mapPos);
+		iterate_DDA(deltaDist, rayStep, sideDist, pos);
 		ignoreFirst = false;
 	}
 

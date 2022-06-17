@@ -46,6 +46,11 @@ DNvec2 DN_vec2_scale(DNvec2 v, GLfloat s)
 	return (DNvec2){v.x * s, v.y * s};
 }
 
+DNvec2 DN_vec2_pow(DNvec2 v, GLfloat s)
+{
+	return (DNvec2){powf(v.x, s), powf(v.y, s)};
+}
+
 DNvec2 DN_vec2_normalize(DNvec2 v)
 {
 	DNvec2 res = v;
@@ -119,6 +124,11 @@ DNvec3 DN_vec3_mult(DNvec3 v1, DNvec3 v2)
 DNvec3 DN_vec3_scale(DNvec3 v, GLfloat s)
 {
 	return (DNvec3){v.x * s, v.y * s, v.z * s};
+}
+
+DNvec3 DN_vec3_pow(DNvec3 v, GLfloat s)
+{
+	return (DNvec3){powf(v.x, s), powf(v.y, s), powf(v.z, s)};
 }
 
 DNvec3 DN_vec3_normalize(DNvec3 v)
@@ -202,6 +212,11 @@ DNvec4 DN_vec4_mult(DNvec4 v1, DNvec4 v2)
 DNvec4 DN_vec4_scale(DNvec4 v, GLfloat s)
 {
 	return (DNvec4){v.x * s, v.y * s, v.z * s, v.w * s};
+}
+
+DNvec4 DN_vec4_pow(DNvec4 v, GLfloat s)
+{
+	return (DNvec4){powf(v.x, s), powf(v.y, s), powf(v.z, s), powf(v.w, s)};
 }
 
 DNvec4 DN_vec4_normalize(DNvec4 v)

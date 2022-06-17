@@ -38,7 +38,7 @@ void _DN_read_chunk_info( FILE *fp, VoxFileChunk* chunk )
 	chunk->endPtr   = ftell(fp) + chunk->len + chunk->childLen;
 }
 
-bool DN_load_vox_file(const char* path, DNvoxelModel* model, DNmaterialHandle material)
+bool DN_load_vox_file(const char* path, DNvoxelModel* model)
 {
 	FILE* fp = fopen(path, "rb");
 
@@ -110,21 +110,15 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model, DNmaterialHandle ma
 	size_t modelSize = model->size.x * model->size.y * model->size.z;
 	model->voxels = DN_MALLOC(modelSize * sizeof(DNcompressedVoxel));
 	for(int i = 0; i < modelSize; i++)
-		model->voxels[i].indirectLight = UINT32_MAX;
+		model->voxels[i].normal = UINT32_MAX;
 
 	for(int i = 0; i < numVoxels; i++)
 	{
 		DNvoxel vox;
 		VoxFileVoxel pos = tempVoxels[i];
-		VoxFileVoxel color = palette[pos.w];
-
-		//vox.albedo.x = pow((float)color.x / 255.0f, 2.2f);
-		//vox.albedo.y = pow((float)color.y / 255.0f, 2.2f);
-		//vox.albedo.z = pow((float)color.z / 255.0f, 2.2f);
-
 		//TODO: add functionality for sharing the palette with magicavoxel or something
 
-		vox.material = material;
+		vox.material = pos.w;
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 		DNivec3 pos2 = {pos.x, pos.z, pos.y};
