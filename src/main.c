@@ -301,7 +301,7 @@ int main()
 	dnMaterials[1].emissive = false;
 	dnMaterials[1].specular = 1.0f;
 	dnMaterials[1].opacity = 1.0f;
-	dnMaterials[1].reflectSky = true;
+	dnMaterials[1].reflectType = 1;
 	dnMaterials[1].shininess = 100;
 
 	dnMaterials[2].albedo = (DNvec3){pow(0.8784f, GAMMA), pow(0.3607f, GAMMA), pow(0.3607f, GAMMA)};
@@ -313,7 +313,7 @@ int main()
 	dnMaterials[3].emissive = false;
 	dnMaterials[3].specular = 0.7f;
 	dnMaterials[3].opacity = 1.0f;
-	dnMaterials[3].reflectSky = false;
+	dnMaterials[3].reflectType = 0;
 	dnMaterials[3].shininess = 3;
 
 	dnMaterials[4].albedo = (DNvec3){pow(0.224f, GAMMA), pow(0.831f, GAMMA), pow(0.718f, GAMMA)};
@@ -419,8 +419,8 @@ int main()
 
 		if(activeMap->streamable && updateData)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
-		DN_update_lighting(activeMap, 0, 0, glfwGetTime());
 		DN_draw(activeMap);
+		DN_update_lighting(activeMap, 0, 0, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);

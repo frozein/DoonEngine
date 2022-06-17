@@ -58,7 +58,7 @@ struct Material
 	float opacity;   //the opacity of the voxel
 
 	float specular;  //what percentage of rays are specular, the other percent are diffuse
-	uint reflectSky; //only applies to specular voxels. whether or not they will reflect the sky color
+	uint reflectType; //only applies to specular voxels. whether or not they will reflect the sky color
 	uint shininess;  //the greater the number, the closer the specular rays are to perfect reflection
 };
 

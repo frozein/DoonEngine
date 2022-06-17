@@ -69,7 +69,7 @@ typedef struct DNmaterial
 	GLfloat opacity;
 
 	GLfloat specular;
-	GLuint reflectSky;
+	GLuint reflectType; //0 = do not reflect the sky color, 1 = reflect the sky color, 2 = highlight only (much faster to calculate)
 	GLuint shininess;
 } DNmaterial;
 
