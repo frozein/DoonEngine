@@ -350,8 +350,8 @@ int main()
 
 	//sync with gpu:
 	//---------------------------------
-	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
-	DN_sync_gpu(sphereMap, DN_WRITE, DN_REQUEST_NONE);
+	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
+	DN_sync_gpu(sphereMap, DN_WRITE, DN_REQUEST_NONE, 5);
 
 	//set materials:
 	//---------------------------------
@@ -397,10 +397,10 @@ int main()
 		activeMap->camOrient = (DNvec3){pitch, yaw, 0.0f};
 		activeMap->camViewMode = viewMode;
 
-		if(activeMap->streamable && updateData)
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
 		DN_draw(activeMap);
-		DN_update_lighting(activeMap, 5, 1, glfwGetTime());
+		if(activeMap->streamable && updateData)
+			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 5);
+		DN_update_lighting(activeMap, 1, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
@@ -476,10 +476,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
-				if(activeMap->streamable)
-					DN_sync_gpu(activeMap, DN_WRITE, DN_REQUEST_NONE);
-				else
-					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+				if(!activeMap->streamable)
+					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 			}
 		}
 
@@ -491,10 +489,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			DN_separate_position(hitPos, &mapPos, &localPos);
 
 			DN_remove_voxel(activeMap, mapPos, localPos);
-			if(activeMap->streamable)
-				DN_sync_gpu(activeMap, DN_WRITE, DN_REQUEST_NONE);
-			else
-				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED);
+			if(!activeMap->streamable)
+				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 		}
 }
 

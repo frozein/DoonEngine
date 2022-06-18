@@ -420,8 +420,13 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 	map->gpuChunkLayout[maxTimeIndex] = pos;
 }
 
-static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requests)
+static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
 {
+	static unsigned int frameNum = 0;
+	frameNum++;
+	if(frameNum >= lightingSplit)
+		frameNum = 0;
+
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
 	DNchunkHandle* voxelMapGPU = (DNchunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
@@ -439,36 +444,13 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	{
 		DNivec3 pos = {x, y, z};
 		int mapIndex = DN_FLATTEN_INDEX(pos, map->mapSize);    //the map index for the cpu-side memory
-		DNchunkHandle cell = voxelMapGPU[mapIndex];
 
-		if(op != DN_READ)
-		{
-			//if a chunk was added to the cpu map, request it to be added to the gpu map:
-			if(map->map[mapIndex].flag != 0 && cell.flag == 0)
-				voxelMapGPU[mapIndex].flag = 1;
-			else if(map->map[mapIndex].flag == 0 && cell.flag != 0)
-			{
-				voxelMapGPU[mapIndex].flag = 0;
-				map->gpuChunkLayout[cell.index].x = -1;
-			}
-
-			if(map->map[mapIndex].flag != 0 && map->chunks[map->map[mapIndex].index].updated)
-			{
-				if(cell.flag == 2)
-					map->gpuChunkLayout[cell.index].x = -1;
-				voxelMapGPU[mapIndex].flag = cell.flag >= 2 ? 3 : 1;
-				map->chunks[map->map[mapIndex].index].updated = false;
-			}
-
-			//if flag = 3 (requested), try to load a new chunk:
-			if(cell.flag == 3 && map->map[mapIndex].flag != 0)
-				_DN_stream_voxel_chunk(map, pos, voxelMapGPU, mapIndex);
-		}
+		DNchunkHandle GPUcell = voxelMapGPU[mapIndex];
 
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(requests != DN_REQUEST_NONE && cell.flag >= 1 && (requests == DN_REQUEST_LOADED || cell.visible == 1))
+			if(requests != DN_REQUEST_NONE && GPUcell.flag >= 1 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == frameNum || map->chunks[map->map[mapIndex].index].updated))
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
@@ -478,7 +460,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 						break;
 				}
 
-				map->lightingRequests[map->numLightingRequests++].x = cell.index;
+				map->lightingRequests[map->numLightingRequests++].x = GPUcell.index;
 			}
 
  			//set the "visible" flag to 0:
@@ -487,6 +469,29 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 			//increase the "time last used" flag:
 			voxelMapGPU[mapIndex].lastUsed++;
 		}
+
+		if(op != DN_READ)
+		{
+			//if a chunk was added to the cpu map, request it to be added to the gpu map:
+			if(map->map[mapIndex].flag != 0 && GPUcell.flag == 0)
+				voxelMapGPU[mapIndex].flag = 1;
+			else if(map->map[mapIndex].flag == 0 && GPUcell.flag != 0)
+			{
+				voxelMapGPU[mapIndex].flag = 0;
+				map->gpuChunkLayout[GPUcell.index].x = -1;
+			}
+
+			if(GPUcell.flag == 2 && map->chunks[map->map[mapIndex].index].updated)
+			{
+				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map->chunks[map->map[mapIndex].index]);
+				glBufferSubData(GL_SHADER_STORAGE_BUFFER, GPUcell.index * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &gpuChunk);
+				map->chunks[map->map[mapIndex].index].updated = false;
+			}
+
+			//if flag = 3 (requested), try to load a new chunk:
+			if(GPUcell.flag == 3 && map->map[mapIndex].flag != 0)
+				_DN_stream_voxel_chunk(map, pos, voxelMapGPU, mapIndex);
+		}
 	}
 
 	//unmap:
@@ -494,7 +499,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
-static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests requests)
+static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
 {
 	if(op != DN_READ)
 	{
@@ -574,12 +579,12 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
-void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests)
+void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
 {
 	if(map->streamable)
-		_DN_sync_gpu_streamable(map, op, requests);
+		_DN_sync_gpu_streamable(map, op, requests, lightingSplit);
 	else
-		_DN_sync_gpu_nonstreamable(map, op, requests);
+		_DN_sync_gpu_nonstreamable(map, op, requests, lightingSplit);
 	glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 }
 
@@ -625,7 +630,7 @@ void DN_draw(DNmap* map)
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void DN_update_lighting(DNmap* map, unsigned int split, unsigned int numDiffuseSamples, float time)
+void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
 {
 	glUseProgram(lightingProgram);
 
@@ -633,24 +638,12 @@ void DN_update_lighting(DNmap* map, unsigned int split, unsigned int numDiffuseS
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 
-	static unsigned int frameNum = 0;
-	static float oldTime = 0.0;
-	frameNum++;
-	if(frameNum > split)
-	{
-		frameNum = 0;
-		oldTime = time;
-	}
-
-	int numThisFrame = (int)ceil((float)map->numLightingRequests / split);
-	int offset = numThisFrame * (frameNum % split);
-	offset = min(offset, map->numLightingRequests - numThisFrame);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 
-	if(numThisFrame > maxLightingRequests)
+	if(map->numLightingRequests > maxLightingRequests)
 	{
 		size_t newSize = maxLightingRequests;
-		while(newSize < numThisFrame)
+		while(newSize < map->numLightingRequests )
 			newSize *= 2;
 
 		DN_ERROR_LOG("NOTE - RESIZING LIGHTING REQUESTS BUFFER TO ACCOMODATE %zi REQUESTS\n", newSize);
@@ -663,7 +656,7 @@ void DN_update_lighting(DNmap* map, unsigned int split, unsigned int numDiffuseS
 		maxLightingRequests = newSize;
 	}
 
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, numThisFrame * sizeof(DNuvec4), &map->lightingRequests[offset]);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(DNuvec4), map->lightingRequests);
 
 	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", time);
@@ -676,7 +669,7 @@ void DN_update_lighting(DNmap* map, unsigned int split, unsigned int numDiffuseS
 	DN_program_uniform_vec3(lightingProgram, "ambientStrength", map->ambientLightStrength);
 	glUniform3uiv(glGetUniformLocation(lightingProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
-	glDispatchCompute(numThisFrame, 1, 1);
+	glDispatchCompute(map->numLightingRequests, 1, 1);
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
 }
 

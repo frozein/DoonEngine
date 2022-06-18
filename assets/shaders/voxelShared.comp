@@ -273,11 +273,14 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 		{
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, pos, pos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
-				rayPos += updatedRayDir * (intersection.x + EPSILON); //add so that new pos is inside the chunk
+				rayPos += updatedRayDir * (intersection.x - EPSILON); //add so that new pos is inside the chunk
+
+			vec3 chunkRayPos = (rayPos - pos) * CHUNK_SIZE;
+			chunkRayPos = clamp(chunkRayPos, vec3(EPSILON), CHUNK_SIZE - EPSILON); //try to reduce noise. TODO: remove noise entirely
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			if(step_chunk(mapTile.index, rayDir, invRayDir, (rayPos - pos) * CHUNK_SIZE, ignoreFirst, voxel, chunkPos, colorAdd, colorMult))
+			if(step_chunk(mapTile.index, rayDir, invRayDir, chunkRayPos, ignoreFirst, voxel, chunkPos, colorAdd, colorMult))
 			{
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects

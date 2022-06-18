@@ -141,7 +141,7 @@ void DN_delete_map(DNmap* map);
 void DN_draw(DNmap* map);
 
 //Updates the lighting on every chunk currently in a map's lightingRequests. @param split the number of frames it takes up update every chunk @param numDiffuseSamples the number of diffuse lighting samples to take
-void DN_update_lighting(DNmap* map, unsigned int split, unsigned int numDiffuseSamples, float time);
+void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:
@@ -152,7 +152,7 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos);
 void DN_remove_chunk(DNmap* map, DNivec3 pos);
 
 //Updates the gpu-side data for a map. For non-streamable maps, this should be called after edits to the map. For streamable maps, this should be called every frame (or every few frames). @param requests determines what chunks, if any, will be placed into this map's lightingRequests array.
-void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests);
+void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
