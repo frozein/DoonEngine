@@ -26,24 +26,19 @@ typedef struct DNvoxel
 	uint8_t material; //the material index, rangine from 0-255, a material of 255 represents an empty voxel
 } DNvoxel;
 
-//a single voxel, as stored on the GPU
+//a compressed voxel
 typedef struct DNcompressedVoxel
 {
-	GLuint normal; 		 //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
-	GLuint directLight;  //used to store how much direct light the voxel receives,   not updated CPU-side
-	GLuint specLight;    //used to store how much specular light the voxel receives, not updated CPU-side
-	GLuint diffuseLight; //used to store how much diffuse light the voxel receives,  not updated CPU-side
+	GLuint normal; //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
 } DNcompressedVoxel;
 
-//a chunk of voxels, as stored on the GPU
+//a chunk of compressed voxels
 typedef struct DNchunk
 {
-	DNivec3 pos; 			   //the chunk's position within the entire map
-	GLuint used; 			   //whether the chunk is currently used by a map tile
-	GLuint updated; 		   //whether the chunk has updates not yet pushed to the GPU
-	GLuint numVoxels; 		   //the number of filled voxels this chunk contains, used to identify empty chunks for removal
-	GLuint numLightingSamples; //the number of lighting samples this chunk has taken, not updated CPU-side
-	GLuint padding; 
+	DNivec3 pos; 	  //the chunk's position within the entire map
+	GLuint used; 	  //whether the chunk is currently used by a map tile
+	GLuint updated;   //whether the chunk has updates not yet pushed to the GPU
+	GLuint numVoxels; //the number of filled voxels this chunk contains, used to identify empty chunks for removal
 
 	DNcompressedVoxel voxels[8][8][8]; //the grid of voxels in this map, of size CHUNK_SIZE
 } DNchunk;

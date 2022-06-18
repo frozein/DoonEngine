@@ -197,7 +197,7 @@ int main()
 	treeMap = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
 	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 
-	sphereMap = DN_create_map((DNuvec3){10, 3, 10}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 128);
+	sphereMap = DN_create_map((DNuvec3){30, 30, 30}, (DNuvec2){SCREEN_W, SCREEN_H}, true, 1024);
 	sphereMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 	activeMap = sphereMap;
 
@@ -210,7 +210,7 @@ int main()
 
 	//generate voxel data (for testing with sphere):
 	//---------------------------------
-	/*for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < sphereMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < sphereMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
 			{
@@ -227,16 +227,15 @@ int main()
 						maxNormal = fabs(vox.normal.z);
 
 					vox.normal = DN_vec3_scale(vox.normal, 1.0f / maxNormal);
-					vox.albedo = (DNvec3){pow(x / 240.0f, GAMMA), pow(y / 240.0f, GAMMA), pow(z / 240.0f, GAMMA)};
 
 					DNivec3 chunkPos;
 					DNivec3 localPos;
 					DN_separate_position((DNivec3){x, y, z}, &chunkPos, &localPos);
 					DN_set_voxel(sphereMap, chunkPos, localPos, vox);
 				}
-			}*/
+			}
 
-	for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
+	/*for(int z = 0; z < sphereMap->mapSize.z * DN_CHUNK_SIZE.z; z++)
 		for(int y = 0; y < sphereMap->mapSize.y * DN_CHUNK_SIZE.y; y++)
 			for(int x = 0; x < sphereMap->mapSize.x * DN_CHUNK_SIZE.x; x++)
 			{
@@ -291,7 +290,7 @@ int main()
 
 					DN_set_voxel(sphereMap, (DNivec3){x / 8, y / 8, z / 8}, (DNivec3){x % 8, y % 8, z % 8}, vox);
 				}
-	}
+	}*/
 
 	//--------------//
 
@@ -401,7 +400,7 @@ int main()
 		if(activeMap->streamable && updateData)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE);
 		DN_draw(activeMap);
-		DN_update_lighting(activeMap, 2, 5, glfwGetTime());
+		DN_update_lighting(activeMap, 5, 1, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);

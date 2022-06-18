@@ -30,12 +30,8 @@ struct CompressedVoxel //a compressed voxel
 
 struct Chunk //a chunk of voxels
 {
-	ivec3 pos; 				 //the position within the map
-	uint used; 				 //not used
-	uint updated; 			 //not used
-	uint numVoxels; 		 //not used
+	ivec3 pos;				 //the chunk's position within the map
 	uint numIndirectSamples; //the number of diffuse lighting samples this chunk has taken
-	uint padding;
 
 	CompressedVoxel voxels[8][8][8]; //the grid of voxels
 };
