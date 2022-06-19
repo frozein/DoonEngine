@@ -177,7 +177,7 @@ bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
 
 //Uploads materials from dnMaterials to the gpu so their effects can be visually seen
-void DN_set_materials();
+void DN_sync_materials();
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:

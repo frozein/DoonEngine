@@ -718,7 +718,6 @@ void DN_draw(DNmap* map)
 	DN_program_uniform_vec3(finalProgram, "ambientStrength", map->ambientLightStrength);
 	glUniform3uiv(glGetUniformLocation(finalProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
-	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
@@ -882,7 +881,7 @@ bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU-SIDE MAP SETTINGS:
 
-void DN_set_materials()
+void DN_sync_materials()
 {
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS, dnMaterials);

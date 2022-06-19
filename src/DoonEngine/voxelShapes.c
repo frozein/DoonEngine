@@ -1,9 +1,77 @@
 #include "voxelShapes.h"
 #include "math/vector.h"
+#include "utility/shader.h"
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <math.h>
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//SHAPE SDFs:
+
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//SHAPES:
+
+//shape parameters:
+static DNvec3 center;
+static float radius;
+
+static void DN_shape(DNmap* map, DNivec3 min, DNivec3 max, float (*sdf)(DNvec3))
+{
+
+}
+
+void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
+{
+	DNivec3 min = {(int)floorf(c.x - r), (int)floorf(c.y - r), (int)floorf(c.z - r)};
+	DNivec3 max = {(int)ceilf (c.x + r), (int)ceilf (c.y + r), (int)ceilf (c.z + r)};
+
+	const float rSqr = r * r;
+	for(int z = min.z; z <= max.z; z++)
+	{
+		if(z / DN_CHUNK_SIZE.z >= map->mapSize.z || z < 0)
+			continue;
+
+		for(int y = min.y; y <= max.y; y++)
+		{
+			if(y / DN_CHUNK_SIZE.y >= map->mapSize.y || y < 0)
+				continue;
+
+			for(int x = min.x; x <= max.x; x++)
+			{
+				if(x / DN_CHUNK_SIZE.x >= map->mapSize.x || x < 0)
+					continue;
+
+				float distSqr = (c.x - x) * (c.x - x) + (c.y - y) * (c.y - y) + (c.z - z) * (c.z - z);
+				if(distSqr <= rSqr)
+				{
+					DNivec3 mapPos;
+					DNivec3 chunkPos;
+					DN_separate_position((DNivec3){x, y, z}, &mapPos, &chunkPos);
+
+					DNchunkHandle mapTile = map->map[DN_FLATTEN_INDEX(mapPos, map->mapSize)];
+					if(mapTile.flag == 0 || !DN_does_voxel_exist(map, mapPos, chunkPos))
+					{
+						DNvoxel vox;
+						vox.material = material;
+						vox.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
+
+						float maxNormal = fabs(vox.normal.x);
+						if(fabs(vox.normal.y) > maxNormal)
+							maxNormal = fabs(vox.normal.y);
+						if(fabs(vox.normal.z) > maxNormal)
+							maxNormal = fabs(vox.normal.z);
+
+						vox.normal = DN_vec3_scale(vox.normal, 1.0f / maxNormal);
+
+						DN_set_voxel(map, mapPos, chunkPos, vox);
+					}
+				}
+			}
+		}
+	}
+}
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MODEL UTILITIES:

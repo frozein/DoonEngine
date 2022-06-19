@@ -266,12 +266,11 @@ int main()
 	dnMaterials[9].specular = 0;
 	dnMaterials[9].opacity = 1.0f;
 
-	DN_set_materials();
+	DN_sync_materials();
 
 	//sync with gpu:
 	//---------------------------------
 	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
-	DN_sync_gpu(demoMap, DN_WRITE, DN_REQUEST_NONE, 5);
 
 	//main loop:
 	//---------------------------------
@@ -328,9 +327,11 @@ int main()
 
 	//clean up and close:
 	//---------------------------------
-	DN_delete_map(demoMap);
 	DN_delete_map(treeMap);
+	DN_delete_map(demoMap);
+	DN_delete_map(sphereMap);
 	DN_quit();
+
 	glDeleteVertexArrays(1, &quadBuffer);
 	DN_program_free(quadShader);
 	glfwTerminate();
@@ -384,7 +385,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			if(DN_in_map_bounds(activeMap, mapPos))
 			{
 				DNvoxel newVox;
-				newVox.material = 0;
+				newVox.material = 9;
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
@@ -465,6 +466,7 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 	glViewport(0, 0, w, h);
 	DN_set_texture_size(treeMap, (DNuvec2){w, h});
 	DN_set_texture_size(demoMap, (DNuvec2){w, h});
+	DN_set_texture_size(sphereMap, (DNuvec2){w, h});
 	SCREEN_W = w;
 	SCREEN_H = h;
 }
