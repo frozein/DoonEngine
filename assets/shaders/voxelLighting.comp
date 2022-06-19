@@ -266,5 +266,9 @@ void main()
 	if(chunkPos == ivec3(0, 0, 0))
 		atomicAdd(chunks[chunkIndex].numIndirectSamples, updatedDiffuseSamples);
 
+	//set visible to false:
+	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+	map[mapIndex].visible = 0;
+
 	return;
 }

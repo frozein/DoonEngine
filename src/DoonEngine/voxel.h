@@ -134,6 +134,11 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 //Deletes a DNmap, should be called whenever a map is no longer needed to avoid memory leaks
 void DN_delete_map(DNmap* map);
 
+//Loads a DNmap from a file with the specified parameters. @returns the loaded map or NULL, on failure
+DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, unsigned int minChunks);
+//Saves a DNmap to a file. @returns true on success, false on failure
+bool DN_save_map(const char* filePath, DNmap* map);
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //DRAWING:
 
@@ -172,7 +177,7 @@ bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
 
 //Uploads materials from dnMaterials to the gpu so their effects can be visually seen
-void DN_set_materials(DNmaterialHandle min, unsigned int num);
+void DN_set_materials();
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:

@@ -237,6 +237,102 @@ void DN_delete_map(DNmap* map)
 	DN_FREE(map);
 }
 
+DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, unsigned int minChunks)
+{
+	//open file:
+	//---------------------------------
+	FILE* fptr = fopen(filePath, "rb");
+	if(!fptr)
+	{
+		DN_ERROR_LOG("ERROR - UNABLE TO OPEN FILE \"%s\" FOR READING", filePath);
+		return NULL;
+	}
+
+	DNmap* map;
+
+	//read map size and map:
+	//---------------------------------
+	DNuvec3 mapSize;
+	fread(&mapSize, sizeof(DNuvec3), 1, fptr);
+	map = DN_create_map(mapSize, textureSize, streamable, minChunks);
+	fread(map->map, sizeof(DNchunkHandle), map->mapSize.x * map->mapSize.y * map->mapSize.z, fptr);
+
+	//make sure nothing seems loaded on gpu:
+	for(int i = 0; i < map->mapSize.x * map->mapSize.y * map->mapSize.z; i++)
+		map->map[i].flag = min(map->map[i].flag, 1);
+
+	//read chunk cap and chunks:
+	//---------------------------------
+	unsigned int chunkCap;
+	fread(&chunkCap, sizeof(unsigned int), 1, fptr);
+	DN_set_max_chunks(map, chunkCap);
+	fread(map->chunks, sizeof(DNchunk), map->chunkCap, fptr);
+
+	//read camera parameters:
+	//---------------------------------
+	fread(&map->camPos, sizeof(DNvec3), 1, fptr);
+	fread(&map->camOrient, sizeof(DNvec3), 1, fptr);
+	fread(&map->camFOV, sizeof(float), 1, fptr);
+	fread(&map->camViewMode, sizeof(unsigned int), 1, fptr);
+
+	//read lighting parameters:
+	//---------------------------------
+	fread(&map->sunDir, sizeof(DNvec3), 1, fptr);
+	fread(&map->sunStrength, sizeof(DNvec3), 1, fptr);
+	fread(&map->ambientLightStrength, sizeof(DNvec3), 1, fptr);
+	fread(&map->diffuseBounceLimit, sizeof(unsigned int), 1, fptr);
+	fread(&map->specBounceLimit, sizeof(unsigned int), 1, fptr);
+	fread(&map->shadowSoftness, sizeof(float), 1, fptr);
+
+	//close file and return:
+	//---------------------------------
+	fclose(fptr);
+	return map;
+}
+
+bool DN_save_map(const char* filePath, DNmap* map)
+{
+	//open file:
+	//---------------------------------
+	FILE* fptr = fopen(filePath, "wb");
+	if(!fptr)
+	{
+		DN_ERROR_LOG("ERROR - UNABLE TO OPEN FILE \"%s\" FOR WRITING", filePath);
+		return false;
+	}
+
+	//write map size and map:
+	//---------------------------------
+	fwrite(&map->mapSize, sizeof(DNuvec3), 1, fptr);
+	fwrite(map->map, sizeof(DNchunkHandle), map->mapSize.x * map->mapSize.y * map->mapSize.z, fptr);
+	
+	//write chunk cap and chunks:
+	//---------------------------------
+	fwrite(&map->chunkCap, sizeof(unsigned int), 1, fptr);
+	fwrite(map->chunks, sizeof(DNchunk), map->chunkCap, fptr);
+
+	//write camera parameters:
+	//---------------------------------
+	fwrite(&map->camPos, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->camOrient, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->camFOV, sizeof(float), 1, fptr);
+	fwrite(&map->camViewMode, sizeof(unsigned int), 1, fptr);
+
+	//write lighting parameters:
+	//---------------------------------
+	fwrite(&map->sunDir, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->sunStrength, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->ambientLightStrength, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->diffuseBounceLimit, sizeof(unsigned int), 1, fptr);
+	fwrite(&map->specBounceLimit, sizeof(unsigned int), 1, fptr);
+	fwrite(&map->shadowSoftness, sizeof(float), 1, fptr);
+
+	//close file and return
+	//---------------------------------
+	fclose(fptr);
+	return true;
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:
 
@@ -450,7 +546,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(requests != DN_REQUEST_NONE && GPUcell.flag >= 1 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == frameNum || map->chunks[map->map[mapIndex].index].updated))
+			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == frameNum || map->chunks[map->map[mapIndex].index].updated))
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
@@ -462,9 +558,6 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 
 				map->lightingRequests[map->numLightingRequests++].x = GPUcell.index;
 			}
-
- 			//set the "visible" flag to 0:
-			voxelMapGPU[mapIndex].visible = 0;
 
 			//increase the "time last used" flag:
 			voxelMapGPU[mapIndex].lastUsed++;
@@ -789,16 +882,10 @@ bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU-SIDE MAP SETTINGS:
 
-void DN_set_materials(DNmaterialHandle min, unsigned int num)
+void DN_set_materials()
 {
-	if(min + num > DN_MAX_VOXEL_MATERIALS)
-	{
-		DN_ERROR_LOG("ERROR - TRYING TO SET OUT OF BOUNDS MATERIALS\n");
-		return;
-	}
-
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * num, &dnMaterials[min]);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS, dnMaterials);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
