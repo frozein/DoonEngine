@@ -10,6 +10,8 @@
 
 //Places a sphere into the map at the given center and with the given radius
 void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r);
+//Places a box into the map with the given values
+void DN_shapes_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:

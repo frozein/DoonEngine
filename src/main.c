@@ -388,7 +388,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				newVox.material = 9;
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
-				DN_set_voxel(activeMap, mapPos, localPos, newVox);
+				//DN_set_voxel(activeMap, mapPos, localPos, newVox);
+				//DN_shapes_sphere(activeMap, 9, (DNvec3){newPos.x, newPos.y, newPos.z}, 10.0f);
+				DN_shapes_box(activeMap, 9, (DNvec3){newPos.x, newPos.y, newPos.z}, (DNvec3){4.0f, 4.0f, 4.0f}, (DNvec3){0.0f, 0.0f, 0.0f});
 				if(!activeMap->streamable)
 					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 			}
