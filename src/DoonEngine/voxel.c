@@ -920,7 +920,12 @@ void DN_set_compressed_voxel(DNmap* map, DNivec3 mapPos, DNivec3 chunkPos, DNcom
 	//add new chunk if the requested chunk doesn't yet exist:
 	unsigned int mapIndex = DN_FLATTEN_INDEX(mapPos, map->mapSize);
 	if(map->map[mapIndex].flag == 0)
+	{
+		if(voxel.normal & 0xFF == 255) //if adding an empty voxel to an empty chunk, just return
+			return;
+
 		DN_add_chunk(map, mapPos);
+	}
 	
 	unsigned int chunkIndex = map->map[mapIndex].index;
 
