@@ -8,10 +8,23 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPES:
 
+//NOTE: the shapes are generated using distance fields and thus may not appear exactly as specified when scaled down to the low-resolution voxel map
+//for example, a cylinder with a height of 5 might only be 4 voxels tall due to rounding
+
 //Places a sphere into the map at the given center and with the given radius
-void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r);
-//Places a box into the map with the given values
-void DN_shapes_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient);
+void DN_shape_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r);
+//Places a box into the map with the given parameters @param c the center @param len the distance from the center to the edge of the box
+void DN_shape_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient);
+//Places a box into the map with the given parameters @param c the center @param len the distance from the center to the edge of the box @param r the radius of the corners
+void DN_shape_rounded_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, float r, DNvec3 orient);
+//Places a torus into the map with the given parameters @param c the center @param minR the interior radius @param maxR the exterior radius
+void DN_shape_torus(DNmap* map, DNmaterialHandle material, DNvec3 c, float ra, float rb, DNvec3 orient);
+//Places an ellipsoid into the map with the given parameters @c the center @param r the lengths of the semi-axis of the ellipsoid
+void DN_shape_ellipsoid(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 r, DNvec3 orient);
+//Places a cylinder into the map with the given parameters @param c the center @param r the radius @param h the height
+void DN_shape_cylinder(DNmap* map, DNmaterialHandle material, DNvec3 c, float r, float h, DNvec3 orient);
+//Places a cone into the map with the given parameters @param b the base point of the cone @param r the radius @param h the height
+void DN_shape_cone(DNmap* map, DNmaterialHandle material, DNvec3 b, float r, float h, DNvec3 orient);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:

@@ -55,7 +55,7 @@ DNvec2 DN_vec2_normalize(DNvec2 v)
 {
 	DNvec2 res = v;
 
-	GLfloat mag = DN_vec2_length(v);
+	GLfloat mag = v.x * v.x + v.y * v.y;
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -80,7 +80,7 @@ DNvec2 DN_vec2_lerp(DNvec2 from, DNvec2 to, GLfloat a)
 
 GLfloat DN_vec2_length(DNvec2 v)
 {
-	return v.x * v.x + v.y * v.y;
+	return sqrtf(v.x * v.x + v.y * v.y);
 }
 
 GLfloat DN_vec2_dot(DNvec2 v1, DNvec2 v2)
@@ -135,7 +135,7 @@ DNvec3 DN_vec3_normalize(DNvec3 v)
 {
 	DNvec3 res = v;
 
-	GLfloat mag = DN_vec3_length(v);
+	GLfloat mag = v.x * v.x + v.y * v.y + v.z * v.z;
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -171,7 +171,7 @@ GLfloat DN_vec3_length(DNvec3 v)
 
 GLfloat DN_vec3_dot(DNvec3 v1, DNvec3 v2)
 {
-	return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
+	return sqrtf(v1.x * v2.x + v1.y * v2.y + v1.z * v2.z);
 }
 
 GLfloat DN_vec3_distance(DNvec3 v1, DNvec3 v2)
@@ -223,7 +223,7 @@ DNvec4 DN_vec4_normalize(DNvec4 v)
 {
 	DNvec4 res = v;
 
-	GLfloat mag = DN_vec4_length(v);
+	GLfloat mag = v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
 	if(fabsf(mag - 1.0f) >= NORMALIZE_TOLERANCE && mag != 0.0f)
 	{
 		mag = 1.0f / sqrtf(mag);
@@ -250,7 +250,7 @@ DNvec4 DN_vec4_lerp(DNvec4 from, DNvec4 to, GLfloat a)
 
 GLfloat DN_vec4_length(DNvec4 v)
 {
-	return v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w;
+	return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z + v.w * v.w);
 }
 
 GLfloat DN_vec4_dot(DNvec4 v1, DNvec4 v2)

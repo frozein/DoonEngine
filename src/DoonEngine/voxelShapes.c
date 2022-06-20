@@ -11,8 +11,11 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPE PARAMETERS:
 
-static DNvec3 center;
 static float radius;
+static float radiusB;
+static float height;
+static DNvec2 angles;
+static DNvec3 radii;
 static DNvec3 length;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -26,6 +29,34 @@ static float _DN_sdf_box(DNvec3 p)
 	float q2 = min(max(max(q.x, q.y), q.z), 0.0);
 
 	return q1 + q2;
+}
+
+static float _DN_sdf_rounded_box(DNvec3 p)
+{
+	return _DN_sdf_box(p) - radius;
+}
+
+static float _DN_sdf_torus(DNvec3 p)
+{
+	DNvec2 q = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, p.y};
+	return (DN_vec2_length(q) - radiusB);
+}
+
+static float _DN_sdf_ellipsoid(DNvec3 p)
+{
+	return (DN_vec3_length((DNvec3){p.x / radii.x, p.y / radii.y, p.z / radii.z}) - 1.0f) * min(min(radii.x, radii.y), radii.z);
+}
+
+static float _DN_sdf_cylinder(DNvec3 p)
+{
+	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, fabs(p.y) - height};
+	return min(max(d.x, d.y), 0.0) + DN_vec2_length((DNvec2){max(d.x, 0.0), max(d.y, 0.0)});
+}
+
+static float _DN_sdf_cone(DNvec3 p)
+{
+	float q = DN_vec2_length((DNvec2){p.x, p.z});
+	return max(DN_vec2_dot((DNvec2){angles.x, angles.y}, (DNvec2){q, p.y}), -height - p.y);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -137,7 +168,7 @@ static void _DN_shape(DNmap* map, DNmaterialHandle material, DNvec3 min, DNvec3 
 //SHAPES
 
 //this function is implemented specially to be more efficient
-void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
+void DN_shape_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
 {
 	DNivec3 min = {(int)floorf(c.x - r), (int)floorf(c.y - r), (int)floorf(c.z - r)};
 	DNivec3 max = {(int)ceilf (c.x + r), (int)ceilf (c.y + r), (int)ceilf (c.z + r)};
@@ -172,12 +203,7 @@ void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
 						vox.material = material;
 						vox.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
 
-						float maxNormal = fabs(vox.normal.x);
-						if(fabs(vox.normal.y) > maxNormal)
-							maxNormal = fabs(vox.normal.y);
-						if(fabs(vox.normal.z) > maxNormal)
-							maxNormal = fabs(vox.normal.z);
-
+						float maxNormal = max(max(fabs(vox.normal.x), fabs(vox.normal.y)), fabs(vox.normal.z));
 						vox.normal = DN_vec3_scale(vox.normal, 1.0f / maxNormal);
 
 						DN_set_voxel(map, mapPos, chunkPos, vox);
@@ -188,7 +214,7 @@ void DN_shapes_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
 	}
 }
 
-void DN_shapes_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient)
+void DN_shape_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -197,6 +223,82 @@ void DN_shapes_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, 
 	length = len;
 
 	_DN_shape(map, material, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
+}
+
+void DN_shape_rounded_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
+{
+	DNmat4 transform;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
+	transform = DN_mat4_rotate_euler(transform, orient);
+
+	length = len;
+	radius = r;
+
+	DNvec3 min = {-len.x - r, -len.y - r, -len.z - r};
+	DNvec3 max = { len.x + r,  len.y + r,  len.z + r};
+
+	_DN_shape(map, material, min, max, transform, _DN_sdf_rounded_box);
+}
+
+void DN_shape_torus(DNmap* map, DNmaterialHandle material, DNvec3 c, float ra, float rb, DNvec3 orient)
+{
+	DNmat4 transform;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
+	transform = DN_mat4_rotate_euler(transform, orient);
+
+	radius = ra;
+	radiusB = rb;
+
+	DNvec3 min = (DNvec3){-(ra + rb), -rb, -(ra + rb)};
+	DNvec3 max = (DNvec3){ (ra + rb),  rb,  (ra + rb)};
+
+	_DN_shape(map, material, min, max, transform, _DN_sdf_torus);
+}
+
+void DN_shape_ellipsoid(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 r, DNvec3 orient)
+{
+	DNmat4 transform;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
+	transform = DN_mat4_rotate_euler(transform, orient);
+
+	radii = r;
+
+	DNvec3 min = {-r.x, -r.y, -r.z};
+	DNvec3 max = { r.x,  r.y,  r.z};
+
+	_DN_shape(map, material, min, max, transform, _DN_sdf_ellipsoid);
+}
+
+void DN_shape_cylinder(DNmap* map, DNmaterialHandle material, DNvec3 c, float r, float h, DNvec3 orient)
+{
+	DNmat4 transform;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
+	transform = DN_mat4_rotate_euler(transform, orient);
+
+	radius = r;
+	height = h / 2;
+
+	DNvec3 min = {-r, -h / 2, -r};
+	DNvec3 max = { r,  h / 2,  r};
+
+	_DN_shape(map, material, min, max, transform, _DN_sdf_cylinder);
+}
+
+void DN_shape_cone(DNmap* map, DNmaterialHandle material, DNvec3 b, float r, float h, DNvec3 orient)
+{
+	DNmat4 transform;
+	b.y += h;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, b);
+	transform = DN_mat4_rotate_euler(transform, orient);
+
+	float hyp = sqrtf(r * r + h * h);
+	angles = (DNvec2){h / hyp, r / hyp};
+	height = h;
+
+	DNvec3 min = {-r, -h, -r};
+	DNvec3 max = { r,  0,  r};
+
+	_DN_shape(map, material, min, max, transform, _DN_sdf_cone);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
