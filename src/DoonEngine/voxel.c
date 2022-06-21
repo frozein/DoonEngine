@@ -18,8 +18,6 @@ GLuint materialBuffer = 0;
 GLprogram lightingProgram = 0;
 GLprogram finalProgram = 0;
 
-DNmaterial* dnMaterials = 0;
-
 unsigned int maxLightingRequests = 1024;
 
 #define WORKGROUP_SIZE 16
@@ -55,15 +53,6 @@ static void _DN_clear_chunk(DNmap* map, unsigned int index);
 
 bool DN_init()
 {	
-	//allocate memory for materials:
-	//---------------------------------
-	dnMaterials = DN_MALLOC(sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS);
-	if(!dnMaterials)
-	{
-		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE MEMORY FOR VOXEL MATERIALS\n");
-		return false;
-	}
-
 	//generate gl buffers:
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&materialBuffer, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS))
@@ -106,8 +95,6 @@ void DN_quit()
 
 	glDeleteBuffers(1, &materialBuffer);
 	glDeleteBuffers(1, &lightingRequestBuffer);
-
-	DN_FREE(dnMaterials);
 }
 
 DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsigned int minChunks)
@@ -175,6 +162,13 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	for(int i = 0; i < numChunks; i++)
 		_DN_clear_chunk(map, i);
 
+	map->materials = DN_MALLOC(sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS);
+	if(!map->materials)
+	{
+		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE CPU MEMORY FOR MATERIALS\n");
+		return NULL;
+	}
+
 	map->lightingRequests = DN_MALLOC(sizeof(DNuvec4) * numChunks);
 	if(!map->lightingRequests)
 	{
@@ -231,6 +225,7 @@ void DN_delete_map(DNmap* map)
 
 	DN_FREE(map->map);
 	DN_FREE(map->chunks);
+	DN_FREE(map->materials);
 	DN_FREE(map->lightingRequests);
 	if(map->streamable)
 		DN_FREE(map->gpuChunkLayout);
@@ -267,6 +262,10 @@ DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, u
 	fread(&chunkCap, sizeof(unsigned int), 1, fptr);
 	DN_set_max_chunks(map, chunkCap);
 	fread(map->chunks, sizeof(DNchunk), map->chunkCap, fptr);
+
+	//read materials:
+	//---------------------------------
+	fread(map->materials, sizeof(DNmaterial), DN_MAX_VOXEL_MATERIALS, fptr);
 
 	//read camera parameters:
 	//---------------------------------
@@ -310,6 +309,10 @@ bool DN_save_map(const char* filePath, DNmap* map)
 	//---------------------------------
 	fwrite(&map->chunkCap, sizeof(unsigned int), 1, fptr);
 	fwrite(map->chunks, sizeof(DNchunk), map->chunkCap, fptr);
+
+	//write materials:
+	//---------------------------------
+	fwrite(map->materials, sizeof(DNmaterial), DN_MAX_VOXEL_MATERIALS, fptr);
 
 	//write camera parameters:
 	//---------------------------------
@@ -705,9 +708,12 @@ void DN_draw(DNmap* map)
 
 	glUseProgram(finalProgram);
 
-	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS, map->materials);
 
 	DN_program_uniform_vec3(finalProgram, "camPos", map->camPos);
 	DN_program_uniform_vec3(finalProgram, "camDir", camFront);
@@ -879,15 +885,6 @@ bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//GPU-SIDE MAP SETTINGS:
-
-void DN_sync_materials()
-{
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS, dnMaterials);
-}
-
-//--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:
 
 bool DN_in_map_bounds(DNmap* map, DNivec3 pos)
@@ -921,7 +918,7 @@ void DN_set_compressed_voxel(DNmap* map, DNivec3 mapPos, DNivec3 chunkPos, DNcom
 	unsigned int mapIndex = DN_FLATTEN_INDEX(mapPos, map->mapSize);
 	if(map->map[mapIndex].flag == 0)
 	{
-		if(voxel.normal & 0xFF == 255) //if adding an empty voxel to an empty chunk, just return
+		if((voxel.normal & 0xFF) == 255) //if adding an empty voxel to an empty chunk, just return
 			return;
 
 		DN_add_chunk(map, mapPos);

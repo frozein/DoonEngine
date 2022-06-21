@@ -212,62 +212,6 @@ int main()
 
 	//--------------//
 
-	dnMaterials[0].albedo = DN_vec3_pow((DNvec3){0.8588f, 0.7922f, 0.6118f}, GAMMA);
-	dnMaterials[0].emissive = false;
-	dnMaterials[0].specular = 0;
-	dnMaterials[0].opacity = 1.0f;
-
-	dnMaterials[1].albedo = DN_vec3_pow((DNvec3){0.9f, 0.9f, 0.9f}, GAMMA);
-	dnMaterials[1].emissive = false;
-	dnMaterials[1].specular = 1.0f;
-	dnMaterials[1].opacity = 1.0f;
-	dnMaterials[1].reflectType = 1;
-	dnMaterials[1].shininess = 100;
-
-	dnMaterials[2].albedo = DN_vec3_pow((DNvec3){0.8784f, 0.3607f, 0.3607f}, GAMMA);
-	dnMaterials[2].emissive = false;
-	dnMaterials[2].specular = 0.0f;
-	dnMaterials[2].opacity = 1.0f;
-
-	dnMaterials[3].albedo = DN_vec3_pow((DNvec3){0.1f, 0.1f, 1.0f}, GAMMA);
-	dnMaterials[3].emissive = false;
-	dnMaterials[3].specular = 0.7f;
-	dnMaterials[3].opacity = 1.0f;
-	dnMaterials[3].reflectType = 0;
-	dnMaterials[3].shininess = 3;
-
-	dnMaterials[4].albedo = DN_vec3_pow((DNvec3){0.224f, 0.831f, 0.718f}, GAMMA);
-	dnMaterials[4].emissive = true;
-	dnMaterials[4].specular = 0.0f;
-	dnMaterials[4].opacity = 1.0f;
-
-	dnMaterials[5].albedo = DN_vec3_pow((DNvec3){1.0f, 1.0f, 1.0f}, GAMMA);
-	dnMaterials[5].emissive = true;
-	dnMaterials[5].specular = 0.0f;
-	dnMaterials[5].opacity = 1.0f;
-
-	dnMaterials[6].albedo = DN_vec3_pow((DNvec3){0.569f, 0.224f, 0.831f}, GAMMA);
-	dnMaterials[6].emissive = false;
-	dnMaterials[6].specular = 0.0f;
-	dnMaterials[6].opacity = 0.5f;
-
-	dnMaterials[7].albedo = DN_vec3_pow((DNvec3){0.8392f, 0.8314f, 0.2588f}, GAMMA);
-	dnMaterials[7].emissive = false;
-	dnMaterials[7].specular = 0.0f;
-	dnMaterials[7].opacity = 0.5f;
-
-	dnMaterials[8].albedo = DN_vec3_pow((DNvec3){0.8196f, 0.4549f, 0.1961f}, GAMMA);
-	dnMaterials[8].emissive = true;
-	dnMaterials[8].specular = 0.0f;
-	dnMaterials[8].opacity = 1.0f;
-
-	dnMaterials[9].albedo = DN_vec3_pow((DNvec3){0.306f, 0.831f, 0.224f}, GAMMA);
-	dnMaterials[9].emissive = false;
-	dnMaterials[9].specular = 0;
-	dnMaterials[9].opacity = 1.0f;
-
-	DN_sync_materials();
-
 	//sync with gpu:
 	//---------------------------------
 	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);

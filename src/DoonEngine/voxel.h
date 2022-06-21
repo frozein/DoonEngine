@@ -87,6 +87,7 @@ typedef struct DNmap
 	//data:
 	DNchunkHandle* map; 		 	  //READ-WRITE | A pointer to the actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNchunk* chunks; 	 		 	  //READ-WRITE | A pointer to the array of chunks that the map has
+	DNmaterial* materials;			  //READ-WRITE | A pointer to the array of materials that the map has
 	DNuvec4* lightingRequests;        //READ-WRITE | A pointer to an array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
 	DNivec3* gpuChunkLayout;		  //READ ONLY  | A pointer to an array representing the chunk layout on the GPU, only used for streamable maps. Represents the position in the map that each chunk is.
 
@@ -175,9 +176,6 @@ bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
 
 //Sets the current maximum number of lighting updates the map can hold at once. Returns true on success, false on failure
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num);
-
-//Uploads materials from dnMaterials to the gpu so their effects can be visually seen
-void DN_sync_materials();
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:
