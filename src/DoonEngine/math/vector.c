@@ -41,6 +41,11 @@ DNvec2 DN_vec2_mult(DNvec2 v1, DNvec2 v2)
 	return (DNvec2){v1.x * v2.x, v1.y * v2.y};
 }
 
+DNvec2 DN_vec2_divide(DNvec2 v1, DNvec2 v2)
+{
+	return (DNvec2){v1.x / v2.x, v1.y / v2.y};
+}
+
 DNvec2 DN_vec2_scale(DNvec2 v, GLfloat s)
 {
 	return (DNvec2){v.x * s, v.y * s};
@@ -119,6 +124,11 @@ DNvec3 DN_vec3_subtract(DNvec3 v1, DNvec3 v2)
 DNvec3 DN_vec3_mult(DNvec3 v1, DNvec3 v2)
 {
 	return (DNvec3){v1.x * v2.x, v1.y * v2.y, v1.z * v2.z};
+}
+
+DNvec3 DN_vec3_divide(DNvec3 v1, DNvec3 v2)
+{
+	return (DNvec3){v1.x / v2.x, v1.y / v2.y, v1.z / v2.z};
 }
 
 DNvec3 DN_vec3_scale(DNvec3 v, GLfloat s)
@@ -207,6 +217,11 @@ DNvec4 DN_vec4_subtract(DNvec4 v1, DNvec4 v2)
 DNvec4 DN_vec4_mult(DNvec4 v1, DNvec4 v2)
 {
 	return (DNvec4){v1.x * v2.x, v1.y * v2.y, v1.z * v2.z, v1.w * v2.w};
+}
+
+DNvec4 DN_vec4_divide(DNvec4 v1, DNvec4 v2)
+{
+	return (DNvec4){v1.x / v2.x, v1.y / v2.y, v1.z / v2.z, v1.w / v2.w};
 }
 
 DNvec4 DN_vec4_scale(DNvec4 v, GLfloat s)

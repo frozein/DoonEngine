@@ -25,7 +25,7 @@ static float _DN_sdf_box(DNvec3 p)
 {
 	DNvec3 q = DN_vec3_subtract((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
 
-	float q1 = DN_vec3_length((DNvec3){max(q.x, 0.0), max(q.y, 0.0), max(q.z, 0.0)});
+	float q1 = DN_vec3_length(DN_vec3_clamp(q, 0.0, INFINITY));
 	float q2 = min(max(max(q.x, q.y), q.z), 0.0);
 
 	return q1 + q2;
@@ -44,13 +44,13 @@ static float _DN_sdf_torus(DNvec3 p)
 
 static float _DN_sdf_ellipsoid(DNvec3 p)
 {
-	return (DN_vec3_length((DNvec3){p.x / radii.x, p.y / radii.y, p.z / radii.z}) - 1.0f) * min(min(radii.x, radii.y), radii.z);
+	return (DN_vec3_length(DN_vec3_divide(p, radii)) - 1.0f) * min(min(radii.x, radii.y), radii.z);
 }
 
 static float _DN_sdf_cylinder(DNvec3 p)
 {
 	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, fabs(p.y) - height};
-	return min(max(d.x, d.y), 0.0) + DN_vec2_length((DNvec2){max(d.x, 0.0), max(d.y, 0.0)});
+	return min(max(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_clamp(d, 0.0, INFINITY));
 }
 
 static float _DN_sdf_cone(DNvec3 p)
@@ -234,8 +234,8 @@ void DN_shape_rounded_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec
 	length = len;
 	radius = r;
 
-	DNvec3 min = {-len.x - r, -len.y - r, -len.z - r};
-	DNvec3 max = { len.x + r,  len.y + r,  len.z + r};
+	DNvec3 min = {min(-len.x, -r), min(-len.y, -r), min(-len.z, -r)};
+	DNvec3 max = {max( len.x,  r), max( len.x,  r), max( len.x,  r)};
 
 	_DN_shape(map, material, min, max, transform, _DN_sdf_rounded_box);
 }

@@ -104,6 +104,9 @@ typedef struct DNmap
 	unsigned int diffuseBounceLimit;  //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
 	unsigned int specBounceLimit; 	  //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
 	float shadowSoftness; 			  //READ-WRITE | How soft shadows from direct light appear
+
+	unsigned int frameNum;			  //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
+	float lastTime;					  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNmap;
 
 //An enumeration representing the types of chunks that can be requested for lighting updates

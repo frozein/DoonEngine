@@ -214,6 +214,9 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	map->specBounceLimit = 2;
 	map->shadowSoftness = 10.0f;
 
+	map->frameNum = 0;
+	map->lastTime = 0.0f;
+
 	return map;
 }
 
@@ -521,10 +524,9 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 
 static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
 {
-	static unsigned int frameNum = 0;
-	frameNum++;
-	if(frameNum >= lightingSplit)
-		frameNum = 0;
+	map->frameNum++;
+	if(map->frameNum >= lightingSplit)
+		map->frameNum = 0;
 
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
@@ -549,7 +551,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == frameNum || map->chunks[map->map[mapIndex].index].updated))
+			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].index].updated))
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
@@ -730,6 +732,9 @@ void DN_draw(DNmap* map)
 
 void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
 {
+	if(map->frameNum == 1)
+		map->lastTime = time;
+		
 	glUseProgram(lightingProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
@@ -757,7 +762,7 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(DNuvec4), map->lightingRequests);
 
 	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
-	DN_program_uniform_float(lightingProgram, "time", time);
+	DN_program_uniform_float(lightingProgram, "time", map->lastTime);
 	DN_program_uniform_uint(lightingProgram, "numDiffuseSamples", numDiffuseSamples);
 	DN_program_uniform_uint(lightingProgram, "diffuseBounceLimit", map->diffuseBounceLimit);
 	DN_program_uniform_uint(lightingProgram, "specularBounceLimit", map->specBounceLimit);
