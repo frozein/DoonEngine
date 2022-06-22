@@ -14,6 +14,9 @@
 //the maximum number of materials (NOTE: a material of 255 represents an empty voxel):
 #define DN_MAX_MATERIALS 256
 
+//the value used for gamma correction, raise albedo values to this value to convert them to linear color space
+#define DN_GAMMA 2.2f
+
 //flattens a 3D vector position into a 1D array index given the dimensions of the array
 #define DN_FLATTEN_INDEX(p, s) (p.x) + (s.x) * ((p.y) + (p.z) * (s.y))
 

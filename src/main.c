@@ -12,7 +12,6 @@
 #include <math.h>
 #include <GLAD/glad.h>
 #include <GLFW/glfw3.h>
-#include <STB/stb_image.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -32,7 +31,7 @@ void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum s
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-//map:
+//maps:
 DNmap* activeMap;
 
 DNmap* treeMap;
@@ -48,21 +47,13 @@ GLfloat ASPECT_RATIO = 9.0 / 16.0;
 DNvec3 camFront =    {0.0f, 0.0f,  1.0f};
 const DNvec3 camUp = {0.0f, 1.0f,  0.0f};
 
-float lastX = 400.0f, lastY = 300.0f;
-bool firstMouse = true;
-
+//timing:
 float deltaTime = 0.0f;
-
-bool updateData = true;
-
-#define GAMMA 2.2f
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 int main()
 {
-	int error;
-
 	//init GLFW:
 	//---------------------------------
 	glfwInit();
@@ -77,7 +68,6 @@ int main()
 	{
 		printf("Failed to create GLFW window\n");
 		glfwTerminate();
-		scanf("%d", &error);
 		return -1;
 	}
 	glfwMakeContextCurrent(window);
@@ -88,7 +78,6 @@ int main()
 	if(!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
 	{
 		printf("Failed to initialize GLAD\n");
-		scanf("%d", &error);
 		return -1;
 	}
 
@@ -115,7 +104,6 @@ int main()
 		DN_ERROR_LOG("quad shader failed\n");
 		DN_program_free(quadShader);
 		glfwTerminate();
-		scanf("%d", &error);
 
 		return -1;
 	}
@@ -148,7 +136,6 @@ int main()
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
-		scanf("%d", &error);
 		return -1;
 	}
 
@@ -158,7 +145,6 @@ int main()
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
 		glDeleteVertexArrays(1, &quadBuffer);
-		scanf("%d", &error);
 		return -1;
 	}
 
@@ -186,7 +172,6 @@ int main()
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
 		glfwTerminate();
-		scanf("%d", &error);
 		return -1;
 	}
 
@@ -210,12 +195,12 @@ int main()
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_map(treeMap, model, (DNivec3){0, 0, 0});
 
-	treeMap->materials[130].albedo = DN_vec3_pow((DNvec3){0.4f, 0.2f, 0.0f}, GAMMA);
+	treeMap->materials[130].albedo = DN_vec3_pow((DNvec3){0.4f, 0.2f, 0.0f}, DN_GAMMA);
 	treeMap->materials[130].emissive = false;
 	treeMap->materials[130].specular = 0.0f;
 	treeMap->materials[130].opacity = 1.0f;
 
-	treeMap->materials[160].albedo = DN_vec3_pow((DNvec3){0.2f, 0.4f, 0.0f}, GAMMA);
+	treeMap->materials[160].albedo = DN_vec3_pow((DNvec3){0.2f, 0.4f, 0.0f}, DN_GAMMA);
 	treeMap->materials[160].emissive = false;
 	treeMap->materials[160].specular = 0.0f;
 	treeMap->materials[160].opacity = 1.0f;
@@ -261,7 +246,7 @@ int main()
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, activeMap->camFOV });
 
 		DN_draw(activeMap);
-		if(activeMap->streamable && updateData)
+		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 5);
 		DN_update_lighting(activeMap, 1, glfwGetTime());
 
@@ -289,13 +274,15 @@ int main()
 	glDeleteVertexArrays(1, &quadBuffer);
 	DN_program_free(quadShader);
 	glfwTerminate();
-
-	scanf("%d", &error);
+;
 	return 0;
 }
 
 void mouse_pos_callback(GLFWwindow *window, double x, double y)
 {
+	static float lastX = 400.0f, lastY = 300.0f;
+	static bool firstMouse = true;
+
 	if(firstMouse)
 	{
 		lastX = x;
@@ -391,14 +378,10 @@ void process_input(GLFWwindow *window)
 		activeMap->camViewMode = 5;
 
 	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
-		updateData = true;
-	if(glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS)
-		updateData = false;
-	if(glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS)
-		activeMap = treeMap;
-	if(glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS)
 		activeMap = demoMap;
-	if(glfwGetKey(window, GLFW_KEY_F5) == GLFW_PRESS)
+	if(glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS)
+		activeMap = treeMap;
+	if(glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS)
 		activeMap = sphereMap;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)

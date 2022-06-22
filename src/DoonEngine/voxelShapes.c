@@ -340,7 +340,7 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model)
 
 	if(fp == NULL)
 	{
-		DN_ERROR_LOG("ERROR - UNABLE TO OPEN FILE \"%s\"\n", path);
+		DN_ERROR_LOG("DN ERROR - UNABLE TO OPEN FILE \"%s\"\n", path);
 		return false;
 	}
 
@@ -353,7 +353,7 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model)
 	int idNum = _DN_read_int(fp);
 	if(idNum != CHUNK_ID('V', 'O', 'X', ' '))
 	{
-		DN_ERROR_LOG("ERROR - NOT A VALID .VOX FILE\n");
+		DN_ERROR_LOG("DN ERROR - NOT A VALID .VOX FILE\n");
 		return false;
 	}
 
