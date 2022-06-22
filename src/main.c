@@ -208,17 +208,17 @@ int main()
 	DNvoxelModel model;
 	DN_load_vox_file("models/tree.vox", &model);
 	DN_calculate_model_normals(2, &model);
-	DN_place_model_into_world(treeMap, model, (DNivec3){0, 0, 0});
+	DN_place_model_into_map(treeMap, model, (DNivec3){0, 0, 0});
 
-	treeMap->materials[138].albedo = DN_vec3_pow((DNvec3){0.4f, 0.2f, 0.0f}, GAMMA);
-	treeMap->materials[138].emissive = false;
-	treeMap->materials[138].specular = 0.0f;
-	treeMap->materials[138].opacity = 1.0f;
+	treeMap->materials[130].albedo = DN_vec3_pow((DNvec3){0.4f, 0.2f, 0.0f}, GAMMA);
+	treeMap->materials[130].emissive = false;
+	treeMap->materials[130].specular = 0.0f;
+	treeMap->materials[130].opacity = 1.0f;
 
-	treeMap->materials[168].albedo = DN_vec3_pow((DNvec3){0.2f, 0.4f, 0.0f}, GAMMA);
-	treeMap->materials[168].emissive = false;
-	treeMap->materials[168].specular = 0.0f;
-	treeMap->materials[168].opacity = 1.0f;
+	treeMap->materials[160].albedo = DN_vec3_pow((DNvec3){0.2f, 0.4f, 0.0f}, GAMMA);
+	treeMap->materials[160].emissive = false;
+	treeMap->materials[160].specular = 0.0f;
+	treeMap->materials[160].opacity = 1.0f;
 
 	//--------------//
 

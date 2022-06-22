@@ -55,7 +55,7 @@ bool DN_init()
 {	
 	//generate gl buffers:
 	//---------------------------------
-	if(!_DN_gen_shader_storage_buffer(&materialBuffer, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS))
+	if(!_DN_gen_shader_storage_buffer(&materialBuffer, sizeof(DNmaterial) * DN_MAX_MATERIALS))
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
 		return false;
@@ -162,7 +162,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	for(int i = 0; i < numChunks; i++)
 		_DN_clear_chunk(map, i);
 
-	map->materials = DN_MALLOC(sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS);
+	map->materials = DN_MALLOC(sizeof(DNmaterial) * DN_MAX_MATERIALS);
 	if(!map->materials)
 	{
 		DN_ERROR_LOG("ERROR - FAILED TO ALLOCATE CPU MEMORY FOR MATERIALS\n");
@@ -268,7 +268,7 @@ DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, u
 
 	//read materials:
 	//---------------------------------
-	fread(map->materials, sizeof(DNmaterial), DN_MAX_VOXEL_MATERIALS, fptr);
+	fread(map->materials, sizeof(DNmaterial), DN_MAX_MATERIALS, fptr);
 
 	//read camera parameters:
 	//---------------------------------
@@ -315,7 +315,7 @@ bool DN_save_map(const char* filePath, DNmap* map)
 
 	//write materials:
 	//---------------------------------
-	fwrite(map->materials, sizeof(DNmaterial), DN_MAX_VOXEL_MATERIALS, fptr);
+	fwrite(map->materials, sizeof(DNmaterial), DN_MAX_MATERIALS, fptr);
 
 	//write camera parameters:
 	//---------------------------------
@@ -715,7 +715,7 @@ void DN_draw(DNmap* map)
 	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_VOXEL_MATERIALS, map->materials);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
 
 	DN_program_uniform_vec3(finalProgram, "camPos", map->camPos);
 	DN_program_uniform_vec3(finalProgram, "camDir", camFront);

@@ -5,23 +5,44 @@
 #include "../math/common.h"
 #include <stdbool.h>
 
-typedef GLuint GLshader; //a handle to a GL shader
+typedef GLuint GLshader;  //a handle to a GL shader
 typedef GLuint GLprogram; //a handle to a GL shader program
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-//Loads and compiles a shader and returns a handle to it. Returns -1 on failure
+/* Loads and compiles a shader
+ * @param type the type of shader to be compiled. For example, GL_VERTEX_SHADER
+ * @param path the path to the shader to be loaded
+ * @param includePath the path to the shader to be included, if an include is not needed, set to NULL
+ * @returns the handle to the shader, or -1 on failure
+ */
 int DN_shader_load(GLenum type, const char* path, const char* includePath);
-//Deletes a shader, any type
+/* Frees a shader
+ * @param id the handle to the shader to free
+ */
 void DN_shader_free(GLshader id);
 
-//Loads, compiles, and links a vertex and fragment shader into a shader program and returns a handle to it. Returns -1 on failure
+/* Generates a shader program with a vertex and a fragment shader
+ * @param vertexPath the path to the vertex shader to use
+ * @param vertexIncludePath the path to the file to be included in the vertex shader, or NULL if none is desired
+ * @param fragmentPath the path to the fragment shader to use
+ * @param fragmentIncludePath the path to the file to be included in the fragment shader, or NULL if none is desired
+ * @returns the handle to the program, or -1 on failure
+ */
 int DN_program_load(const char* vertexPath, const char* vertexIncludePath, const char* fragmentPath, const char* fragmentIncludePath);
-//Loads, compiles, and links a compute shader into a shader program and returns a handle to it. Will paste the code in includePath to the top of the file if it is not NULL. Returns -1 on failure
+/* Generates a shader program with a compute shader
+ * @param path the path to the compute shader to use
+ * @param includePath the path to the file to be included in the compute shader, or NULL if none is desired
+ * @returns the handle to the program, or -1 on failure
+ */
 int DN_compute_program_load(const char* path, const char* includePath);
-//Deletes a shader program, any type
+/* Frees a shader program
+ * @param id the handle to the shader program to free
+ */
 void DN_program_free(GLprogram id);
-//Activates a shader program for rendering
+/* Activaes a shader program for drawing
+ * @param id the handle to the program to activate
+ */
 void DN_program_activate(GLprogram id);
 
 //--------------------------------------------------------------------------------------------------------------------------------//

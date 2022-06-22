@@ -117,7 +117,7 @@ static DNvec3 _DN_calc_normal(DNvec4 p, DNmat4 invTransform, float dist, float (
 }
 
 //@param min the minimum point on the bounding box of the UN-TRANSFORMED shape
-static void _DN_shape(DNmap* map, DNmaterialHandle material, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
+static void _DN_shape(DNmap* map, uint8_t material, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
 {
 	DNmat4 invTransform = DN_mat4_inv(transform);
 
@@ -168,7 +168,7 @@ static void _DN_shape(DNmap* map, DNmaterialHandle material, DNvec3 min, DNvec3 
 //SHAPES
 
 //this function is implemented specially to be more efficient
-void DN_shape_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
+void DN_shape_sphere(DNmap* map, uint8_t material, DNvec3 c, float r)
 {
 	DNivec3 min = {(int)floorf(c.x - r), (int)floorf(c.y - r), (int)floorf(c.z - r)};
 	DNivec3 max = {(int)ceilf (c.x + r), (int)ceilf (c.y + r), (int)ceilf (c.z + r)};
@@ -214,7 +214,7 @@ void DN_shape_sphere(DNmap* map, DNmaterialHandle material, DNvec3 c, float r)
 	}
 }
 
-void DN_shape_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, DNvec3 orient)
+void DN_shape_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -225,7 +225,7 @@ void DN_shape_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, D
 	_DN_shape(map, material, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
 }
 
-void DN_shape_rounded_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
+void DN_shape_rounded_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -240,7 +240,7 @@ void DN_shape_rounded_box(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec
 	_DN_shape(map, material, min, max, transform, _DN_sdf_rounded_box);
 }
 
-void DN_shape_torus(DNmap* map, DNmaterialHandle material, DNvec3 c, float ra, float rb, DNvec3 orient)
+void DN_shape_torus(DNmap* map, uint8_t material, DNvec3 c, float ra, float rb, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -255,7 +255,7 @@ void DN_shape_torus(DNmap* map, DNmaterialHandle material, DNvec3 c, float ra, f
 	_DN_shape(map, material, min, max, transform, _DN_sdf_torus);
 }
 
-void DN_shape_ellipsoid(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 r, DNvec3 orient)
+void DN_shape_ellipsoid(DNmap* map, uint8_t material, DNvec3 c, DNvec3 r, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -269,7 +269,7 @@ void DN_shape_ellipsoid(DNmap* map, DNmaterialHandle material, DNvec3 c, DNvec3 
 	_DN_shape(map, material, min, max, transform, _DN_sdf_ellipsoid);
 }
 
-void DN_shape_cylinder(DNmap* map, DNmaterialHandle material, DNvec3 c, float r, float h, DNvec3 orient)
+void DN_shape_cylinder(DNmap* map, uint8_t material, DNvec3 c, float r, float h, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -284,7 +284,7 @@ void DN_shape_cylinder(DNmap* map, DNmaterialHandle material, DNvec3 c, float r,
 	_DN_shape(map, material, min, max, transform, _DN_sdf_cylinder);
 }
 
-void DN_shape_cone(DNmap* map, DNmaterialHandle material, DNvec3 b, float r, float h, DNvec3 orient)
+void DN_shape_cone(DNmap* map, uint8_t material, DNvec3 b, float r, float h, DNvec3 orient)
 {
 	DNmat4 transform;
 	b.y += h;
@@ -414,7 +414,7 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model)
 		VoxFileVoxel pos = tempVoxels[i];
 		//TODO: add functionality for sharing the palette with magicavoxel or something
 
-		vox.material = pos.w;
+		vox.material = pos.w - 8; //for some reason magicavoxel starts indexing their palette at 8?
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 
 		DNivec3 pos2 = {pos.x, pos.z, pos.y};
@@ -463,7 +463,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			{
 				DNvec3 toCenter = {xP - xC, yP - yC, zP - zC};
 				float dist = DN_vec3_dot(toCenter, toCenter);
-				dist *= dist; //reduces artifacts at the cost of some smoothness
+				dist *= dist; //reduces artifacts at the cost of some smoothness, not sure why
 				toCenter = DN_vec3_scale(toCenter, 1.0f / dist);
 				sum = DN_vec3_add(sum, toCenter);
 			}
@@ -484,7 +484,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 	}
 }
 
-void DN_place_model_into_world(DNmap* map, DNvoxelModel model, DNivec3 pos)
+void DN_place_model_into_map(DNmap* map, DNvoxelModel model, DNivec3 pos)
 {
 	for(int x = 0; x < model.size.x; x++)
 	for(int y = 0; y < model.size.y; y++)
