@@ -422,7 +422,11 @@ static DNchunkGPU _DN_chunk_to_gpu(DNchunk chunk)
 	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
 	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
 	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+	{
 		res.voxels[x][y][z].normal = chunk.voxels[x][y][z].normal;
+		res.voxels[x][y][z].specLight = 0;
+		res.voxels[x][y][z].diffuseLight = 0;
+	}
 
 	return res;
 }
@@ -732,7 +736,7 @@ void DN_draw(DNmap* map)
 
 void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
 {
-	if(map->frameNum == 1)
+	if(map->frameNum == 0)
 		map->lastTime = time;
 		
 	glUseProgram(lightingProgram);

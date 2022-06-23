@@ -233,6 +233,11 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 					colorAdd += colorMult * material.opacity * material.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
 				}
+
+				uint index = chunks[chunk].pos.x + mapSize.x * (chunks[chunk].pos.y + mapSize.y * chunks[chunk].pos.z);
+
+				if(map[index].lastUsed > 0)
+					map[index].lastUsed = 0;
 			}
 			else
 			{
