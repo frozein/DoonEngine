@@ -165,11 +165,11 @@ void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout
 			//multiply the final color:
 			if(hitMaterial.emissive)
 			{
-				color += newColor * hitMaterial.albedo;
+				color += newColor * (hitMaterial.albedo * colorMult + colorAdd);
 				return;
 			}
 			else
-				newColor *= hitMaterial.albedo;
+				newColor *= (hitMaterial.albedo * colorMult + colorAdd);
 		}
 		else
 		{
