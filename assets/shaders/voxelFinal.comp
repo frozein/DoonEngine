@@ -55,26 +55,26 @@ void main()
 			{	
 				vec3 solidColor;
 				if(finalMaterial.emissive)
-					solidColor = finalMaterial.albedo;
+					solidColor = finalVoxel.albedo;
 				else
-					solidColor = ambientStrength * finalMaterial.albedo + finalVoxel.specLight + finalVoxel.diffuseLight;
+					solidColor = ambientStrength * finalVoxel.albedo + finalVoxel.specLight + finalVoxel.diffuseLight;
 
 				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
 				break;
 			}
 			case 1: //albedo
 			{
-				finalColor = pow(finalMaterial.albedo, vec3(INV_GAMMA));
+				finalColor = pow( finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 2: //diffuse light
 			{
-				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.diffuseLight / finalMaterial.albedo, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalVoxel.albedo : finalVoxel.diffuseLight / finalVoxel.albedo, vec3(INV_GAMMA));
 				break;
 			}
 			case 3: //specular light
 			{
-				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalVoxel.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
 			case 4: //normal

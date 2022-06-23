@@ -14,6 +14,7 @@ struct Voxel //a single voxel
 {
 	vec3 normal;       //the direction the voxel points (for lighting calculation)
 	uint material;     //the index of this voxel's material
+	vec3 albedo;	   //the "base color" (percentage of light reflected)
 
 	vec3 specLight;    //the lighting caused by reflecting light rays off of the voxel
 	vec3 diffuseLight; //the diffuse lighting of the voxel, caused by multiple light ray bounces
@@ -22,7 +23,7 @@ struct Voxel //a single voxel
 struct CompressedVoxel //a compressed voxel
 {
 	uint normal;       //layout: normal.x (8 bits)        | normal.y (8 bits)      | normal.z (8 bits)        | material index (8 bits)
-	uint directLight;  //layout: directLight.x (8 bits)   | directLight.y (8 bits) | directLight.z (8 bits)   | specLight.x (8 bits)
+	uint albedo;  	   //layout: albedo.r (8 bits)        | albedo.g (8 bits) 	   | albedo.b (8 bits)   	  | specLight.x (8 bits)
 	uint specLight;    //layout: specLight.y (8 bits)     | specLight.z (8 bits)   | diffuseLight.x (16 bits)
 	uint diffuseLight; //layout: diffuseLight.y (16 bits)                          | diffuseLight.z (16 bits)
 };
@@ -45,7 +46,8 @@ struct ChunkHandle //a handle to a Chunk
 
 struct Material
 {
-	vec3 albedo;      //the "base color" of the material, the proportion of light reflected
+	vec3 padding;	  //for alignment
+
 	bool emissive;    //whether or not the voxel emits light
 	float opacity;    //the opacity of the voxel
 	float specular;   //what percentage of rays are specular, the other percent are diffuse
@@ -128,7 +130,7 @@ Voxel decompress_voxel(CompressedVoxel compressed) //decompresses an entire voxe
 	Voxel res;
 
 	uvec4 normalRead 		= decode_uint_RGBA(compressed.normal);
-	uvec4 directLightRead   = decode_uint_RGBA(compressed.directLight);
+	uvec4 albedoRead 	    = decode_uint_RGBA(compressed.albedo);
 	uvec4 specLightRead 	= decode_uint_RGBA(compressed.specLight);
 	uvec4 diffuseLightRead  = decode_uint_RGBA(compressed.diffuseLight);
 
@@ -138,8 +140,9 @@ Voxel decompress_voxel(CompressedVoxel compressed) //decompresses an entire voxe
 
 	res.normal       = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
 	res.material     = normalRead.w;
+	res.albedo 		 = vec3(albedoRead.xyz) * 0.00392156862;
 	res.diffuseLight = vec3(diffuseLight * 0.0000152590219);
-	res.specLight    = vec3(directLightRead.w, specLightRead.xy) * 0.00392156862;
+	res.specLight    = vec3(albedoRead.w, specLightRead.xy) * 0.00392156862;
 
 	return res;
 }
@@ -228,7 +231,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
 				if(lastVox != voxel.material)
 				{
-					colorAdd += colorMult * material.opacity * material.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
+					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
 				}
 

@@ -86,7 +86,7 @@ typedef struct DNvoxelModel
  * @param model populated with the model once loaded
  * @returns true on success, false on failure
  */
-bool DN_load_vox_file(const char* path, DNvoxelModel* model);
+bool DN_load_vox_file(const char* path, uint8_t material, DNvoxelModel* model);
 /* Frees the memory of a model
  * @param model the model to free
 */

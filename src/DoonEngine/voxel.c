@@ -424,6 +424,7 @@ static DNchunkGPU _DN_chunk_to_gpu(DNchunk chunk)
 	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
 	{
 		res.voxels[x][y][z].normal = chunk.voxels[x][y][z].normal;
+		res.voxels[x][y][z].directLight = chunk.voxels[x][y][z].albedo;
 		res.voxels[x][y][z].specLight = 0;
 		res.voxels[x][y][z].diffuseLight = 0;
 	}
@@ -1114,9 +1115,15 @@ static DNuvec4 _DN_decode_uint_RGBA(GLuint val)
 DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 {
 	DNcompressedVoxel res;
+
 	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
+	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
+
 	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.material};
+	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), 0};
+
 	res.normal = _DN_encode_uint_RGBA(normal);
+	res.albedo = _DN_encode_uint_RGBA(albedo);
 
 	return res;
 }
@@ -1124,11 +1131,14 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel)
 {
 	DNvoxel res;
+
 	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
+	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
 
 	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
 	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
 	res.material = normal.w;
+	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
 
 	return res;
 }

@@ -177,12 +177,8 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap = DN_load_map("maps/demo.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true, 128);
-	demoMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-
+	demoMap   = DN_load_map("maps/demo.voxmap",   (DNuvec2){SCREEN_W, SCREEN_H}, true, 128  );
 	sphereMap = DN_load_map("maps/sphere.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true, 1024);
-	sphereMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-
 	activeMap = demoMap;
 
 	//load model:
@@ -191,19 +187,13 @@ int main()
 	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 
 	DNvoxelModel model;
-	DN_load_vox_file("models/tree.vox", &model);
+	DN_load_vox_file("models/tree.vox", 0, &model);
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_map(treeMap, model, (DNivec3){0, 0, 0});
 
-	treeMap->materials[130].albedo = DN_vec3_pow((DNvec3){0.4f, 0.2f, 0.0f}, DN_GAMMA);
-	treeMap->materials[130].emissive = false;
-	treeMap->materials[130].specular = 0.0f;
-	treeMap->materials[130].opacity = 1.0f;
-
-	treeMap->materials[160].albedo = DN_vec3_pow((DNvec3){0.2f, 0.4f, 0.0f}, DN_GAMMA);
-	treeMap->materials[160].emissive = false;
-	treeMap->materials[160].specular = 0.0f;
-	treeMap->materials[160].opacity = 1.0f;
+	treeMap->materials[0].emissive = false;
+	treeMap->materials[0].specular = 0.0f;
+	treeMap->materials[0].opacity = 1.0f;
 
 	//--------------//
 

@@ -27,12 +27,14 @@ typedef struct DNvoxel
 {
 	DNvec3 normal; 	  //the normal (direction the voxel points towards)
 	uint8_t material; //the index into the materials array, in the range [0, 255] (NOTE: a material of 255 represents an empty voxel)
+	DNvec3 albedo;    //the "base color" (the percentage of light that gets reflected)
 } DNvoxel;
 
 //a compressed voxel, this is how voxels are actually stored in memory
 typedef struct DNcompressedVoxel
 {
 	GLuint normal; //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
+	GLuint albedo; //layout: albedo.r (8 bits) | albedo.g (8 bits) | albedo.b (8 bits) | unused (8 bits)
 } DNcompressedVoxel;
 
 //a chunk of voxels, voxels are stored this way to save memory and accelerate ray casting
@@ -58,7 +60,8 @@ typedef struct DNchunkHandle
 //material properties for a voxel
 typedef struct DNmaterial
 {
-	DNvec3 albedo;      //the "base color" of the voxel, the proportion of light reflected
+	DNvec3 padding;		//for gpu alignment
+
 	GLuint emissive;    //whether or not the voxel emits light, represented as a uint for GPU memory alignment
 	GLfloat opacity;    //the voxel's opacity, in the range [0.0, 1.0]
 	GLfloat specular;   //the percent of light reflected specularly by a voxel in the range [0.0, 1.0]

@@ -334,7 +334,7 @@ void _DN_read_chunk_info( FILE *fp, VoxFileChunk* chunk )
 	chunk->endPtr   = ftell(fp) + chunk->len + chunk->childLen;
 }
 
-bool DN_load_vox_file(const char* path, DNvoxelModel* model)
+bool DN_load_vox_file(const char* path, uint8_t material, DNvoxelModel* model)
 {
 	FILE* fp = fopen(path, "rb");
 
@@ -412,13 +412,13 @@ bool DN_load_vox_file(const char* path, DNvoxelModel* model)
 	{
 		DNvoxel vox;
 		VoxFileVoxel pos = tempVoxels[i];
-		//TODO: add functionality for sharing the palette with magicavoxel or something
 
-		vox.material = pos.w - 8; //for some reason magicavoxel starts indexing their palette at 8?
+		vox.material = material; //TODO: add support for multiple materials per model
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
+		vox.albedo = DN_vec3_pow((DNvec3){palette[pos.w].x / 255.0f, palette[pos.w].y / 255.0f, palette[pos.w].z / 255.0f}, DN_GAMMA);
 
-		DNivec3 pos2 = {pos.x, pos.z, pos.y};
-		model->voxels[DN_FLATTEN_INDEX(pos2, model->size)] = DN_compress_voxel(vox); //have to invert z and y because magicavoxel has z as the up axis
+		DNivec3 pos2 = {pos.x, pos.z, pos.y}; //have to invert z and y because magicavoxel has z as the up axis
+		model->voxels[DN_FLATTEN_INDEX(pos2, model->size)] = DN_compress_voxel(vox);
 	}
 
 	return true;
