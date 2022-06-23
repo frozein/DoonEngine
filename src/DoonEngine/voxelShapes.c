@@ -117,7 +117,7 @@ static DNvec3 _DN_calc_normal(DNvec4 p, DNmat4 invTransform, float dist, float (
 }
 
 //@param min the minimum point on the bounding box of the UN-TRANSFORMED shape
-static void _DN_shape(DNmap* map, uint8_t material, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
+static void _DN_shape(DNmap* map, DNvoxel voxel, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
 {
 	DNmat4 invTransform = DN_mat4_inv(transform);
 
@@ -153,10 +153,8 @@ static void _DN_shape(DNmap* map, uint8_t material, DNvec3 min, DNvec3 max, DNma
 					DNchunkHandle mapTile = map->map[DN_FLATTEN_INDEX(mapPos, map->mapSize)];
 					if(mapTile.flag == 0 || !DN_does_voxel_exist(map, mapPos, chunkPos))
 					{
-						DNvoxel vox;
-						vox.material = material;
-						vox.normal = _DN_calc_normal((DNvec4){x, y, z, 1.0f}, invTransform, dist, sdf);
-						DN_set_voxel(map, mapPos, chunkPos, vox);
+						voxel.normal = _DN_calc_normal((DNvec4){x, y, z, 1.0f}, invTransform, dist, sdf);
+						DN_set_voxel(map, mapPos, chunkPos, voxel);
 					}
 				}
 			}
@@ -168,10 +166,10 @@ static void _DN_shape(DNmap* map, uint8_t material, DNvec3 min, DNvec3 max, DNma
 //SHAPES
 
 //this function is implemented specially to be more efficient
-void DN_shape_sphere(DNmap* map, uint8_t material, DNvec3 c, float r)
+void DN_shape_sphere(DNmap* map, DNvoxel voxel, DNvec3 c, float r)
 {
-	DNivec3 min = {(int)floorf(c.x - r), (int)floorf(c.y - r), (int)floorf(c.z - r)};
-	DNivec3 max = {(int)ceilf (c.x + r), (int)ceilf (c.y + r), (int)ceilf (c.z + r)};
+	DNivec3 min = {(int)floorf(c.x - r) + 1, (int)floorf(c.y - r) + 1, (int)floorf(c.z - r) + 1};
+	DNivec3 max = {(int)ceilf (c.x + r) - 1, (int)ceilf (c.y + r) - 1, (int)ceilf (c.z + r) - 1};
 
 	const float rSqr = r * r;
 	for(int z = min.z; z <= max.z; z++)
@@ -199,14 +197,12 @@ void DN_shape_sphere(DNmap* map, uint8_t material, DNvec3 c, float r)
 					DNchunkHandle mapTile = map->map[DN_FLATTEN_INDEX(mapPos, map->mapSize)];
 					if(mapTile.flag == 0 || !DN_does_voxel_exist(map, mapPos, chunkPos))
 					{
-						DNvoxel vox;
-						vox.material = material;
-						vox.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
+						voxel.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
 
-						float maxNormal = max(max(fabs(vox.normal.x), fabs(vox.normal.y)), fabs(vox.normal.z));
-						vox.normal = DN_vec3_scale(vox.normal, 1.0f / maxNormal);
+						float maxNormal = max(max(fabs(voxel.normal.x), fabs(voxel.normal.y)), fabs(voxel.normal.z));
+						voxel.normal = DN_vec3_scale(voxel.normal, 1.0f / maxNormal);
 
-						DN_set_voxel(map, mapPos, chunkPos, vox);
+						DN_set_voxel(map, mapPos, chunkPos, voxel);
 					}
 				}
 			}
@@ -214,7 +210,7 @@ void DN_shape_sphere(DNmap* map, uint8_t material, DNvec3 c, float r)
 	}
 }
 
-void DN_shape_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, DNvec3 orient)
+void DN_shape_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -222,10 +218,10 @@ void DN_shape_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, DNvec3 ori
 
 	length = len;
 
-	_DN_shape(map, material, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
+	_DN_shape(map, voxel, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
 }
 
-void DN_shape_rounded_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
+void DN_shape_rounded_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -237,10 +233,10 @@ void DN_shape_rounded_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, fl
 	DNvec3 min = {min(-len.x, -r), min(-len.y, -r), min(-len.z, -r)};
 	DNvec3 max = {max( len.x,  r), max( len.x,  r), max( len.x,  r)};
 
-	_DN_shape(map, material, min, max, transform, _DN_sdf_rounded_box);
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_rounded_box);
 }
 
-void DN_shape_torus(DNmap* map, uint8_t material, DNvec3 c, float ra, float rb, DNvec3 orient)
+void DN_shape_torus(DNmap* map, DNvoxel voxel, DNvec3 c, float ra, float rb, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -252,10 +248,10 @@ void DN_shape_torus(DNmap* map, uint8_t material, DNvec3 c, float ra, float rb, 
 	DNvec3 min = (DNvec3){-(ra + rb), -rb, -(ra + rb)};
 	DNvec3 max = (DNvec3){ (ra + rb),  rb,  (ra + rb)};
 
-	_DN_shape(map, material, min, max, transform, _DN_sdf_torus);
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_torus);
 }
 
-void DN_shape_ellipsoid(DNmap* map, uint8_t material, DNvec3 c, DNvec3 r, DNvec3 orient)
+void DN_shape_ellipsoid(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 r, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -266,10 +262,10 @@ void DN_shape_ellipsoid(DNmap* map, uint8_t material, DNvec3 c, DNvec3 r, DNvec3
 	DNvec3 min = {-r.x, -r.y, -r.z};
 	DNvec3 max = { r.x,  r.y,  r.z};
 
-	_DN_shape(map, material, min, max, transform, _DN_sdf_ellipsoid);
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_ellipsoid);
 }
 
-void DN_shape_cylinder(DNmap* map, uint8_t material, DNvec3 c, float r, float h, DNvec3 orient)
+void DN_shape_cylinder(DNmap* map, DNvoxel voxel, DNvec3 c, float r, float h, DNvec3 orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
@@ -281,10 +277,10 @@ void DN_shape_cylinder(DNmap* map, uint8_t material, DNvec3 c, float r, float h,
 	DNvec3 min = {-r, -h / 2, -r};
 	DNvec3 max = { r,  h / 2,  r};
 
-	_DN_shape(map, material, min, max, transform, _DN_sdf_cylinder);
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_cylinder);
 }
 
-void DN_shape_cone(DNmap* map, uint8_t material, DNvec3 b, float r, float h, DNvec3 orient)
+void DN_shape_cone(DNmap* map, DNvoxel voxel, DNvec3 b, float r, float h, DNvec3 orient)
 {
 	DNmat4 transform;
 	b.y += h;
@@ -298,7 +294,7 @@ void DN_shape_cone(DNmap* map, uint8_t material, DNvec3 b, float r, float h, DNv
 	DNvec3 min = {-r, -h, -r};
 	DNvec3 max = { r,  0,  r};
 
-	_DN_shape(map, material, min, max, transform, _DN_sdf_cone);
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_cone);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//

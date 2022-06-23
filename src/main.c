@@ -237,7 +237,7 @@ int main()
 
 		DN_draw(activeMap);
 		if(activeMap->streamable)
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 5);
+			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
 		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
@@ -318,6 +318,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				DNvoxel newVox;
 				newVox.material = 0;
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
+				newVox.albedo = DN_vec3_pow((DNvec3){0.871f, 0.463f, 0.843f}, DN_GAMMA);
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
 				if(!activeMap->streamable)

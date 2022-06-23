@@ -13,63 +13,63 @@
 
 /* Places a sphere into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the sphere's center
  * @param r the sphere's radius
  */
-void DN_shape_sphere(DNmap* map, uint8_t material, DNvec3 c, float r);
+void DN_shape_sphere(DNmap* map, DNvoxel voxel, DNvec3 c, float r);
 /* Places a box into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, DNvec3 orient);
+void DN_shape_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 orient);
 /* Places a rounded box into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param r the box's radius
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_rounded_box(DNmap* map, uint8_t material, DNvec3 c, DNvec3 len, float r, DNvec3 orient);
+void DN_shape_rounded_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, float r, DNvec3 orient);
 /* Places a torus into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the torus's center
  * @param ra the center radius of the torus
  * @param rb the radius of the "ring" of the torus
  * @param orient the torus's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_torus(DNmap* map, uint8_t material, DNvec3 c, float ra, float rb, DNvec3 orient);
+void DN_shape_torus(DNmap* map, DNvoxel voxel, DNvec3 c, float ra, float rb, DNvec3 orient);
 /* Places an ellipsoid into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the center of the ellipsoid
  * @param r the lengths of the semi-axes of the ellipsoid
  * @param orient the ellipsoid's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_ellipsoid(DNmap* map, uint8_t material, DNvec3 c, DNvec3 r, DNvec3 orient);
+void DN_shape_ellipsoid(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 r, DNvec3 orient);
 /* Places a cylinder into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param c the center of the cylinder
  * @param r the radius of the cylinder
  * @param h the height of the cylinder
  * @param orient the cylinder's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cylinder(DNmap* map, uint8_t material, DNvec3 c, float r, float h, DNvec3 orient);
+void DN_shape_cylinder(DNmap* map, DNvoxel voxel, DNvec3 c, float r, float h, DNvec3 orient);
 /* Places a cone into a map
  * @param map the map to edit
- * @param material the material to use
+ * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param b the position of the cone's base
  * @param r the radius of the cone
  * @param h the height of the cone
  * @param orient the cone's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cone(DNmap* map, uint8_t material, DNvec3 b, float r, float h, DNvec3 orient);
+void DN_shape_cone(DNmap* map, DNvoxel voxel, DNvec3 b, float r, float h, DNvec3 orient);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:
