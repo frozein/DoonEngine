@@ -10,7 +10,7 @@ uniform vec3 camDir;    //the direction the camera is pointing
 uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
 uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
 
-uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = depth, 2 = normals
+uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -48,7 +48,6 @@ void main()
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight     *= finalMaterial.specular;
 			finalVoxel.diffuseLight  *= 1.0 - finalMaterial.specular;
-			finalVoxel.directLight   *= 1.0 - finalMaterial.specular;
 
 			switch(viewMode)
 			{
@@ -58,7 +57,7 @@ void main()
 				if(finalMaterial.emissive)
 					solidColor = finalMaterial.albedo;
 				else
-					solidColor = (finalVoxel.directLight + finalVoxel.diffuseLight + ambientStrength) * finalMaterial.albedo + finalVoxel.specLight;
+					solidColor = ambientStrength * finalMaterial.albedo + finalVoxel.specLight + finalVoxel.diffuseLight;
 
 				finalColor = pow(solidColor * finalColorMult + finalColorAdd, vec3(INV_GAMMA));
 				break;
@@ -68,22 +67,17 @@ void main()
 				finalColor = pow(finalMaterial.albedo, vec3(INV_GAMMA));
 				break;
 			}
-			case 2: //direct light
+			case 2: //diffuse light
 			{
-				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.directLight, vec3(INV_GAMMA));
+				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.diffuseLight / finalMaterial.albedo, vec3(INV_GAMMA));
 				break;
 			}
-			case 3: //indirect light
-			{
-				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.diffuseLight, vec3(INV_GAMMA));
-				break;
-			}
-			case 4: //specular light
+			case 3: //specular light
 			{
 				finalColor = pow(finalMaterial.emissive ? finalMaterial.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
-			case 5: //normal
+			case 4: //normal
 			{
 				finalColor = vec3(abs(finalVoxel.normal));
 				break;

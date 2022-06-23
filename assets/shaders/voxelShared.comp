@@ -15,7 +15,6 @@ struct Voxel //a single voxel
 	vec3 normal;       //the direction the voxel points (for lighting calculation)
 	uint material;     //the index of this voxel's material
 
-	vec3 directLight;  //the direct lighting from the sun, creates shadows
 	vec3 specLight;    //the lighting caused by reflecting light rays off of the voxel
 	vec3 diffuseLight; //the diffuse lighting of the voxel, caused by multiple light ray bounces
 };
@@ -140,7 +139,6 @@ Voxel decompress_voxel(CompressedVoxel compressed) //decompresses an entire voxe
 	res.normal       = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
 	res.material     = normalRead.w;
 	res.diffuseLight = vec3(diffuseLight * 0.0000152590219);
-	res.directLight  = vec3(directLightRead.xyz) * 0.00392156862;
 	res.specLight    = vec3(directLightRead.w, specLightRead.xy) * 0.00392156862;
 
 	return res;

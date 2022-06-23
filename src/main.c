@@ -248,7 +248,7 @@ int main()
 		DN_draw(activeMap);
 		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 5);
-		DN_update_lighting(activeMap, 1, glfwGetTime());
+		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
 		glActiveTexture(GL_TEXTURE0);
@@ -274,7 +274,7 @@ int main()
 	glDeleteVertexArrays(1, &quadBuffer);
 	DN_program_free(quadShader);
 	glfwTerminate();
-;
+
 	return 0;
 }
 
@@ -374,8 +374,6 @@ void process_input(GLFWwindow *window)
 		activeMap->camViewMode = 3;
 	if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
 		activeMap->camViewMode = 4;
-	if(glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
-		activeMap->camViewMode = 5;
 
 	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
 		activeMap = demoMap;

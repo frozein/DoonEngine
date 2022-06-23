@@ -215,7 +215,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	map->shadowSoftness = 10.0f;
 
 	map->frameNum = 0;
-	map->lastTime = 0.0f;
+	map->lastTime = 123.456f;
 
 	return map;
 }
@@ -734,7 +734,7 @@ void DN_draw(DNmap* map)
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
-void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
+void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int maxDiffuseSamples, float time)
 {
 	if(map->frameNum == 0)
 		map->lastTime = time;
@@ -768,6 +768,7 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time)
 	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", map->lastTime);
 	DN_program_uniform_uint(lightingProgram, "numDiffuseSamples", numDiffuseSamples);
+	DN_program_uniform_uint(lightingProgram, "maxDiffuseSamples", maxDiffuseSamples);
 	DN_program_uniform_uint(lightingProgram, "diffuseBounceLimit", map->diffuseBounceLimit);
 	DN_program_uniform_uint(lightingProgram, "specularBounceLimit", map->specBounceLimit);
 	DN_program_uniform_vec3(lightingProgram, "sunDir", DN_vec3_normalize(map->sunDir));

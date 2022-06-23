@@ -95,7 +95,7 @@ typedef struct DNmap
 	DNvec3 camPos; 			  		  //READ-WRITE | The camera's position relative to this map, in DNchunks
 	DNvec3 camOrient; 		  		  //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
 	float camFOV; 			 		  //READ-WRITE | The camera's field of view
-	unsigned int camViewMode; 		  //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = direct light only; 3 = diffuse light only; 4 = specular light only; 5 = normals
+	unsigned int camViewMode; 		  //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = normals
 
 	//lighting parameters:
 	DNvec3 sunDir; 					  //READ-WRITE | The direction pointing towards the sun
@@ -172,9 +172,10 @@ void DN_draw(DNmap* map);
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update
  * @param numDiffuseSamples the number of diffuse lighting samples to take
+ * @param maxDiffuseSamples the maximum number of diffuse samples that a chunk can store at once. The lower the value, the faster lighting can change but the more flickering that can occur. 1000 is a good base value
  * @param time the current running time of the application, used for random seeding
  */
-void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, float time);
+void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int maxDiffuseSamples, float time);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:

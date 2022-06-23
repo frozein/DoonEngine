@@ -11,6 +11,7 @@ layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer //a b
 
 uniform float time; //for random seeding
 uniform uint numDiffuseSamples;   //the number of diffuse lighting samples to take
+uniform uint maxDiffuseSamples;   //the maximum number of diffuse samples that can be stored
 uniform uint diffuseBounceLimit;  //the maximum number of times a diffuse light ray can bounce
 uniform uint specularBounceLimit; //the maximum number of times a specular light ray can bounce
 
@@ -54,10 +55,15 @@ vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 a
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-bool shadow_ray(vec3 rayPos, vec3 sunDir, out vec3 colorAdd, out float colorMult) //returns true if the shadow ray hit the map
+void shadow_ray(vec3 rayPos, float seed, inout vec3 color) //returns true if the shadow ray hit the map
 {
 	Voxel hitVoxel; //not used
-	return step_map(sunDir, 1 / sunDir, rayPos, true, hitVoxel, colorAdd, colorMult); //return whether or not the map was hit
+	vec3 updatedSunDir = normalize(sunDir * shadowSoftness + rand_unit_sphere(seed));
+	vec3 colorAdd;
+	float colorMult;
+
+	if(!step_map(updatedSunDir, 1 / updatedSunDir, rayPos, true, hitVoxel, colorAdd, colorMult))
+		color += sunStrength * colorMult + colorAdd;
 }
 
 void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflectType, inout vec3 color) //casts out a specular ray and adds the appropriate color to color
@@ -89,7 +95,6 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 			{
 				hitMaterial = materials[hitVoxel.material];
 				hitVoxel.diffuseLight *= 1.0 - hitMaterial.specular;
-				hitVoxel.directLight   *= 1.0 - hitMaterial.specular;	
 
 				if(hitMaterial.emissive)
 				{
@@ -98,7 +103,7 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 				}
 				else
 				{
-					vec3 hitColor = (hitVoxel.directLight + hitVoxel.diffuseLight + ambientStrength) * hitMaterial.albedo;	
+					vec3 hitColor = (ambientStrength) * hitMaterial.albedo + hitVoxel.diffuseLight;	
 					color += (hitColor * colorMult + colorAdd) * multiplier;
 
 					//reflect ray again if the hit voxel is specular:
@@ -173,7 +178,7 @@ void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout
 		}
 		else
 		{
-			color += (newColor * max(dot(dir, sunDir), 0.0) * sunStrength * colorMult + colorAdd) * colorMult; //not sure why i multiply by colorMult twice but it looks better like this
+			color += (newColor * max(dot(dir, sunDir), 0.0) * sunStrength * colorMult + colorAdd);
 			return;
 		}
 
@@ -191,7 +196,7 @@ void main()
 	ivec3 chunkPos = ivec3(gl_LocalInvocationID);
 	Voxel thisVoxel = decompress_voxel(get_voxel(chunkIndex, chunkPos));
 	Material thisMaterial = materials[thisVoxel.material];
-	float indirectSamples = float(chunks[chunkIndex].numIndirectSamples);
+	float indirectSamples = float(min(chunks[chunkIndex].numIndirectSamples, maxDiffuseSamples)); //have a maximum number of samples to allow the lighting to change quicker
 
 	//increase number of diffuse samples for newly updated chunks to avoid noise:
 	uint updatedDiffuseSamples = numDiffuseSamples;
@@ -203,34 +208,15 @@ void main()
 	rayPos = rayPos + (HALF_INV_CHUNK_SIZE - vec3(EPSILON)) * thisVoxel.normal;
 
 	//lighting types:
-	vec3 directLight = vec3(0.0);
 	vec3 specLight = vec3(0.0);
 	vec3 diffuseLight = vec3(0.0);
 
-	//shadow rays:
-	vec3 viewDir = rayPos - camPos; //the vector from the ray position to the camera
-	vec3 reflected = reflect(normalize(viewDir), thisVoxel.normal);
-	for(int i = 0; i < 15; i++)
-	{
-		vec3 updatedSunDir = sunDir * shadowSoftness + spherePoints[i];
-
-		vec3 colorAdd;
-		float colorMult;
-		if(!shadow_ray(rayPos, updatedSunDir, colorAdd, colorMult))
-		{
-			directLight += (sunStrength * colorMult + colorAdd);
-
-			if(thisMaterial.reflectType == 2 && dot(normalize(reflected * thisMaterial.shininess + spherePoints[i]), sunDir) > 0.99)
-				specLight += (sunStrength * colorMult + colorAdd);
-		}
-	}
-
-	directLight /= 15.0;
-	specLight /= 15.0;
-
 	//specular rays:
+	vec3 viewDir = rayPos - camPos; //the vector from the ray position to the camera
 	if(thisMaterial.specular > 0.0 && dot(viewDir, thisVoxel.normal) < 0.0 && thisMaterial.reflectType <= 1)
 	{
+		vec3 reflected = reflect(normalize(viewDir), thisVoxel.normal);
+
 		for(int i = 0; i < 15; i++)
 		{
 			vec3 specDir = normalize(reflected * thisMaterial.shininess + spherePoints[i]);
@@ -240,25 +226,30 @@ void main()
 		specLight /= 15.0;
 	}
 
-	//diffuse rays:
+	//diffuse and shadow rays:
 	if(thisMaterial.specular < 1.0)
 	{
 		for(int i = 0; i < updatedDiffuseSamples; i++)
+		{
 			diffuse_ray(thisVoxel.normal, rayPos, thisVoxel, time * (i + 1), diffuseLight);
+			shadow_ray(rayPos, time * (i + 1 + updatedDiffuseSamples), diffuseLight);
+		}
 
+		diffuseLight *= thisMaterial.albedo;
 		diffuseLight = (thisVoxel.diffuseLight * indirectSamples + diffuseLight) / (indirectSamples + updatedDiffuseSamples); //add to average
 	}
+
+	//clamp to avoid compression errors:
+	specLight 	 = clamp(specLight,    vec3(0.0), vec3(1.0));
+	diffuseLight = clamp(diffuseLight, vec3(0.0), vec3(1.0));
+
+	//determine how to write diffuse:
 	uvec3 writeDiffuseLight = uvec3(round(diffuseLight * 65535));
 	uvec3 writeLower = writeDiffuseLight & 0xFF;
 	uvec3 writeUpper = (writeDiffuseLight >> 8) & 0xFF;
 
-	//clamp to avoid compression errors:
-	directLight  = clamp(directLight,  vec3(0.0), vec3(1.0));
-	specLight 	 = clamp(specLight,    vec3(0.0), vec3(1.0));
-	diffuseLight = clamp(diffuseLight, vec3(0.0), vec3(1.0));
-
 	//store lighting:
-	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].directLight,   encode_uint_RGBA(uvec4(round(directLight  * 255), round(specLight.x * 255))));
+	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].directLight,   encode_uint_RGBA(uvec4(round(thisMaterial.albedo * 255), round(specLight.x * 255))));
 	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].specLight,     encode_uint_RGBA(uvec4(round(specLight.yz * 255), writeUpper.x, writeLower.x)));
 	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].diffuseLight,  encode_uint_RGBA(uvec4(writeUpper.y, writeLower.y, writeUpper.z, writeLower.z)));
 
