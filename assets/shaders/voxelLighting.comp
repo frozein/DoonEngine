@@ -250,12 +250,12 @@ void main()
 
 	//store lighting:
 	chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].albedo = encode_uint_RGBA(uvec4(round(thisVoxel.albedo * 255), round(specLight.x * 255)));
-	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].specLight,     encode_uint_RGBA(uvec4(round(specLight.yz * 255), writeUpper.x, writeLower.x)));
-	atomicExchange(chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].diffuseLight,  encode_uint_RGBA(uvec4(writeUpper.y, writeLower.y, writeUpper.z, writeLower.z)));
+	chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].specLight = encode_uint_RGBA(uvec4(round(specLight.yz * 255), writeUpper.x, writeLower.x));
+	chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].diffuseLight = encode_uint_RGBA(uvec4(writeUpper.y, writeLower.y, writeUpper.z, writeLower.z));
 
 	//increase number of samples:
 	if(chunkPos == ivec3(0, 0, 0))
-		atomicAdd(chunks[chunkIndex].numIndirectSamples, updatedDiffuseSamples);
+		chunks[chunkIndex].numIndirectSamples += updatedDiffuseSamples;
 
 	//set visible to false:
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
