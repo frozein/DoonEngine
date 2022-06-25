@@ -26,7 +26,7 @@ static float _DN_sdf_box(DNvec3 p)
 	DNvec3 q = DN_vec3_subtract((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
 
 	float q1 = DN_vec3_length(DN_vec3_clamp(q, 0.0, INFINITY));
-	float q2 = min(max(max(q.x, q.y), q.z), 0.0);
+	float q2 = fmin(fmax(fmax(q.x, q.y), q.z), 0.0);
 
 	return q1 + q2;
 }
@@ -44,19 +44,19 @@ static float _DN_sdf_torus(DNvec3 p)
 
 static float _DN_sdf_ellipsoid(DNvec3 p)
 {
-	return (DN_vec3_length(DN_vec3_divide(p, radii)) - 1.0f) * min(min(radii.x, radii.y), radii.z);
+	return (DN_vec3_length(DN_vec3_divide(p, radii)) - 1.0f) * fmin(fmin(radii.x, radii.y), radii.z);
 }
 
 static float _DN_sdf_cylinder(DNvec3 p)
 {
 	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, fabs(p.y) - height};
-	return min(max(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_clamp(d, 0.0, INFINITY));
+	return fmin(fmax(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_clamp(d, 0.0, INFINITY));
 }
 
 static float _DN_sdf_cone(DNvec3 p)
 {
 	float q = DN_vec2_length((DNvec2){p.x, p.z});
-	return max(DN_vec2_dot((DNvec2){angles.x, angles.y}, (DNvec2){q, p.y}), -height - p.y);
+	return fmax(DN_vec2_dot((DNvec2){angles.x, angles.y}, (DNvec2){q, p.y}), -height - p.y);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -112,7 +112,7 @@ static DNvec3 _DN_calc_normal(DNvec4 p, DNmat4 invTransform, float dist, float (
 	float y = sdf((DNvec3){yP.x, yP.y, yP.z}) - dist;
 	float z = sdf((DNvec3){zP.x, zP.y, zP.z}) - dist;
 
-	float maxNormal = max(max(fabs(x), fabs(y)), fabs(z));
+	float maxNormal = fmax(fmax(fabs(x), fabs(y)), fabs(z));
 	return DN_vec3_scale((DNvec3){x, y, z}, 1 / maxNormal);
 }
 
@@ -199,7 +199,7 @@ void DN_shape_sphere(DNmap* map, DNvoxel voxel, DNvec3 c, float r)
 					{
 						voxel.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
 
-						float maxNormal = max(max(fabs(voxel.normal.x), fabs(voxel.normal.y)), fabs(voxel.normal.z));
+						float maxNormal = fmax(fmax(fabs(voxel.normal.x), fabs(voxel.normal.y)), fabs(voxel.normal.z));
 						voxel.normal = DN_vec3_scale(voxel.normal, 1.0f / maxNormal);
 
 						DN_set_voxel(map, mapPos, chunkPos, voxel);
@@ -230,8 +230,8 @@ void DN_shape_rounded_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, float
 	length = len;
 	radius = r;
 
-	DNvec3 min = {min(-len.x, -r), min(-len.y, -r), min(-len.z, -r)};
-	DNvec3 max = {max( len.x,  r), max( len.x,  r), max( len.x,  r)};
+	DNvec3 min = {fmin(-len.x, -r), fmin(-len.y, -r), fmin(-len.z, -r)};
+	DNvec3 max = {fmax( len.x,  r), fmax( len.x,  r), fmax( len.x,  r)};
 
 	_DN_shape(map, voxel, min, max, transform, _DN_sdf_rounded_box);
 }

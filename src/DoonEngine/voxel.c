@@ -126,9 +126,9 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 
 	size_t numChunks;
 	if(streamable)
-		numChunks = min(mapSize.x * mapSize.y * mapSize.z, minChunks);
+		numChunks = fmin(mapSize.x * mapSize.y * mapSize.z, minChunks);
 	else
-		numChunks = min(mapSize.x * mapSize.y * mapSize.z, 64); //set 64 as the minimum, can be tweaked
+		numChunks = fmin(mapSize.x * mapSize.y * mapSize.z, 64); //set 64 as the minimum, can be tweaked
 
 	if(!_DN_gen_shader_storage_buffer(&map->glChunkBufferID, sizeof(DNchunkGPU) * numChunks))
 	{
@@ -257,7 +257,7 @@ DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, u
 
 	//make sure nothing seems loaded on gpu:
 	for(int i = 0; i < map->mapSize.x * map->mapSize.y * map->mapSize.z; i++)
-		map->map[i].flag = min(map->map[i].flag, 1);
+		map->map[i].flag = fmin(map->map[i].flag, 1);
 
 	//read chunk cap and chunks:
 	//---------------------------------
@@ -376,7 +376,7 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos)
 	} while(i != map->nextChunk);
 
 	//if no empty chunk is found, increase capacity:
-	size_t newCap = min(map->chunkCap * 2, map->mapSize.x * map->mapSize.y * map->mapSize.z);
+	size_t newCap = fmin(map->chunkCap * 2, map->mapSize.x * map->mapSize.y * map->mapSize.z);
 	DN_ERROR_LOG("DN NOTE - RESIZING CHUNK MEMORY TO ALLOW FOR %zi CHUNKS\n", newCap);
 
 	i = map->chunkCap;
@@ -463,7 +463,7 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 
 	if(maxTime <= 1) //if the oldest chunk is currently in use, double the buffer size
 	{
-		size_t newCap = min(map->chunkCap, map->chunkCapGPU * 2);
+		size_t newCap = fmin(map->chunkCap, map->chunkCapGPU * 2);
 		DN_ERROR_LOG("DN NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %zi CHUNKS\n", newCap);
 
 		//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
@@ -560,7 +560,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
-					size_t newCap = min(map->mapSize.x * map->mapSize.y * map->mapSize.z, map->lightingRequestCap * 2);
+					size_t newCap = fmin(map->mapSize.x * map->mapSize.y * map->mapSize.z, map->lightingRequestCap * 2);
 					DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUEST MEMORY TO ALLOW FOR %zi REQUESTS\n", newCap);
 					if(!DN_set_max_lighting_requests(map, newCap))
 						break;
@@ -666,7 +666,7 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
-					size_t newCap = min(maxIndex, map->lightingRequestCap * 2);
+					size_t newCap = fmin(maxIndex, map->lightingRequestCap * 2);
 					DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUEST MEMORY TO ALLOW FOR %zi REQUESTS\n", newCap);
 					if(!DN_set_max_lighting_requests(map, newCap))
 						break;
