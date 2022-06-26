@@ -122,7 +122,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
-	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
 
 	size_t numChunks;
 	if(streamable)
@@ -136,7 +136,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
-	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R32UI, GL_RED, GL_UNSIGNED_INT, NULL);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
 
 	//allocate CPU memory:
 	//---------------------------------
