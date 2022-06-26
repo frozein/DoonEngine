@@ -41,7 +41,6 @@ DNmap* sphereMap;
 //screen dimensions:
 GLuint SCREEN_W = 1920;
 GLuint SCREEN_H = 1080;
-GLfloat ASPECT_RATIO = 9.0 / 16.0;
 
 //cam stuff:
 DNvec3 camFront =    {0.0f, 0.0f,  1.0f};
@@ -85,8 +84,9 @@ int main()
 	//---------------------------------
 	glViewport(0, 0, SCREEN_W, SCREEN_H);
 
-	glEnable              ( GL_DEBUG_OUTPUT );
-	glDebugMessageCallback( message_callback, 0 );
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_DEBUG_OUTPUT);
+	glDebugMessageCallback(message_callback, 0);
 
 	//set callback funcs:
 	//---------------------------------
@@ -98,15 +98,19 @@ int main()
 
 	//generate shader program:
 	//---------------------------------
-	int quadShader = DN_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
-	if(quadShader < 0)
+	int quadProgram = DN_program_load("shaders/quad.vert", NULL, "shaders/quad.frag", NULL);
+	if(quadProgram < 0)
 	{
-		DN_ERROR_LOG("quad shader failed\n");
-		DN_program_free(quadShader);
+		printf("Failed to load quad shader\n");
+		DN_program_free(quadProgram);
 		glfwTerminate();
 
 		return -1;
 	}
+
+	DN_program_activate(quadProgram);
+	DN_program_uniform_int(quadProgram, "colorTex", 0);
+	DN_program_uniform_int(quadProgram, "depthTex", 1);
 
 	//generate quad buffer:
 	//---------------------------------
@@ -154,48 +158,100 @@ int main()
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(GLfloat), (void*)(long long)(3 * sizeof(GL_FLOAT)));
 	glEnableVertexAttribArray(1);
 
-	//generate texture:
+	//load stuff for rasterization test:
 	//---------------------------------
-	GLuint finalTexture;
-	glGenTextures(1, &finalTexture);
-	glBindTexture(GL_TEXTURE_2D, finalTexture);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	//vertex data for a cube:
+	float cubeVertices[] = {
+		//positions:
+		-0.5f, -0.5f, -0.5f,
+		 0.5f, -0.5f, -0.5f,
+		 0.5f,  0.5f, -0.5f,
+		 0.5f,  0.5f, -0.5f,
+		-0.5f,  0.5f, -0.5f,
+		-0.5f, -0.5f, -0.5f,
+
+		-0.5f, -0.5f,  0.5f,
+		 0.5f, -0.5f,  0.5f,
+		 0.5f,  0.5f,  0.5f,
+		 0.5f,  0.5f,  0.5f,
+		-0.5f,  0.5f,  0.5f,
+		-0.5f, -0.5f,  0.5f,
+
+		-0.5f,  0.5f,  0.5f,
+		-0.5f,  0.5f, -0.5f,
+		-0.5f, -0.5f, -0.5f,
+		-0.5f, -0.5f, -0.5f,
+		-0.5f, -0.5f,  0.5f,
+		-0.5f,  0.5f,  0.5f,
+
+		 0.5f,  0.5f,  0.5f,
+		 0.5f,  0.5f, -0.5f,
+		 0.5f, -0.5f, -0.5f,
+		 0.5f, -0.5f, -0.5f,
+		 0.5f, -0.5f,  0.5f,
+		 0.5f,  0.5f,  0.5f,
+
+		-0.5f, -0.5f, -0.5f,
+		 0.5f, -0.5f, -0.5f,
+		 0.5f, -0.5f,  0.5f,
+		 0.5f, -0.5f,  0.5f,
+		-0.5f, -0.5f,  0.5f,
+		-0.5f, -0.5f, -0.5f,
+
+		-0.5f,  0.5f, -0.5f,
+		 0.5f,  0.5f, -0.5f,
+		 0.5f,  0.5f,  0.5f,
+		 0.5f,  0.5f,  0.5f,
+		-0.5f,  0.5f,  0.5f,
+		-0.5f,  0.5f, -0.5f
+	};
+
+	unsigned int cubeVAO, cubeVBO;
+	glGenVertexArrays(1, &cubeVAO);
+	glGenBuffers(1, &cubeVBO);
+	glBindVertexArray(cubeVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(cubeVertices), cubeVertices, GL_STATIC_DRAW);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
+	glEnableVertexAttribArray(0);
+
+	int cubeProgram = DN_program_load("shaders/vertTest.vert", NULL, "shaders/fragTest.frag", NULL);
+	if(cubeProgram < 0)
+	{
+		printf("Failed to load rasterization test shader program\n");
+		return -1;
+	}
 
 	//initialize voxel pipeline:
 	//---------------------------------
 	if(!DN_init())
 	{
-		DN_ERROR_LOG("ERROR - FAILED TO INTIALIZE VOXEL PIPELINE\n");
+		printf("Failed to initialize voxel pipeline\n");
 		glfwTerminate();
 		return -1;
 	}
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",   (DNuvec2){SCREEN_W, SCREEN_H}, true, 128  );
-	sphereMap = DN_load_map("maps/sphere.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true, 1024);
+	demoMap   = DN_load_map("maps/demo.voxmap",   (DNuvec2){SCREEN_W, SCREEN_H}, true,  128);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
+	sphereMap = DN_load_map("maps/sphere.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true,  1024);
+	demoMap->camFOV = 90.0f;
+
 	activeMap = demoMap;
 
 	//load model:
 	//---------------------------------
-	treeMap = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
-	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-
 	DNvoxelModel model;
 	DN_load_vox_file("models/tree.vox", 0, &model);
 	DN_calculate_model_normals(2, &model);
 	DN_place_model_into_map(treeMap, model, (DNivec3){0, 0, 0});
 
+	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
 	treeMap->materials[0].emissive = false;
 	treeMap->materials[0].specular = 0.0f;
 	treeMap->materials[0].opacity = 1.0f;
-
-	//--------------//
 
 	//sync with gpu:
 	//---------------------------------
@@ -206,11 +262,6 @@ int main()
 	float lastFrame = glfwGetTime();
 	int numFrames = 0;
 	float cumTime = 0.0;
-
-	const int lightingSplit = 5;
-	unsigned int numChunksToUpdate = 0;
-	int frameNum = 0;
-	float oldTime = 0.0f;
 
 	while(!glfwWindowShouldClose(window))
 	{
@@ -228,26 +279,50 @@ int main()
 			cumTime = 0.0f;
 		}
 
+		//clear
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 		//process keyboard input:
 		process_input(window);
 
 		//update cam direction:
 		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){activeMap->camOrient.x, activeMap->camOrient.y, 0.0f}));
-		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, activeMap->camFOV });
+		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 
-		DN_draw(activeMap);
+		//draw and update voxels:
+		DNmat4 view;
+		DNmat4 projection;
+		DN_draw(activeMap, 0.1f, 100.0f, &view, &projection);
+
 		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
+
 		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
-		glActiveTexture(GL_TEXTURE0);
+		DN_program_activate(quadProgram);
+
+		glActiveTexture(GL_TEXTURE0 + 0);
 		glBindTexture(GL_TEXTURE_2D, activeMap->glTextureID);
-		DN_program_activate(quadShader);
-		DN_program_uniform_float(quadShader, "time", glfwGetTime());
+		glActiveTexture(GL_TEXTURE0 + 1);
+		glBindTexture(GL_TEXTURE_2D, activeMap->glDepthTextureID);
+		
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
 		glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
+
+		//rasterization test:
+		DN_program_activate(cubeProgram);
+
+		DNmat4 model = DN_mat4_translate(DN_MAT4_IDENTITY, (DNvec3){5 + 3 * cosf(glfwGetTime()), 1.5 + cosf(glfwGetTime() * 5), 5 + 3 * sinf(glfwGetTime())});
+		DN_program_uniform_mat4(cubeProgram, "modelMat", model);
+		DN_program_uniform_mat4(cubeProgram, "viewMat", view);
+		DN_program_uniform_mat4(cubeProgram, "projectionMat", projection);
+		DN_program_uniform_vec3(cubeProgram, "color", (DNvec3){1.0f, 0.0f, 0.0f});
+
+		glBindVertexArray(cubeVAO);
+		glDrawArrays(GL_TRIANGLES, 0, 36);
 
 		//finish rendering and swap:
 		glfwSwapBuffers(window);
@@ -262,7 +337,7 @@ int main()
 	DN_quit();
 
 	glDeleteVertexArrays(1, &quadBuffer);
-	DN_program_free(quadShader);
+	DN_program_free(quadProgram);
 	glfwTerminate();
 
 	return 0;
@@ -341,11 +416,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY)
 {
-    activeMap->camFOV += (float)offsetY / 10.0f;
-    if (activeMap->camFOV < 0.5f)
-        activeMap->camFOV = 0.5f;
-    if (activeMap->camFOV > 2.0f)
-        activeMap->camFOV = 2.0f; 
+    activeMap->camFOV -= (float)offsetY;
+    if (activeMap->camFOV < 45.0f)
+        activeMap->camFOV = 45.0f;
+    if (activeMap->camFOV > 90.0f)
+        activeMap->camFOV = 90.0f; 
 }
 
 void process_input(GLFWwindow *window)

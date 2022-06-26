@@ -74,6 +74,7 @@ typedef struct DNmap
 {	
 	//opengl handles:
 	GLuint glTextureID;     		  //READ ONLY | The openGL texture ID, use glActivate() with this to render it
+	GLuint glDepthTextureID;		  //READ ONLY | The openGL texture ID for the depth texture
 	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
 	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
 
@@ -97,7 +98,7 @@ typedef struct DNmap
 	//camera parameters:
 	DNvec3 camPos; 			  		  //READ-WRITE | The camera's position relative to this map, in DNchunks
 	DNvec3 camOrient; 		  		  //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
-	float camFOV; 			 		  //READ-WRITE | The camera's field of view
+	float camFOV; 			 		  //READ-WRITE | The camera's field of view, measured in degrees
 	unsigned int camViewMode; 		  //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = normals
 
 	//lighting parameters:
@@ -169,8 +170,12 @@ bool DN_save_map(const char* filePath, DNmap* map);
 
 /* Draws the voxel map to the texture
  * @param map the map to render
+ * @param nearPlane the camera's near clipping plane, used for composing with rasterized objects
+ * @param farPlane the camera's far clipping plane, used for composing with rasterized objects
+ * @param view populated with the camera's view matrix, use this when rendering rasterized objects
+ * @param projection populated with the camera's projection matrix, use this when rendering rasterized objects
  */
-void DN_draw(DNmap* map);
+void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update

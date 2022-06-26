@@ -16,7 +16,7 @@
 GLuint lightingRequestBuffer = 0;
 GLuint materialBuffer = 0;
 GLprogram lightingProgram = 0;
-GLprogram finalProgram = 0;
+GLprogram drawProgram = 0;
 
 unsigned int maxLightingRequests = 1024;
 
@@ -72,16 +72,16 @@ bool DN_init()
 	//load shaders:
 	//---------------------------------
 	int lighting = DN_compute_program_load("shaders/voxelLighting.comp", "shaders/voxelShared.comp");
-	int final    = DN_compute_program_load("shaders/voxelFinal.comp"   , "shaders/voxelShared.comp");
+	int draw     = DN_compute_program_load("shaders/voxelDraw.comp"    , "shaders/voxelShared.comp");
 
-	if(lighting < 0 || final < 0)
+	if(lighting < 0 || draw < 0)
 	{
 		DN_ERROR_LOG("DN ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
 		return false;
 	}
 
 	lightingProgram = lighting;
-	finalProgram = final;
+	drawProgram = draw;
 
 	//return:
 	//---------------------------------
@@ -91,7 +91,7 @@ bool DN_init()
 void DN_quit()
 {
 	DN_program_free(lightingProgram);
-	DN_program_free(finalProgram);
+	DN_program_free(drawProgram);
 
 	glDeleteBuffers(1, &materialBuffer);
 	glDeleteBuffers(1, &lightingRequestBuffer);
@@ -107,6 +107,15 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	//---------------------------------
 	glGenTextures(1, &map->glTextureID);
 	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	glGenTextures(1, &map->glDepthTextureID); //TODO: find a way to make this only use 1 float, texture formats dont seem to work when not rgba32f
+	glBindTexture(GL_TEXTURE_2D, map->glDepthTextureID);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -223,6 +232,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 void DN_delete_map(DNmap* map)
 {
 	glDeleteTextures(1, &map->glTextureID);
+	glDeleteTextures(1, &map->glDepthTextureID);
 	glDeleteBuffers(1, &map->glMapBufferID);
 	glDeleteBuffers(1, &map->glChunkBufferID);
 
@@ -694,42 +704,50 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UPDATING/DRAWING:
 
-void DN_draw(DNmap* map)
+void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
 {
-	float aspectRatio = (float)map->textureSize.y / (float)map->textureSize.x;
+	float aspectRatio = (float)map->textureSize.y / map->textureSize.x;
 	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, map->camOrient));
-	DNvec3 camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, map->camFOV });
+	DNvec3 camFront;
 	DNvec3 camPlaneU;
 	DNvec3 camPlaneV;
 
 	if(aspectRatio < 1.0f)
 	{
+		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, aspectRatio / tanf(map->camFOV * 0.5f * DEG_TO_RAD) });
 		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
 		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * aspectRatio, 0.0f});
 	}
 	else
 	{
+		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f / tanf(map->camFOV * 0.5f * DEG_TO_RAD) });
 		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f / aspectRatio, 0.0f, 0.0f});
 		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f, 0.0f});
 	}
+	
+	*view = DN_mat4_lookat(map->camPos, DN_vec3_add(map->camPos, camFront), (DNvec3){0.0f, 1.0f, 0.0f});
+	*projection = DN_mat4_perspective_proj_from_fov(map->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
 
-	glUseProgram(finalProgram);
+	glUseProgram(drawProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
-	glBindImageTexture(0, map->glTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(0, map->glTextureID, 	 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(1, map->glDepthTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
 
-	DN_program_uniform_vec3(finalProgram, "camPos", map->camPos);
-	DN_program_uniform_vec3(finalProgram, "camDir", camFront);
-	DN_program_uniform_vec3(finalProgram, "camPlaneU", camPlaneU);
-	DN_program_uniform_vec3(finalProgram, "camPlaneV", camPlaneV);
-	DN_program_uniform_vec3(finalProgram, "sunStrength", map->sunStrength);
-	DN_program_uniform_uint(finalProgram, "viewMode", map->camViewMode);
-	DN_program_uniform_vec3(finalProgram, "ambientStrength", map->ambientLightStrength);
-	glUniform3uiv(glGetUniformLocation(finalProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
+	DN_program_uniform_vec3(drawProgram, "camPos", map->camPos);
+	DN_program_uniform_vec3(drawProgram, "camDir", camFront);
+	DN_program_uniform_vec3(drawProgram, "camPlaneU", camPlaneU);
+	DN_program_uniform_vec3(drawProgram, "camPlaneV", camPlaneV);
+	DN_program_uniform_vec3(drawProgram, "sunStrength", map->sunStrength);
+	DN_program_uniform_uint(drawProgram, "viewMode", map->camViewMode);
+	DN_program_uniform_vec3(drawProgram, "ambientStrength", map->ambientLightStrength);
+	DN_program_uniform_mat4(drawProgram, "viewMat", *view);
+	DN_program_uniform_mat4(drawProgram, "projectionMat", *projection);
+	glUniform3uiv(glGetUniformLocation(drawProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
@@ -791,6 +809,14 @@ bool DN_set_texture_size(DNmap* map, DNuvec2 size)
 	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
 
 	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		DN_ERROR_LOG("DN ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
+		return false;
+	}
+
+	glBindTexture(GL_TEXTURE_2D, map->glDepthTextureID);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
