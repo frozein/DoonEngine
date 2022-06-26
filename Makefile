@@ -7,6 +7,8 @@ SRCS := $(shell find $(SRC_DIRS) -name *.c)
 OBJS := $(SRCS:%=$(BUILD_DIR)/%.o)
 DEPS := $(OBJS:.o=.d)
 
+CFLAGS := -g -O3
+
 INC_DIRS := $(shell find $(SRC_DIRS) -type d)
 INC_DIRS += ./dependencies/include
 INC_FLAGS := $(addprefix -I,$(INC_DIRS))
