@@ -59,17 +59,17 @@ void DN_program_uniform_float (GLprogram id, const char* name, GLfloat  val);
 void DN_program_uniform_double(GLprogram id, const char* name, GLdouble val);
 
 //Sets a vector2 uniform
-void DN_program_uniform_vec2(GLprogram id, const char* name, DNvec2 val);
+void DN_program_uniform_vec2(GLprogram id, const char* name, DNvec2* val);
 //Sets a vector3 uniform
-void DN_program_uniform_vec3(GLprogram id, const char* name, DNvec3 val);
+void DN_program_uniform_vec3(GLprogram id, const char* name, DNvec3* val);
 //Sets a vector4 uniform
-void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4 val);
+void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4* val);
 
 //Sets a 2x2 matrix uniform
-void DN_program_uniform_mat2(GLprogram id, const char* name, DNmat2 val);
+void DN_program_uniform_mat2(GLprogram id, const char* name, DNmat2* val);
 //Sets a 3x3 matrix uniform
-void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3 val);
+void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3* val);
 //Sets a 4x4 matrix uniform
-void DN_program_uniform_mat4(GLprogram id, const char* name, DNmat4 val);
+void DN_program_uniform_mat4(GLprogram id, const char* name, DNmat4* val);
 
 #endif

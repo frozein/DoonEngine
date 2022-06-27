@@ -6,11 +6,6 @@ layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
 layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output texture
 layout(rgba32f, binding = 1) uniform image2D depthOutput; //the depth output texture
 
-uniform vec3 camPos;    //the camera's position
-uniform vec3 camDir;    //the direction the camera is pointing
-uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
-uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
-
 uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
 
 uniform mat4 viewMat;		//the view matrix used to rasterize any objects, used to determine the depth
@@ -32,6 +27,7 @@ void main()
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	vec2 screenPos = coords / vec2(imageSize(colorOutput)) * 2.0 - 1.0;
 
+	//to calculate ray direction, we want to rotate screen space positions according to the view matrix, but not translate them
 	mat4 centeredViewMat = viewMat;
 	centeredViewMat[3][0] = 0.0;
 	centeredViewMat[3][1] = 0.0;

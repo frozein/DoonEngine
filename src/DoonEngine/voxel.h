@@ -168,14 +168,21 @@ bool DN_save_map(const char* filePath, DNmap* map);
 //--------------------------------------------------------------------------------------------------------------------------------//
 //DRAWING:
 
-/* Draws the voxel map to the texture
+/* Calculates the view and projection matrices for the current camera position.
  * @param map the map to render
  * @param nearPlane the camera's near clipping plane, used for composing with rasterized objects
  * @param farPlane the camera's far clipping plane, used for composing with rasterized objects
  * @param view populated with the camera's view matrix, use this when rendering rasterized objects
  * @param projection populated with the camera's projection matrix, use this when rendering rasterized objects
  */
-void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection);
+void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection);
+
+/* Draws the voxel map to the texture
+ * @param map the map to render
+ * @param view the camera's view matrix
+ * @param projection the camera's projection matrix
+ */
+void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update

@@ -32,7 +32,7 @@ int DN_shader_load(GLenum type, const char* path, const char* includePath)
 	int success;
 
 	shader = glCreateShader(type);
-	glShaderSource(shader, 1, &source, NULL);
+	glShaderSource(shader, 1, (const GLchar * const*)&source, NULL);
 	glCompileShader(shader);
 
 	DN_FREE(source);
@@ -152,34 +152,34 @@ void DN_program_uniform_double(GLprogram id, const char* name, GLdouble val)
 	glUniform1d(glGetUniformLocation(id, name), (GLdouble)val);
 }
 
-void DN_program_uniform_vec2(GLprogram id, const char* name, DNvec2 val)
+void DN_program_uniform_vec2(GLprogram id, const char* name, DNvec2* val)
 {
-	glUniform2fv(glGetUniformLocation(id, name), 1, (GLfloat*)&val);
+	glUniform2fv(glGetUniformLocation(id, name), 1, (GLfloat*)val);
 }
 
-void DN_program_uniform_vec3(GLprogram id, const char* name, DNvec3 val)
+void DN_program_uniform_vec3(GLprogram id, const char* name, DNvec3* val)
 {
-	glUniform3fv(glGetUniformLocation(id, name), 1, (GLfloat*)&val);
+	glUniform3fv(glGetUniformLocation(id, name), 1, (GLfloat*)val);
 }
 
-void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4 val)
+void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4* val)
 {
-	glUniform4fv(glGetUniformLocation(id, name), 1, (GLfloat*)&val);
+	glUniform4fv(glGetUniformLocation(id, name), 1, (GLfloat*)val);
 }
 
-void DN_program_uniform_mat2(GLprogram id, const char* name, DNmat2 val)
+void DN_program_uniform_mat2(GLprogram id, const char* name, DNmat2* val)
 {
-	glUniformMatrix2fv(glGetUniformLocation(id, name), 1, GL_FALSE, val.m[0]);
+	glUniformMatrix2fv(glGetUniformLocation(id, name), 1, GL_FALSE, (GLfloat*)&val->m[0]);
 }
 
-void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3 val)
+void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3* val)
 {
-	glUniformMatrix3fv(glGetUniformLocation(id, name), 1, GL_FALSE, val.m[0]);
+	glUniformMatrix3fv(glGetUniformLocation(id, name), 1, GL_FALSE, (GLfloat*)&val->m[0]);
 }
 
-void DN_program_uniform_mat4(GLprogram id, const char* name, DNmat4 val)
+void DN_program_uniform_mat4(GLprogram id, const char* name, DNmat4* val)
 {
-	glUniformMatrix4fv(glGetUniformLocation(id, name), 1, GL_FALSE, val.m[0]);
+	glUniformMatrix4fv(glGetUniformLocation(id, name), 1, GL_FALSE, (GLfloat*)&val->m[0]);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//

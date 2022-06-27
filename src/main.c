@@ -293,7 +293,9 @@ int main()
 		//draw and update voxels:
 		DNmat4 view;
 		DNmat4 projection;
-		DN_draw(activeMap, 0.1f, 100.0f, &view, &projection);
+		DN_set_view_projection_matrices(activeMap, 0.1f, 100.0f, &view, &projection);
+		
+		DN_draw(activeMap, &view, &projection);
 
 		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
@@ -316,10 +318,11 @@ int main()
 		DN_program_activate(cubeProgram);
 
 		DNmat4 model = DN_mat4_translate(DN_MAT4_IDENTITY, (DNvec3){5 + 3 * cosf(glfwGetTime()), 1.5 + cosf(glfwGetTime() * 5), 5 + 3 * sinf(glfwGetTime())});
-		DN_program_uniform_mat4(cubeProgram, "modelMat", model);
-		DN_program_uniform_mat4(cubeProgram, "viewMat", view);
-		DN_program_uniform_mat4(cubeProgram, "projectionMat", projection);
-		DN_program_uniform_vec3(cubeProgram, "color", (DNvec3){1.0f, 0.0f, 0.0f});
+		DN_program_uniform_mat4(cubeProgram, "modelMat", &model);
+		DN_program_uniform_mat4(cubeProgram, "viewMat", &view);
+		DN_program_uniform_mat4(cubeProgram, "projectionMat", &projection);
+		DNvec3 color = {1.0f, 0.0f, 0.0f};
+		DN_program_uniform_vec3(cubeProgram, "color", &color);
 
 		glBindVertexArray(cubeVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
