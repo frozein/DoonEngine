@@ -29,13 +29,15 @@ void main()
 	bool voxelHit;			//whether or not a voxel was hit
 
 	//calculate ray position and direction:
-	vec2 screenPos;
-	screenPos.x = gl_GlobalInvocationID.x / (float(gl_NumWorkGroups.x) * 8.0) - 1.0; //(0,0) at the center of the screen
-	screenPos.y = gl_GlobalInvocationID.y / (float(gl_NumWorkGroups.y) * 8.0) - 1.0;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	vec2 screenPos = coords / vec2(imageSize(colorOutput)) * 2.0 - 1.0;
 
+	mat4 invViewMat = inverse(viewMat);
+	mat4 invProjectionMat = inverse(projectionMat);
+
+	vec3 rayPos = (invViewMat * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	vec3 rayDir = camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV;
 	vec3 invRayDir = 1.0 / rayDir;
-	vec3 rayPos = camPos;
 
 	//check if ray hits the map at all:
 	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), mapSize);
@@ -118,7 +120,6 @@ void main()
 	}
 
 	//store final color to texture:
-	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	imageStore(colorOutput, coords, vec4(finalColor, 1.0));
 	imageStore(depthOutput, coords, transformedIntersectionPoint);
 }
