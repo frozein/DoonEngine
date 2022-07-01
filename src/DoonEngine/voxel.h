@@ -183,7 +183,7 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
  * @param rasterColorTexture the handle to the color buffer for rasterized objects, or -1 if not composing with rasterized objects
  * @param rasterDepthTexture the handle to the depth buffer for rasterized objects, or -1 if not composing with rasterized objects
  */
-void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection, int rasterColorTexture, int rasterDepthTexture);
+void DN_draw(DNmap* map, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update

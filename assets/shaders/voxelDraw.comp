@@ -7,14 +7,15 @@ layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output tex
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uniform sampler2D colorSample;  //the color of any rasterized objects
-uniform sampler2D depthSample;  //the depth of any rasterized objects
+uniform sampler2D colorSample;   //the color of any rasterized objects
+uniform sampler2D depthSample;   //the depth of any rasterized objects
 
-uniform uint viewMode;  	    //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
-uniform bool composeRasterized; //whether or not this scene is being composed with rasterized objects
+uniform uint viewMode;  	     //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
+uniform bool composeRasterized;  //whether or not this scene is being composed with rasterized objects
 
-uniform mat4 viewMat;		    //the view matrix used to rasterize any objects, used to determine the depth
-uniform mat4 projectionMat;     //the projection matrix used to rasterize any objects, used to determine the depth
+uniform mat4 invViewMat;		 //the inverse of the view matrix used for rasterization
+uniform mat4 invCenteredViewMat; //the inverse of the view matrix (without translation) used for rasterization
+uniform mat4 invProjectionMat;	 //the inverse of the projection matrix used for rasterization
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -29,16 +30,6 @@ void main()
 	//calculate ray position and direction:
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	vec2 screenPos = coords / vec2(imageSize(colorOutput)) * 2.0 - 1.0;
-
-	//to calculate ray direction, we want to rotate screen space positions according to the view matrix, but not translate them
-	mat4 centeredViewMat = viewMat;
-	centeredViewMat[3][0] = 0.0;
-	centeredViewMat[3][1] = 0.0;
-	centeredViewMat[3][2] = 0.0;
-
-	mat4 invViewMat = inverse(viewMat); //TODO: invert cpu-side so we don't do it for every pixel
-	mat4 invProjectionMat = inverse(projectionMat);
-	mat4 invCenteredViewMat = inverse(centeredViewMat);
 
 	vec3 rayPos = (invViewMat * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	orgRayPos = rayPos;

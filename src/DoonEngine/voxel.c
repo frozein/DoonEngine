@@ -620,7 +620,7 @@ static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests r
 				}
 			}
 		}
-		else //resize and reupload buffer if a new size is needed: //TODO FIX
+		else //resize and reupload buffer if a new size is needed:
 		{
 			glBufferData(GL_SHADER_STORAGE_BUFFER, map->chunkCap * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
 			map->chunkCapGPU = map->chunkCap;
@@ -716,7 +716,7 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
 	*projection = DN_mat4_perspective_proj_from_fov(map->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
 }
 
-void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection, int rasterColorTexture, int rasterDepthTexture)
+void DN_draw(DNmap* map, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture)
 {
 	glUseProgram(drawProgram);
 
@@ -743,11 +743,22 @@ void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection, int rasterColorTextur
 		DN_program_uniform_uint(drawProgram, "composeRasterized", false);
 	}
 
+	//to calculate ray direction, we want to rotate screen space positions according to the view matrix, but not translate them
+	DNmat4 centeredView = view;
+	centeredView.m[3][0] = 0.0;
+	centeredView.m[3][1] = 0.0;
+	centeredView.m[3][2] = 0.0;
+
+	DNmat4 invView = DN_mat4_inv(view);
+	DNmat4 invCenteredView = DN_mat4_inv(centeredView);
+	DNmat4 invProjection = DN_mat4_inv(projection);
+
 	DN_program_uniform_vec3(drawProgram, "sunStrength", &map->sunStrength);
 	DN_program_uniform_uint(drawProgram, "viewMode", map->camViewMode);
 	DN_program_uniform_vec3(drawProgram, "ambientStrength", &map->ambientLightStrength);
-	DN_program_uniform_mat4(drawProgram, "viewMat", view);
-	DN_program_uniform_mat4(drawProgram, "projectionMat", projection);
+	DN_program_uniform_mat4(drawProgram, "invViewMat", &invView);
+	DN_program_uniform_mat4(drawProgram, "invCenteredViewMat", &invCenteredView);
+	DN_program_uniform_mat4(drawProgram, "invProjectionMat", &invProjection);
 	glUniform3uiv(glGetUniformLocation(drawProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);

@@ -38,6 +38,10 @@ DNmap* treeMap;
 DNmap* demoMap;
 DNmap* sphereMap;
 
+//rasterization textures:
+GLuint rasterColorTex;
+GLuint rasterDepthTex;
+
 //screen dimensions:
 GLuint SCREEN_W = 1920;
 GLuint SCREEN_H = 1080;
@@ -227,7 +231,6 @@ int main()
 	glBindFramebuffer(GL_FRAMEBUFFER, rasterFBO);
 
 	//color texture:
-	GLuint rasterColorTex;
 	glGenTextures(1, &rasterColorTex);
 	glBindTexture(GL_TEXTURE_2D, rasterColorTex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -236,7 +239,6 @@ int main()
 	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rasterColorTex, 0);
 
 	//depth texture:
-	GLuint rasterDepthTex;
 	glGenTextures(1, &rasterDepthTex);
 	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
@@ -346,7 +348,7 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		DN_draw(activeMap, &view, &projection, rasterColorTex, rasterDepthTex);
+		DN_draw(activeMap, view, projection, rasterColorTex, rasterDepthTex);
 
 		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
@@ -506,9 +508,16 @@ void process_input(GLFWwindow *window)
 void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 {
 	glViewport(0, 0, w, h);
+
+	glBindTexture(GL_TEXTURE_2D, rasterColorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+
 	DN_set_texture_size(treeMap, (DNuvec2){w, h});
 	DN_set_texture_size(demoMap, (DNuvec2){w, h});
 	DN_set_texture_size(sphereMap, (DNuvec2){w, h});
+
 	SCREEN_W = w;
 	SCREEN_H = h;
 }
