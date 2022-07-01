@@ -6,11 +6,6 @@ layout(local_size_x = 16, local_size_y = 16) in; //16x16 local group size
 layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output texture
 layout(rgba32f, binding = 1) uniform image2D depthOutput; //the depth output texture
 
-uniform vec3 camPos;    //the camera's position
-uniform vec3 camDir;    //the direction the camera is pointing
-uniform vec3 camPlaneU; //the vector that points along the x-axis of the screen
-uniform vec3 camPlaneV; //the vector that points along the y-axis of the screen
-
 uniform uint viewMode;  //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
 
 uniform mat4 viewMat;		//the view matrix used to rasterize any objects, used to determine the depth
@@ -29,13 +24,22 @@ void main()
 	bool voxelHit;			//whether or not a voxel was hit
 
 	//calculate ray position and direction:
-	vec2 screenPos;
-	screenPos.x = gl_GlobalInvocationID.x / (float(gl_NumWorkGroups.x) * 8.0) - 1.0; //(0,0) at the center of the screen
-	screenPos.y = gl_GlobalInvocationID.y / (float(gl_NumWorkGroups.y) * 8.0) - 1.0;
+	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
+	vec2 screenPos = coords / vec2(imageSize(colorOutput)) * 2.0 - 1.0;
 
-	vec3 rayDir = camDir + screenPos.x * camPlaneU + screenPos.y * camPlaneV;
+	//to calculate ray direction, we want to rotate screen space positions according to the view matrix, but not translate them
+	mat4 centeredViewMat = viewMat;
+	centeredViewMat[3][0] = 0.0;
+	centeredViewMat[3][1] = 0.0;
+	centeredViewMat[3][2] = 0.0;
+
+	mat4 invViewMat = inverse(viewMat);
+	mat4 invProjectionMat = inverse(projectionMat);
+	mat4 invCenteredViewMat = inverse(centeredViewMat);
+
+	vec3 rayPos = (invViewMat * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+	vec3 rayDir = normalize((invCenteredViewMat * invProjectionMat * vec4(screenPos, 0.0, 1.0)).xyz);
 	vec3 invRayDir = 1.0 / rayDir;
-	vec3 rayPos = camPos;
 
 	//check if ray hits the map at all:
 	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), mapSize);
@@ -118,7 +122,6 @@ void main()
 	}
 
 	//store final color to texture:
-	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	imageStore(colorOutput, coords, vec4(finalColor, 1.0));
 	imageStore(depthOutput, coords, transformedIntersectionPoint);
 }

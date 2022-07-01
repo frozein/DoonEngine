@@ -704,7 +704,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UPDATING/DRAWING:
 
-void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
+void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
 {
 	float aspectRatio = (float)map->textureSize.y / map->textureSize.x;
 	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, map->camOrient));
@@ -727,7 +727,10 @@ void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* 
 	
 	*view = DN_mat4_lookat(map->camPos, DN_vec3_add(map->camPos, camFront), (DNvec3){0.0f, 1.0f, 0.0f});
 	*projection = DN_mat4_perspective_proj_from_fov(map->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
+}
 
+void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection)
+{
 	glUseProgram(drawProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
@@ -738,15 +741,11 @@ void DN_draw(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
 
-	DN_program_uniform_vec3(drawProgram, "camPos", map->camPos);
-	DN_program_uniform_vec3(drawProgram, "camDir", camFront);
-	DN_program_uniform_vec3(drawProgram, "camPlaneU", camPlaneU);
-	DN_program_uniform_vec3(drawProgram, "camPlaneV", camPlaneV);
-	DN_program_uniform_vec3(drawProgram, "sunStrength", map->sunStrength);
+	DN_program_uniform_vec3(drawProgram, "sunStrength", &map->sunStrength);
 	DN_program_uniform_uint(drawProgram, "viewMode", map->camViewMode);
-	DN_program_uniform_vec3(drawProgram, "ambientStrength", map->ambientLightStrength);
-	DN_program_uniform_mat4(drawProgram, "viewMat", *view);
-	DN_program_uniform_mat4(drawProgram, "projectionMat", *projection);
+	DN_program_uniform_vec3(drawProgram, "ambientStrength", &map->ambientLightStrength);
+	DN_program_uniform_mat4(drawProgram, "viewMat", view);
+	DN_program_uniform_mat4(drawProgram, "projectionMat", projection);
 	glUniform3uiv(glGetUniformLocation(drawProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
 	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
@@ -784,16 +783,17 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(DNuvec4), map->lightingRequests);
 
-	DN_program_uniform_vec3(lightingProgram, "camPos", map->camPos);
+	DN_program_uniform_vec3(lightingProgram, "camPos", &map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", map->lastTime);
 	DN_program_uniform_uint(lightingProgram, "numDiffuseSamples", numDiffuseSamples);
 	DN_program_uniform_uint(lightingProgram, "maxDiffuseSamples", maxDiffuseSamples);
 	DN_program_uniform_uint(lightingProgram, "diffuseBounceLimit", map->diffuseBounceLimit);
 	DN_program_uniform_uint(lightingProgram, "specularBounceLimit", map->specBounceLimit);
-	DN_program_uniform_vec3(lightingProgram, "sunDir", DN_vec3_normalize(map->sunDir));
-	DN_program_uniform_vec3(lightingProgram, "sunStrength", map->sunStrength);
+	DNvec3 normalizedSunDir = DN_vec3_normalize(map->sunDir);
+	DN_program_uniform_vec3(lightingProgram, "sunDir", &normalizedSunDir);
+	DN_program_uniform_vec3(lightingProgram, "sunStrength", &map->sunStrength);
 	DN_program_uniform_float(lightingProgram, "shadowSoftness", map->shadowSoftness);
-	DN_program_uniform_vec3(lightingProgram, "ambientStrength", map->ambientLightStrength);
+	DN_program_uniform_vec3(lightingProgram, "ambientStrength", &map->ambientLightStrength);
 	glUniform3uiv(glGetUniformLocation(lightingProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
 	glDispatchCompute(map->numLightingRequests, 1, 1);
