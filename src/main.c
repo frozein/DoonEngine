@@ -41,6 +41,7 @@ DNmap* sphereMap;
 //rasterization textures:
 GLuint rasterColorTex;
 GLuint rasterDepthTex;
+GLuint finalTex;
 
 //screen dimensions:
 GLuint SCREEN_W = 1920;
@@ -224,7 +225,7 @@ int main()
 		return -1;
 	}
 
-	//generate rasterization FBO: //TODO: make sure that these textures get resized with the window
+	//generate rasterization FBO:
 	//---------------------------------
 	GLuint rasterFBO;
 	glGenFramebuffers(1, &rasterFBO);
@@ -254,6 +255,14 @@ int main()
 		return -1;
 	}
 
+	//generate final texture:
+	//---------------------------------
+	glGenTextures(1, &finalTex);
+	glBindTexture(GL_TEXTURE_2D, finalTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 	//initialize voxel pipeline:
 	//---------------------------------
 	if(!DN_init())
@@ -268,7 +277,6 @@ int main()
 	demoMap   = DN_load_map("maps/demo.voxmap",   (DNuvec2){SCREEN_W, SCREEN_H}, true,  128);
 	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
 	sphereMap = DN_load_map("maps/sphere.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true,  1024);
-	demoMap->camFOV = 90.0f;
 
 	activeMap = demoMap;
 
@@ -348,7 +356,7 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		DN_draw(activeMap, view, projection, rasterColorTex, rasterDepthTex);
+		DN_draw(activeMap, finalTex, view, projection, rasterColorTex, rasterDepthTex);
 
 		if(activeMap->streamable)
 			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
@@ -360,7 +368,7 @@ int main()
 		DN_program_activate(quadProgram);
 
 		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_2D, activeMap->glTextureID);
+		glBindTexture(GL_TEXTURE_2D, finalTex);
 		
 		glBindVertexArray(quadBuffer);
 		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
@@ -378,6 +386,11 @@ int main()
 	DN_delete_map(demoMap);
 	DN_delete_map(sphereMap);
 	DN_quit();
+
+	glDeleteFramebuffers(1, &rasterFBO);
+	glDeleteTextures(1, &rasterColorTex);
+	glDeleteTextures(1, &rasterDepthTex);
+	glDeleteTextures(1, &finalTex);
 
 	glDeleteVertexArrays(1, &quadBuffer);
 	DN_program_free(quadProgram);
@@ -513,10 +526,8 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
-
-	DN_set_texture_size(treeMap, (DNuvec2){w, h});
-	DN_set_texture_size(demoMap, (DNuvec2){w, h});
-	DN_set_texture_size(sphereMap, (DNuvec2){w, h});
+	glBindTexture(GL_TEXTURE_2D, finalTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 	SCREEN_W = w;
 	SCREEN_H = h;

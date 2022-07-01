@@ -103,14 +103,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	//---------------------------------
 	DNmap* map = DN_MALLOC(sizeof(DNmap));
 
-	//generate texture:
-	//---------------------------------
-	glGenTextures(1, &map->glTextureID);
-	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-
 	//generate buffers:
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&map->glMapBufferID, sizeof(DNchunkHandle) * mapSize.x * mapSize.y * mapSize.x))
@@ -201,7 +193,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	//---------------------------------
 	map->camPos = (DNvec3){0.0f, 0.0f, 0.0f};
 	map->camOrient = (DNvec3){0.0f, 0.0f, 0.0f};
-	map->camFOV = 0.8f;
+	map->camFOV = 90.0f;
 	map->camViewMode = 0;
 
 	map->sunDir = (DNvec3){1.0f, 1.0f, 1.0f};
@@ -219,7 +211,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 
 void DN_delete_map(DNmap* map)
 {
-	glDeleteTextures(1, &map->glTextureID);
 	glDeleteBuffers(1, &map->glMapBufferID);
 	glDeleteBuffers(1, &map->glChunkBufferID);
 
@@ -716,13 +707,13 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
 	*projection = DN_mat4_perspective_proj_from_fov(map->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
 }
 
-void DN_draw(DNmap* map, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture)
+void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture)
 {
 	glUseProgram(drawProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
-	glBindImageTexture(0, map->glTextureID, 	 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
+	glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
@@ -815,23 +806,6 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
-
-bool DN_set_texture_size(DNmap* map, DNuvec2 size)
-{
-	size.x += WORKGROUP_SIZE - size.x % WORKGROUP_SIZE;
-	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
-
-	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
-		return false;
-	}
-
-	map->textureSize = size;
-	return true;
-}
 
 bool DN_set_map_size(DNmap* map, DNuvec3 size)
 {

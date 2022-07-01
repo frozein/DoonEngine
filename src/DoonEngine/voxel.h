@@ -73,7 +73,6 @@ typedef struct DNmaterial
 typedef struct DNmap
 {	
 	//opengl handles:
-	GLuint glTextureID;     		  //READ ONLY | The openGL texture ID, use glActivate() with this to render it
 	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
 	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
 
@@ -178,12 +177,13 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
 
 /* Draws the voxel map to the texture
  * @param map the map to render
+ * @param outputTexture the texture that will be drawn to, must have an internal format of GL_RGBA32F. The textures resolution will be used to determine how many work groups are dispatched
  * @param view the camera's view matrix
  * @param projection the camera's projection matrix
  * @param rasterColorTexture the handle to the color buffer for rasterized objects, or -1 if not composing with rasterized objects
  * @param rasterDepthTexture the handle to the depth buffer for rasterized objects, or -1 if not composing with rasterized objects
  */
-void DN_draw(DNmap* map, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture);
+void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update
@@ -218,13 +218,6 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int 
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
-
-/* Sets the texture size that a map renders to
- * @param map the map to change
- * @param size the size of the new texture, in pixels
- * @returns true on success, false on failure
- */
-bool DN_set_texture_size(DNmap* map, DNuvec2 size);
 
 /* Sets a map's size
  * @param map the map to change

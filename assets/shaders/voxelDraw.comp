@@ -54,13 +54,13 @@ void main()
 		else
 		{
 			maxDepth = -1.0; //if maxDepth is negative, it will not be tested
-			backgroundColor = sky_color(normalize(rayDir));
+			backgroundColor = sky_color(rayDir);
 		}
 	}
 	else
 	{
 		maxDepth = -1.0;
-		backgroundColor = sky_color(normalize(rayDir));
+		backgroundColor = sky_color(rayDir);
 	}
 
 	//check if ray hits the map at all:
