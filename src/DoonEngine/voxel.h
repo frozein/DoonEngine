@@ -74,7 +74,6 @@ typedef struct DNmap
 {	
 	//opengl handles:
 	GLuint glTextureID;     		  //READ ONLY | The openGL texture ID, use glActivate() with this to render it
-	GLuint glDepthTextureID;		  //READ ONLY | The openGL texture ID for the depth texture
 	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
 	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
 
@@ -181,8 +180,10 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
  * @param map the map to render
  * @param view the camera's view matrix
  * @param projection the camera's projection matrix
+ * @param rasterColorTexture the handle to the color buffer for rasterized objects, or -1 if not composing with rasterized objects
+ * @param rasterDepthTexture the handle to the depth buffer for rasterized objects, or -1 if not composing with rasterized objects
  */
-void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection);
+void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection, int rasterColorTexture, int rasterDepthTexture);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param map the map to update

@@ -62,7 +62,7 @@ void shadow_ray(vec3 rayPos, float seed, inout vec3 color) //returns true if the
 	vec3 colorAdd;
 	float colorMult;
 
-	if(!step_map(updatedSunDir, 1 / updatedSunDir, rayPos, true, hitVoxel, colorAdd, colorMult))
+	if(!step_map(updatedSunDir, 1 / updatedSunDir, rayPos, -1.0, true, hitVoxel, colorAdd, colorMult))
 		color += sunStrength * colorMult + colorAdd;
 }
 
@@ -80,7 +80,7 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 		float colorMult;
 
 		//check if a voxel was hit:
-		if(step_map(rayDir, 1 / rayDir, rayPos, true, hitVoxel, colorAdd, colorMult))
+		if(step_map(rayDir, 1 / rayDir, rayPos, -1.0, true, hitVoxel, colorAdd, colorMult))
 		{
 			//get position:
 			ivec3 hitMapPos = ivec3(rayPos);
@@ -155,7 +155,7 @@ void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout
 		vec3 colorAdd;
 		float colorMult;
 
-		bool hit = step_map(dir, 1 / dir, rayPos, true, hitVoxel, colorAdd, colorMult);  //step through map
+		bool hit = step_map(dir, 1 / dir, rayPos, -1.0, true, hitVoxel, colorAdd, colorMult);  //step through map
 		
 		hitNormal = hitVoxel.normal;
 		hitMaterial = materials[hitVoxel.material];

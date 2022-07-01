@@ -209,8 +209,10 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 uint lastVox = 255; //used for transparent voxels
+vec3 orgRayPos;		//used to determine ray's distance, set to the ray's original origin position (before advancing to bounding box)
 
-bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
+//0 = no hit, 1 = hit voxel, 2 = past max depth
+int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPos, float maxDepth, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
 {
 	ivec3 pos = ivec3(floor(rayPos));    //the position within the chunk
 	vec3 deltaDist = abs(invRayDir);     //the distance the ray has to travel to move one unit in each direction
@@ -244,7 +246,7 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 			{
 				//return the position
 				chunkPos = pos;
-				return true;
+				return 1;
 			}
 
 			lastVox = voxel.material;
@@ -255,12 +257,21 @@ bool step_chunk(uint chunk, vec3 rayDir, vec3 invRayDir, vec3 rayPos, bool ignor
 		//iterate the dda algorithm:
 		iterate_DDA(deltaDist, rayStep, sideDist, pos);
 		ignoreFirst = false;
+
+		//check if past the maximum depth:
+		if(maxDepth > 0.0)
+		{
+			vec3 voxelPos = mapPos + pos * INV_CHUNK_SIZE;
+			vec2 intersection = intersect_AABB(invRayDir, orgRayPos, voxelPos, voxelPos + INV_CHUNK_SIZE);
+			if(intersection.x >= maxDepth)
+				return 2;
+		}
 	}
 
-	return false;
+	return 0;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	colorAdd = vec3(0.0); //added to the final color to account for transparency
 	colorMult = 1.0;      //multiplied with the final color to account for transparency
@@ -273,10 +284,19 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 
 	while(in_map_bounds(pos))
 	{
+		//check if past the maximum depth:
+		if(maxDepth > 0.0)
+		{
+			vec2 intersection = intersect_AABB(invRayDir, orgRayPos, pos, pos + 1.0);
+			if(intersection.x > maxDepth)
+				return false;
+		}
+
 		//check if a solid chunk has been hit:
 		ChunkHandle mapTile = get_map_tile(pos);
 		if (mapTile.flag == 2)
 		{
+			//advance ray to chunk edge:
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, pos, pos + 1.0); //find exactly where the ray intersects
 			if(intersection.x > 0) //only increment rayPos if outside the box
 				rayPos += updatedRayDir * (intersection.x - EPSILON); //add so that new pos is inside the chunk
@@ -286,7 +306,8 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			if(step_chunk(mapTile.index, rayDir, invRayDir, chunkRayPos, ignoreFirst, voxel, chunkPos, colorAdd, colorMult))
+			int stepResult = step_chunk(mapTile.index, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, voxel, chunkPos, colorAdd, colorMult);
+			if(stepResult == 1)
 			{
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
@@ -299,6 +320,8 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, 
 
 				return true;
 			}
+			else if(stepResult == 2)
+				return false;
 		}
 		else if(mapTile.flag == 1)
 		{

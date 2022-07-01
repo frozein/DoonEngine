@@ -83,8 +83,6 @@ int main()
 	//set gl viewport:
 	//---------------------------------
 	glViewport(0, 0, SCREEN_W, SCREEN_H);
-
-	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(message_callback, 0);
 
@@ -110,7 +108,6 @@ int main()
 
 	DN_program_activate(quadProgram);
 	DN_program_uniform_int(quadProgram, "colorTex", 0);
-	DN_program_uniform_int(quadProgram, "depthTex", 1);
 
 	//generate quad buffer:
 	//---------------------------------
@@ -223,6 +220,38 @@ int main()
 		return -1;
 	}
 
+	//generate rasterization FBO: //TODO: make sure that these textures get resized with the window
+	//---------------------------------
+	GLuint rasterFBO;
+	glGenFramebuffers(1, &rasterFBO);
+	glBindFramebuffer(GL_FRAMEBUFFER, rasterFBO);
+
+	//color texture:
+	GLuint rasterColorTex;
+	glGenTextures(1, &rasterColorTex);
+	glBindTexture(GL_TEXTURE_2D, rasterColorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rasterColorTex, 0);
+
+	//depth texture:
+	GLuint rasterDepthTex;
+	glGenTextures(1, &rasterDepthTex);
+	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, rasterDepthTex, 0);
+
+	glEnable(GL_DEPTH_TEST);
+
+	if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+	{
+		printf("failed to create rasterization framebuffer\n");
+		return -1;
+	}
+
 	//initialize voxel pipeline:
 	//---------------------------------
 	if(!DN_init())
@@ -266,6 +295,7 @@ int main()
 	while(!glfwWindowShouldClose(window))
 	{
 		//find deltatime:
+		//---------------------------------
 		numFrames++;
 		float currentTime = glfwGetTime();
 		deltaTime = currentTime - lastFrame;
@@ -279,42 +309,25 @@ int main()
 			cumTime = 0.0f;
 		}
 
-		//clear
-		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
 		//process keyboard input:
+		//---------------------------------
 		process_input(window);
 
-		//update cam direction:
+		//update cam transform:
+		//---------------------------------
 		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){activeMap->camOrient.x, activeMap->camOrient.y, 0.0f}));
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 
-		//draw and update voxels:
 		DNmat4 view;
 		DNmat4 projection;
 		DN_set_view_projection_matrices(activeMap, 0.1f, 100.0f, &view, &projection);
 		
-		DN_draw(activeMap, &view, &projection);
+		//rasterize objects:
+		//---------------------------------
+		glBindFramebuffer(GL_FRAMEBUFFER, rasterFBO);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		if(activeMap->streamable)
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
-
-		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
-
-		//render final quad to the screen:
-		DN_program_activate(quadProgram);
-
-		glActiveTexture(GL_TEXTURE0 + 0);
-		glBindTexture(GL_TEXTURE_2D, activeMap->glTextureID);
-		glActiveTexture(GL_TEXTURE0 + 1);
-		glBindTexture(GL_TEXTURE_2D, activeMap->glDepthTextureID);
-		
-		glBindVertexArray(quadBuffer);
-		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
-		glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
-
-		//rasterization test:
 		DN_program_activate(cubeProgram);
 
 		DNmat4 model = DN_mat4_translate(DN_MAT4_IDENTITY, (DNvec3){5 + 3 * cosf(glfwGetTime()), 1.5 + cosf(glfwGetTime() * 5), 5 + 3 * sinf(glfwGetTime())});
@@ -327,7 +340,32 @@ int main()
 		glBindVertexArray(cubeVAO);
 		glDrawArrays(GL_TRIANGLES, 0, 36);
 
+		//trace voxels:
+		//---------------------------------
+		glBindFramebuffer(GL_FRAMEBUFFER, 0);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		DN_draw(activeMap, &view, &projection, rasterColorTex, rasterDepthTex);
+
+		if(activeMap->streamable)
+			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
+
+		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
+
+		//render final quad to the screen:
+		//---------------------------------
+		DN_program_activate(quadProgram);
+
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, activeMap->glTextureID);
+		
+		glBindVertexArray(quadBuffer);
+		glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, (void*)(0 * sizeof(unsigned int)));
+		glMemoryBarrier(GL_FRAMEBUFFER_BARRIER_BIT);
+
 		//finish rendering and swap:
+		//---------------------------------
 		glfwSwapBuffers(window);
 		glfwPollEvents();
 	}

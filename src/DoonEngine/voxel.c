@@ -110,18 +110,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
-	glGenTextures(1, &map->glDepthTextureID); //TODO: find a way to make this only use 1 float, texture formats dont seem to work when not rgba32f
-	glBindTexture(GL_TEXTURE_2D, map->glDepthTextureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, textureSize.x, textureSize.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
 
 	//generate buffers:
 	//---------------------------------
@@ -232,7 +220,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 void DN_delete_map(DNmap* map)
 {
 	glDeleteTextures(1, &map->glTextureID);
-	glDeleteTextures(1, &map->glDepthTextureID);
 	glDeleteBuffers(1, &map->glMapBufferID);
 	glDeleteBuffers(1, &map->glChunkBufferID);
 
@@ -729,17 +716,32 @@ void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane
 	*projection = DN_mat4_perspective_proj_from_fov(map->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
 }
 
-void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection)
+void DN_draw(DNmap* map, DNmat4* view, DNmat4* projection, int rasterColorTexture, int rasterDepthTexture)
 {
 	glUseProgram(drawProgram);
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindImageTexture(0, map->glTextureID, 	 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
-	glBindImageTexture(1, map->glDepthTextureID, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
+
+	if(rasterColorTexture >= 0 && rasterDepthTexture >= 0)
+	{
+		DN_program_uniform_uint(drawProgram, "composeRasterized", true); //no function for bool uniforms, so use uint
+
+		DN_program_uniform_int(drawProgram, "colorSample", 0);
+		glActiveTexture(GL_TEXTURE0 + 0);
+		glBindTexture(GL_TEXTURE_2D, rasterColorTexture);
+		DN_program_uniform_int(drawProgram, "depthSample", 1);
+		glActiveTexture(GL_TEXTURE0 + 1);
+		glBindTexture(GL_TEXTURE_2D, rasterDepthTexture);
+	}
+	else
+	{
+		DN_program_uniform_uint(drawProgram, "composeRasterized", false);
+	}
 
 	DN_program_uniform_vec3(drawProgram, "sunStrength", &map->sunStrength);
 	DN_program_uniform_uint(drawProgram, "viewMode", map->camViewMode);
@@ -809,14 +811,6 @@ bool DN_set_texture_size(DNmap* map, DNuvec2 size)
 	size.y += WORKGROUP_SIZE - size.y % WORKGROUP_SIZE;
 
 	glBindTexture(GL_TEXTURE_2D, map->glTextureID);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO RESIZE FINAL TEXTURE\n");
-		return false;
-	}
-
-	glBindTexture(GL_TEXTURE_2D, map->glDepthTextureID);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, size.x, size.y, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
