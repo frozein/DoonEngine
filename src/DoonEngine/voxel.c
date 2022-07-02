@@ -202,6 +202,10 @@ DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks)
 	map->specBounceLimit = 2;
 	map->shadowSoftness = 10.0f;
 
+	map->useCubemap = false;
+	map->skyGradientBot = (DNvec3){0.71f, 0.85f, 0.90f};
+	map->skyGradientTop = (DNvec3){0.00f, 0.45f, 0.74f};
+
 	map->frameNum = 0;
 	map->lastTime = 123.456f;
 
@@ -273,6 +277,11 @@ DNmap* DN_load_map(const char* filePath, bool streamable, unsigned int minChunks
 	fread(&map->specBounceLimit, sizeof(unsigned int), 1, fptr);
 	fread(&map->shadowSoftness, sizeof(float), 1, fptr);
 
+	//read sky parameters:
+	//---------------------------------
+	fread(&map->skyGradientBot, sizeof(DNvec3), 1, fptr);
+	fread(&map->skyGradientTop, sizeof(DNvec3), 1, fptr);
+
 	//close file and return:
 	//---------------------------------
 	fclose(fptr);
@@ -319,6 +328,11 @@ bool DN_save_map(const char* filePath, DNmap* map)
 	fwrite(&map->diffuseBounceLimit, sizeof(unsigned int), 1, fptr);
 	fwrite(&map->specBounceLimit, sizeof(unsigned int), 1, fptr);
 	fwrite(&map->shadowSoftness, sizeof(float), 1, fptr);
+
+	//write sky parameters:
+	//---------------------------------
+	fwrite(&map->skyGradientBot, sizeof(DNvec3), 1, fptr);
+	fwrite(&map->skyGradientTop, sizeof(DNvec3), 1, fptr);
 
 	//close file and return
 	//---------------------------------
@@ -747,6 +761,19 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 	DNmat4 invCenteredView = DN_mat4_inv(centeredView);
 	DNmat4 invProjection = DN_mat4_inv(projection);
 
+	DN_program_uniform_uint(drawProgram, "useCubemap", map->useCubemap);
+	if(map->useCubemap)
+	{
+		DN_program_uniform_int(drawProgram, "skyCubemap", 2);
+		glActiveTexture(GL_TEXTURE0 + 2);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, map->glCubemapTex);
+	}
+	else
+	{
+		DN_program_uniform_vec3(drawProgram, "skyGradientBot", &map->skyGradientBot);
+		DN_program_uniform_vec3(drawProgram, "skyGradientTop", &map->skyGradientTop);
+	}
+
 	DN_program_uniform_vec3(drawProgram, "sunStrength", &map->sunStrength);
 	DN_program_uniform_uint(drawProgram, "viewMode", map->camViewMode);
 	DN_program_uniform_vec3(drawProgram, "ambientStrength", &map->ambientLightStrength);
@@ -789,6 +816,19 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 	}
 
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(DNuvec4), map->lightingRequests);
+
+	DN_program_uniform_uint(lightingProgram, "useCubemap", map->useCubemap);
+	if(map->useCubemap)
+	{
+		DN_program_uniform_int(lightingProgram, "skyCubemap", 2);
+		glActiveTexture(GL_TEXTURE0 + 2);
+		glBindTexture(GL_TEXTURE_CUBE_MAP, map->glCubemapTex);
+	}
+	else
+	{
+		DN_program_uniform_vec3(lightingProgram, "skyGradientBot", &map->skyGradientBot);
+		DN_program_uniform_vec3(lightingProgram, "skyGradientTop", &map->skyGradientTop);
+	}
 
 	DN_program_uniform_vec3(lightingProgram, "camPos", &map->camPos);
 	DN_program_uniform_float(lightingProgram, "time", map->lastTime);

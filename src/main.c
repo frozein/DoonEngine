@@ -13,6 +13,9 @@
 #include <GLAD/glad.h>
 #include <GLFW/glfw3.h>
 
+#define STB_IMAGE_IMPLEMENTATION
+#include <STB/stb_image.h>
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //Processes keyboard input for the current frame. CALL ONCE PER FRAME ONLY
@@ -255,6 +258,32 @@ int main()
 		return -1;
 	}
 
+	//generate cubemap:
+	//---------------------------------
+	GLuint cubemapTex;
+	glGenTextures(1, &cubemapTex);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTex);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	const char* paths[6] = {"textures/skybox/right.jpg", "textures/skybox/left.jpg", "textures/skybox/top.jpg", "textures/skybox/bottom.jpg", "textures/skybox/front.jpg", "textures/skybox/back.jpg"};
+	for(int i = 0; i < 6; i++)
+	{
+		unsigned int w, h, nChannels;
+		unsigned char* rawImage = stbi_load(paths[i], &w, &h, &nChannels, 0);
+		if(!rawImage)
+		{
+			printf("failed to load skybox texture \"%s\"\n", paths[i]);
+			continue;
+		}
+
+		glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE, rawImage);
+		stbi_image_free(rawImage);
+	}
+
 	//generate final texture:
 	//---------------------------------
 	glGenTextures(1, &finalTex);
@@ -277,6 +306,9 @@ int main()
 	demoMap   = DN_load_map("maps/demo.voxmap",   true,  128);
 	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, false, 0);
 	sphereMap = DN_load_map("maps/sphere.voxmap", true,  1024);
+
+	demoMap->glCubemapTex = cubemapTex;
+	demoMap->useCubemap = true;
 
 	activeMap = demoMap;
 

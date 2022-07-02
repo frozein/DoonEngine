@@ -106,6 +106,12 @@ typedef struct DNmap
 	unsigned int specBounceLimit; 	  //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
 	float shadowSoftness; 			  //READ-WRITE | How soft shadows from direct light appear
 
+	//sky parameters:
+	bool useCubemap;				  //READ-WRITE | Whether or not the map should sample a cubemap for the sky color, otherwise a gradient will be used
+	unsigned int glCubemapTex;		  //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
+	DNvec3 skyGradientBot;				  //READ-WRITE | If the map does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
+	DNvec3 skyGradientTop;				  //READ-WRITE | If the map does NOT sample a cubemap, the color at the top of the gradient for the sky color
+
 	unsigned int frameNum;			  //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
 	float lastTime;					  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNmap;
