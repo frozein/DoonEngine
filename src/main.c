@@ -274,9 +274,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",   (DNuvec2){SCREEN_W, SCREEN_H}, true,  128);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, (DNuvec2){SCREEN_W, SCREEN_H}, false, 0);
-	sphereMap = DN_load_map("maps/sphere.voxmap", (DNuvec2){SCREEN_W, SCREEN_H}, true,  1024);
+	demoMap   = DN_load_map("maps/demo.voxmap",   true,  128);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, false, 0);
+	sphereMap = DN_load_map("maps/sphere.voxmap", true,  1024);
 
 	activeMap = demoMap;
 
@@ -330,7 +330,7 @@ int main()
 
 		DNmat4 view;
 		DNmat4 projection;
-		DN_set_view_projection_matrices(activeMap, 0.1f, 100.0f, &view, &projection);
+		DN_set_view_projection_matrices(activeMap, (float)SCREEN_H / SCREEN_W, 0.1f, 100.0f, &view, &projection);
 		
 		//rasterize objects:
 		//---------------------------------
@@ -527,7 +527,7 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
 	glBindTexture(GL_TEXTURE_2D, finalTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
 	SCREEN_W = w;
 	SCREEN_H = h;

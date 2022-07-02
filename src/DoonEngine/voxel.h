@@ -78,7 +78,6 @@ typedef struct DNmap
 
 	//data parameters:
 	DNuvec3 mapSize; 	    		  //READ ONLY | The size, in DNchunks, of the map
-	DNuvec2 textureSize; 			  //READ ONLY | The size, in pixels, of the texture that the map renders to
 	unsigned int chunkCap;			  //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
 	unsigned int chunkCapGPU; 		  //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
 	unsigned int nextChunk;			  //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
@@ -142,7 +141,7 @@ void DN_quit();
  * @param minChunks for streamable maps only. determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
  * @returns the new map or NULL if the map creation failed in any way
  */
-DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsigned int minChunks);
+DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks);
 /* Deletes a DNmap, should be called whenever a map is no longer needed to avoid memory leaks
  * @param map the map to delete
  */
@@ -155,7 +154,7 @@ void DN_delete_map(DNmap* map);
  * @param minChunks for streamable maps only. determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
  * @returns the loaded map or NULL, on failure
  */
-DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, unsigned int minChunks);
+DNmap* DN_load_map(const char* filePath, bool streamable, unsigned int minChunks);
 /* Saves a DNmap to a file
  * @param filePath the path of the file to save to
  * @param map the map to save
@@ -168,12 +167,13 @@ bool DN_save_map(const char* filePath, DNmap* map);
 
 /* Calculates the view and projection matrices for the current camera position.
  * @param map the map to render
+ * @param aspectRatio the aspect ratio of the target texture (height / width)
  * @param nearPlane the camera's near clipping plane, used for composing with rasterized objects
  * @param farPlane the camera's far clipping plane, used for composing with rasterized objects
  * @param view populated with the camera's view matrix, use this when rendering rasterized objects
  * @param projection populated with the camera's projection matrix, use this when rendering rasterized objects
  */
-void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection);
+void DN_set_view_projection_matrices(DNmap* map, float aspectRatio, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection);
 
 /* Draws the voxel map to the texture
  * @param map the map to render

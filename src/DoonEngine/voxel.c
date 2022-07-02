@@ -97,7 +97,7 @@ void DN_quit()
 	glDeleteBuffers(1, &lightingRequestBuffer);
 }
 
-DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsigned int minChunks)
+DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks)
 {
 	//allocate structure:
 	//---------------------------------
@@ -181,7 +181,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, DNuvec2 textureSize, bool streamable, unsi
 	//set data parameters:
 	//---------------------------------
 	map->mapSize = mapSize;
-	map->textureSize = textureSize;
 	map->chunkCap = numChunks;
 	map->chunkCapGPU = numChunks;
 	map->nextChunk = 0;
@@ -223,7 +222,7 @@ void DN_delete_map(DNmap* map)
 	DN_FREE(map);
 }
 
-DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, unsigned int minChunks)
+DNmap* DN_load_map(const char* filePath, bool streamable, unsigned int minChunks)
 {
 	//open file:
 	//---------------------------------
@@ -240,7 +239,7 @@ DNmap* DN_load_map(const char* filePath, DNuvec2 textureSize, bool streamable, u
 	//---------------------------------
 	DNuvec3 mapSize;
 	fread(&mapSize, sizeof(DNuvec3), 1, fptr);
-	map = DN_create_map(mapSize, textureSize, streamable, minChunks);
+	map = DN_create_map(mapSize, streamable, minChunks);
 	fread(map->map, sizeof(DNchunkHandle), map->mapSize.x * map->mapSize.y * map->mapSize.z, fptr);
 
 	//make sure nothing seems loaded on gpu:
@@ -682,9 +681,8 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UPDATING/DRAWING:
 
-void DN_set_view_projection_matrices(DNmap* map, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
+void DN_set_view_projection_matrices(DNmap* map, float aspectRatio, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
 {
-	float aspectRatio = (float)map->textureSize.y / map->textureSize.x;
 	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, map->camOrient));
 	DNvec3 camFront;
 	DNvec3 camPlaneU;
@@ -717,6 +715,11 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNmaterial) * DN_MAX_MATERIALS, map->materials);
+
+	unsigned int w, h;
+	glBindTexture(GL_TEXTURE_2D, outputTexture);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &w);
+	glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_HEIGHT, &h);
 
 	if(rasterColorTexture >= 0 && rasterDepthTexture >= 0)
 	{
@@ -752,7 +755,7 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 	DN_program_uniform_mat4(drawProgram, "invProjectionMat", &invProjection);
 	glUniform3uiv(glGetUniformLocation(drawProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
-	glDispatchCompute(map->textureSize.x / WORKGROUP_SIZE, map->textureSize.y / WORKGROUP_SIZE, 1);
+	glDispatchCompute(w / WORKGROUP_SIZE, h / WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
