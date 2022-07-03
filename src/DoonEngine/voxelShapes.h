@@ -83,10 +83,11 @@ typedef struct DNvoxelModel
 
 /* Loads a magicavoxel model from a .vox file
  * @param path the path to the file to load from
+ * @param material the material to make the voxels, if negative, the materials will be set to the palette index in magicavoxel
  * @param model populated with the model once loaded
  * @returns true on success, false on failure
  */
-bool DN_load_vox_file(const char* path, uint8_t material, DNvoxelModel* model);
+bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model);
 /* Frees the memory of a model
  * @param model the model to free
 */

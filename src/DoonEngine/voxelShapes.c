@@ -330,7 +330,7 @@ void _DN_read_chunk_info( FILE *fp, VoxFileChunk* chunk )
 	chunk->endPtr   = ftell(fp) + chunk->len + chunk->childLen;
 }
 
-bool DN_load_vox_file(const char* path, uint8_t material, DNvoxelModel* model)
+bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 {
 	FILE* fp = fopen(path, "rb");
 
@@ -409,7 +409,7 @@ bool DN_load_vox_file(const char* path, uint8_t material, DNvoxelModel* model)
 		DNvoxel vox;
 		VoxFileVoxel pos = tempVoxels[i];
 
-		vox.material = material; //TODO: add support for multiple materials per model
+		vox.material = material >= 0 ? material : pos.w;
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 		vox.albedo = DN_vec3_pow((DNvec3){palette[pos.w].x / 255.0f, palette[pos.w].y / 255.0f, palette[pos.w].z / 255.0f}, DN_GAMMA);
 

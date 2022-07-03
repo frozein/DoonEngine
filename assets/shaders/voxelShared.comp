@@ -231,13 +231,14 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPo
 		if (does_voxel_exist(chunk, pos) && !ignoreFirst)
 		{
 			//decompress the voxel and find its material:
-			voxel = decompress_voxel(get_voxel(chunk, pos));
+			CompressedVoxel compressed = get_voxel(chunk, pos);
+			voxel = decompress_voxel(compressed);
 			Material material = materials[voxel.material];
 
 			if(material.opacity < 1.0 && voxel.material < 255)
 			{
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
-				if(lastVox != voxel.material)
+				if(lastVox != ((compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF)))
 				{
 					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
@@ -255,7 +256,7 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPo
 				return 1;
 			}
 
-			lastVox = voxel.material;
+			lastVox = (compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF);
 		}
 		else
 			lastVox = 255;
