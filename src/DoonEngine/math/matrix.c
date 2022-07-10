@@ -132,16 +132,16 @@ DNmat3 DN_mat3_scale(DNmat3 m, DNvec2 s)
 
 DNmat3 DN_mat3_rotate(DNmat3 m, GLfloat angle)
 {
-	DNmat3 res;
+	DNmat3 rotated;
 
 	GLfloat sine =   sinf(angle * DEG_TO_RAD);
 	GLfloat cosine = cosf(angle * DEG_TO_RAD);
-	res.m[0][0] = cosine;
-	res.m[1][0] =  sine;
-	res.m[0][1] = -sine;
-	res.m[1][1] = cosine;
+	rotated.m[0][0] = cosine;
+	rotated.m[1][0] =  sine;
+	rotated.m[0][1] = -sine;
+	rotated.m[1][1] = cosine;
 
-	return res;
+	return DN_mat3_mult(m, rotated);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
