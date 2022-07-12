@@ -46,6 +46,9 @@ GLuint rasterColorTex;
 GLuint rasterDepthTex;
 GLuint finalTex;
 
+//rasterization FBO
+GLuint rasterFBO;
+
 //screen dimensions:
 GLuint SCREEN_W = 1920;
 GLuint SCREEN_H = 1080;
@@ -230,7 +233,6 @@ int main()
 
 	//generate rasterization FBO:
 	//---------------------------------
-	GLuint rasterFBO;
 	glGenFramebuffers(1, &rasterFBO);
 	glBindFramebuffer(GL_FRAMEBUFFER, rasterFBO);
 
@@ -554,15 +556,18 @@ void framebuffer_size_callback(GLFWwindow* window, int w, int h)
 {
 	glViewport(0, 0, w, h);
 
-	glBindTexture(GL_TEXTURE_2D, rasterColorTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
-	glBindTexture(GL_TEXTURE_2D, finalTex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-
 	SCREEN_W = w;
 	SCREEN_H = h;
+
+	glBindFramebuffer(GL_FRAMEBUFFER, rasterFBO);
+	glBindTexture(GL_TEXTURE_2D, rasterColorTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, SCREEN_W, SCREEN_H, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, rasterColorTex, 0);
+	glBindTexture(GL_TEXTURE_2D, rasterDepthTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, SCREEN_W, SCREEN_H, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, rasterDepthTex, 0);
+	glBindTexture(GL_TEXTURE_2D, finalTex);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, SCREEN_W, SCREEN_H, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 }
 
 void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam)
