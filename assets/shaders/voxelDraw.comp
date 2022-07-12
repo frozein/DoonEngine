@@ -30,6 +30,7 @@ void main()
 	//calculate ray position and direction:
 	ivec2 coords = ivec2(gl_GlobalInvocationID.xy);
 	vec2 screenPos = coords / vec2(imageSize(colorOutput)) * 2.0 - 1.0;
+	vec2 texCoords = vec2(coords) / vec2(textureSize(colorSample, 0));
 
 	vec3 rayPos = (invViewMat * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
 	orgRayPos = rayPos;
@@ -40,7 +41,7 @@ void main()
 	vec3 backgroundColor;
 	if(composeRasterized)
 	{
-		maxDepth = texture(depthSample, screenPos * 0.5 + 0.5).x * 2.0 - 1.0;
+		maxDepth = texture(depthSample, texCoords).x * 2.0 - 1.0;
 
 		if(maxDepth < 1.0) //if far clip plane not hit
 		{
@@ -49,7 +50,7 @@ void main()
 			viewSpacePos /= viewSpacePos.w;
 			maxDepth = length(viewSpacePos.xyz);
 
-			backgroundColor = texture(colorSample, screenPos * 0.5 + 0.5).xyz;
+			backgroundColor = texture(colorSample, texCoords).xyz;
 		}
 		else
 		{

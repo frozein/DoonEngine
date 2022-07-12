@@ -360,8 +360,8 @@ DNmat4 DN_mat4_perspective_proj(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfl
 DNmat4 DN_mat4_perspective_proj_from_fov(GLfloat fov, GLfloat aspect, GLfloat n, GLfloat f)
 {
 	GLfloat scale = tanf(fov * 0.5 * DEG_TO_RAD) * n; 
-    GLfloat r = aspect * scale;
-    GLfloat t = scale;
+	GLfloat r = aspect * scale;
+	GLfloat t = scale;
 
 	return DN_mat4_perspective_proj(-r, r, -t, t, n, f);
 }
