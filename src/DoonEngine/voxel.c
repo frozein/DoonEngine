@@ -762,9 +762,9 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 	DNmat4 invProjection = DN_mat4_inv(projection);
 
 	DN_program_uniform_uint(drawProgram, "useCubemap", map->useCubemap);
+	DN_program_uniform_int(drawProgram, "skyCubemap", 2);
 	if(map->useCubemap)
 	{
-		DN_program_uniform_int(drawProgram, "skyCubemap", 2);
 		glActiveTexture(GL_TEXTURE0 + 2);
 		glBindTexture(GL_TEXTURE_CUBE_MAP, map->glCubemapTex);
 	}
