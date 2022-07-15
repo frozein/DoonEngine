@@ -1,0 +1,32 @@
+{
+	"folders": [
+		{
+			"path": "src"
+		},
+		{
+			"path": "assets\\shaders"
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.rh": "c",
+			"stdio.h": "c",
+			"render.h": "c",
+			"initializer_list": "c",
+			"random": "c",
+			"type_traits": "c",
+			"vector": "c",
+			"xstring": "c",
+			"xutility": "c",
+			"compare": "c",
+			"tuple": "c",
+			"utility": "c",
+			"xmemory": "c",
+			"xtr1common": "c",
+			"cmath": "c",
+			"globals.h": "c",
+			"voxel.h": "c",
+			"texture.h": "c"
+		}
+	}
+}
