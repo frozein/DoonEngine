@@ -21,6 +21,11 @@ static DNvec3 length;
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPE SDFs:
 
+static float _DN_sdf_sphere(DNvec3 p)
+{
+	return DN_vec3_length(p) - radius;
+}
+
 static float _DN_sdf_box(DNvec3 p)
 {
 	DNvec3 q = DN_vec3_subtract((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
@@ -125,6 +130,12 @@ static void _DN_shape(DNmap* map, DNvoxel voxel, DNvec3 min, DNvec3 max, DNmat4 
 	DNivec3 iMin = {floorf(min.x), floorf(min.y), floorf(min.z)};
 	DNivec3 iMax = {ceilf (max.x), ceilf (max.y), ceilf (max.z)};
 
+	if (voxel.material == 255)
+	{
+		iMin = (DNivec3){iMin.x - 1, iMin.y - 1, iMin.z - 1};
+		iMax = (DNivec3){iMax.x + 1, iMax.y + 1, iMax.z + 1};
+	}
+
 	for(int z = iMin.z; z <= iMax.z; z++)
 	{
 		if(z / DN_CHUNK_SIZE.z >= map->mapSize.z || z < 0)
@@ -144,17 +155,31 @@ static void _DN_shape(DNmap* map, DNvoxel voxel, DNvec3 min, DNvec3 max, DNmat4 
 				pos = DN_mat4_mult_vec4(invTransform, pos);
 				float dist = sdf((DNvec3){pos.x, pos.y, pos.z});
 
-				if(dist < 0.0)
+				if(dist < 1.0)
 				{
 					DNivec3 mapPos;
 					DNivec3 chunkPos;
 					DN_separate_position((DNivec3){x, y, z}, &mapPos, &chunkPos);
 
 					DNchunkHandle mapTile = map->map[DN_FLATTEN_INDEX(mapPos, map->mapSize)];
-					if(mapTile.flag == 0 || !DN_does_voxel_exist(map, mapPos, chunkPos))
+
+					if (dist < 0.0)
 					{
-						voxel.normal = _DN_calc_normal((DNvec4){x, y, z, 1.0f}, invTransform, dist, sdf);
-						DN_set_voxel(map, mapPos, chunkPos, voxel);
+						if (mapTile.flag == 0 || (!DN_does_voxel_exist(map, mapPos, chunkPos) || voxel.material == 255))
+						{
+							if (voxel.material != 255)
+								voxel.normal = _DN_calc_normal((DNvec4) { x, y, z, 1.0f }, invTransform, dist, sdf);
+							DN_set_voxel(map, mapPos, chunkPos, voxel);
+						}
+					}
+					else if (voxel.material == 255)
+					{
+						if (mapTile.flag != 0 && DN_does_voxel_exist(map, mapPos, chunkPos))
+						{
+							DNvoxel oldVox = DN_get_voxel(map, mapPos, chunkPos);
+							oldVox.normal = DN_vec3_scale(_DN_calc_normal((DNvec4) { x, y, z, 1.0f }, invTransform, dist, sdf), -1.0f);
+							DN_set_voxel(map, mapPos, chunkPos, oldVox);
+						}
 					}
 				}
 			}
@@ -165,49 +190,17 @@ static void _DN_shape(DNmap* map, DNvoxel voxel, DNvec3 min, DNvec3 max, DNmat4 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPES
 
-//this function is implemented specially to be more efficient
 void DN_shape_sphere(DNmap* map, DNvoxel voxel, DNvec3 c, float r)
 {
-	DNivec3 min = {(int)floorf(c.x - r) + 1, (int)floorf(c.y - r) + 1, (int)floorf(c.z - r) + 1};
-	DNivec3 max = {(int)ceilf (c.x + r) - 1, (int)ceilf (c.y + r) - 1, (int)ceilf (c.z + r) - 1};
+	DNmat4 transform;
+	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
 
-	const float rSqr = r * r;
-	for(int z = min.z; z <= max.z; z++)
-	{
-		if(z / DN_CHUNK_SIZE.z >= map->mapSize.z || z < 0)
-			continue;
+	radius = r;
 
-		for(int y = min.y; y <= max.y; y++)
-		{
-			if(y / DN_CHUNK_SIZE.y >= map->mapSize.y || y < 0)
-				continue;
+	DNvec3 min = (DNvec3){-r, -r, -r};
+	DNvec3 max = (DNvec3){ r,  r,  r};
 
-			for(int x = min.x; x <= max.x; x++)
-			{
-				if(x / DN_CHUNK_SIZE.x >= map->mapSize.x || x < 0)
-					continue;
-
-				float distSqr = (c.x - x) * (c.x - x) + (c.y - y) * (c.y - y) + (c.z - z) * (c.z - z);
-				if(distSqr <= rSqr)
-				{
-					DNivec3 mapPos;
-					DNivec3 chunkPos;
-					DN_separate_position((DNivec3){x, y, z}, &mapPos, &chunkPos);
-
-					DNchunkHandle mapTile = map->map[DN_FLATTEN_INDEX(mapPos, map->mapSize)];
-					if(mapTile.flag == 0 || !DN_does_voxel_exist(map, mapPos, chunkPos))
-					{
-						voxel.normal = (DNvec3){x - c.x, y - c.y, z - c.z};
-
-						float maxNormal = fmax(fmax(fabs(voxel.normal.x), fabs(voxel.normal.y)), fabs(voxel.normal.z));
-						voxel.normal = DN_vec3_scale(voxel.normal, 1.0f / maxNormal);
-
-						DN_set_voxel(map, mapPos, chunkPos, voxel);
-					}
-				}
-			}
-		}
-	}
+	_DN_shape(map, voxel, min, max, transform, _DN_sdf_sphere);
 }
 
 void DN_shape_box(DNmap* map, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 orient)
@@ -332,7 +325,7 @@ void _DN_read_chunk_info( FILE *fp, VoxFileChunk* chunk )
 
 bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 {
-	FILE* fp = fopen(path, "rb");
+	FILE* fp = fopen(path, "rb"); 
 
 	if(fp == NULL)
 	{
