@@ -176,12 +176,12 @@ DNvec3 DN_vec3_cross(DNvec3 v1, DNvec3 v2)
 
 GLfloat DN_vec3_length(DNvec3 v)
 {
-	return v.x * v.x + v.y * v.y + v.z * v.z;
+	return sqrtf(v.x * v.x + v.y * v.y + v.z * v.z);
 }
 
 GLfloat DN_vec3_dot(DNvec3 v1, DNvec3 v2)
 {
-	return sqrtf(v1.x * v2.x + v1.y * v2.y + v1.z * v2.z);
+	return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z;
 }
 
 GLfloat DN_vec3_distance(DNvec3 v1, DNvec3 v2)
