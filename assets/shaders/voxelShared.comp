@@ -182,34 +182,11 @@ vec3 sky_color(vec3 rayDir)
 
 void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos) //steps through one tile with the DDA algorithm
 {
-	//https://www.youtube.com/watch?v=NbSee-XM7WA <- see this video for a good overview of the algorithm
+	//branchless dda code from here: https://www.shadertoy.com/view/4dX3zl
 
-	if (sideDist.x < sideDist.y) 
-	{
-		if (sideDist.x < sideDist.z) 
-		{
-			sideDist.x += deltaDist.x;
-			mapPos.x += rayStep.x;
-		}
-		else 
-		{
-			sideDist.z += deltaDist.z;
-			mapPos.z += rayStep.z;
-		}
-	}
-	else
-	{
-		if (sideDist.y < sideDist.z) 
-		{
-			sideDist.y += deltaDist.y;
-			mapPos.y += rayStep.y;
-		}
-		else 
-		{
-			sideDist.z += deltaDist.z;
-			mapPos.z += rayStep.z;
-		}
-	}
+	bvec3 mask = lessThanEqual(sideDist.xyz, min(sideDist.yzx, sideDist.zxy));
+	sideDist += vec3(mask) * deltaDist;
+	mapPos += ivec3(mask) * rayStep;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
