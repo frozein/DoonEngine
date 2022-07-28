@@ -125,10 +125,17 @@ uint get_voxel_index(uint chunk, uint mapIndex, ivec3 chunkPos)
 {
 	uint voxNum = 0;
 	uint localIndex = chunkPos.x + CHUNK_SIZE.x * (chunkPos.y + CHUNK_SIZE.y * chunkPos.z);
-	for(int i = 0; i < localIndex; i++)
-		voxNum += (chunks[chunk].bitMask[i >> 5] >> (i & 0x1F)) & 1;
+	uint bitMaskIndex = localIndex >> 5;
+	for(int i = 0; i <= bitMaskIndex; i++)
+	{
+		uint bits = chunks[chunk].bitMask[i];
+		if(i == bitMaskIndex)
+			bits &= (1 << (localIndex & 0x1F)) - 1;
 
-	return map[mapIndex].testIndex + voxNum; //TODO: figure out why this is slow
+		voxNum += bitCount(bits);
+	}
+
+	return map[mapIndex].testIndex + voxNum;
 }
 
 bool does_voxel_exist(uint chunk, ivec3 chunkPos) //returns true if the voxel at the position is solid (not empty)
