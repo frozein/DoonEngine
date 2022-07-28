@@ -305,9 +305,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",   true,  128);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, false, 0);
-	sphereMap = DN_load_map("maps/sphere.voxmap", true,  1024);
+	demoMap   = DN_load_map("maps/demo.voxmap",   true,  64);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, true,  32);
+	sphereMap = DN_load_map("maps/sphere.voxmap", true,  512);
 
 	demoMap->glCubemapTex = cubemapTex;
 	demoMap->useCubemap = true;
@@ -328,7 +328,7 @@ int main()
 
 	//sync with gpu:
 	//---------------------------------
-	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
+	//DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 
 	//main loop:
 	//---------------------------------
@@ -472,7 +472,11 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 		if(DN_step_map(activeMap, DN_cam_dir(activeMap->camOrient), activeMap->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
+			DNivec3 mapPos;
+			DNivec3 localPos;
+			DN_separate_position(hitPos, &mapPos, &localPos);
+			printf("%i, %i, %i\n", localPos.x, localPos.y, localPos.z);
+			/*DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
 			DNivec3 mapPos;
 			DNivec3 localPos;
@@ -488,7 +492,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
 				if(!activeMap->streamable)
 					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
-			}
+			}*/
 		}
 
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)

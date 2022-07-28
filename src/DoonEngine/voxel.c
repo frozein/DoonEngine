@@ -40,7 +40,7 @@ typedef struct DNchunkGPU
 	DNivec3 pos;
 	GLuint numLightingSamples; //the number of lighting samples this chunk has taken, not updated CPU-side
 
-	DNvoxelGPU voxels[8][8][8];
+	GLuint bitMask[16];
 } DNchunkGPU;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -103,6 +103,27 @@ DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks)
 	//---------------------------------
 	DNmap* map = DN_MALLOC(sizeof(DNmap));
 
+	//alloc buffer with size minChunks * maximum chunk size
+	//temp -> 32-512
+
+	map->numNodes = minChunks;
+	map->voxelCap = 512 * minChunks;
+	map->testLayout = DN_MALLOC(sizeof(*map->testLayout) * (map->voxelCap / 16));
+	for(int i = 0; i < minChunks; i++)
+	{
+		map->testLayout[i].used = false;
+		map->testLayout[i].size = 512;
+		map->testLayout[i].startPos = i * 512;
+	}
+
+	if(!_DN_gen_shader_storage_buffer(&map->glTestBufferID, sizeof(DNvoxelGPU) * (map->voxelCap + 512)))
+	{
+		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR TEST\n");
+		return NULL;
+	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glTestBufferID);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
+
 	//generate buffers:
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&map->glMapBufferID, sizeof(DNchunkHandle) * mapSize.x * mapSize.y * mapSize.x))
@@ -138,7 +159,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks)
 
 	//set all map tiles to empty:
 	for(int i = 0; i < mapSize.x * mapSize.y * mapSize.z; i++)
-		map->map[i].flag = map->map[i].visible = 0;
+		map->map[i].flag = 0;
 
 	map->chunks = DN_MALLOC(sizeof(DNchunk) * numChunks);
 	if(!map->chunks)
@@ -214,6 +235,9 @@ DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks)
 
 void DN_delete_map(DNmap* map)
 {
+	DN_FREE(map->testLayout);
+	glDeleteBuffers(1, &map->glTestBufferID);
+
 	glDeleteBuffers(1, &map->glMapBufferID);
 	glDeleteBuffers(1, &map->glChunkBufferID);
 
@@ -414,27 +438,56 @@ void DN_remove_chunk(DNmap* map, DNivec3 pos)
 }
 
 //converts a DNchunk to a DNchunkGPU
-static DNchunkGPU _DN_chunk_to_gpu(DNchunk chunk)
+static DNchunkGPU _DN_chunk_to_gpu(DNchunk chunk, int* numVoxels, DNvoxelGPU* voxels)
 {
 	DNchunkGPU res;
 	res.pos = chunk.pos;
 	res.numLightingSamples = 0;
 
+	for(int i = 0; i < 16; i++)
+		res.bitMask[i] = 0;
+
+	int n = 0;
 	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
 	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
 	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
 	{
-		res.voxels[x][y][z].normal = chunk.voxels[x][y][z].normal;
-		res.voxels[x][y][z].directLight = chunk.voxels[x][y][z].albedo;
-		res.voxels[x][y][z].specLight = 0;
-		res.voxels[x][y][z].diffuseLight = 0;
+		if((chunk.voxels[x][y][z].normal & 0xFF) == 255)
+			continue;
+
+		bool visible = false;
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x + 1, y, z}) || (chunk.voxels[x + 1][y][z].normal & 0xFF) == 255);
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x - 1, y, z}) || (chunk.voxels[x - 1][y][z].normal & 0xFF) == 255);
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x, y + 1, z}) || (chunk.voxels[x][y + 1][z].normal & 0xFF) == 255);
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x, y - 1, z}) || (chunk.voxels[x][y - 1][z].normal & 0xFF) == 255);
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x, y, z + 1}) || (chunk.voxels[x][y][z + 1].normal & 0xFF) == 255);
+		visible = visible || (!DN_in_chunk_bounds((DNivec3){x, y, z - 1}) || (chunk.voxels[x][y][z - 1].normal & 0xFF) == 255);
+
+		if(!visible)
+			continue;
+
+		DNivec3 pos = (DNivec3){x, y, z};
+		unsigned int index = DN_FLATTEN_INDEX(pos, DN_CHUNK_SIZE);
+		res.bitMask[index / 32] |= 1 << (index % 32);
+
+		DNvoxelGPU vox;
+		vox.normal = chunk.voxels[x][y][z].normal;
+		vox.directLight = chunk.voxels[x][y][z].albedo;
+		vox.diffuseLight = 0;
+		vox.specLight = 0;
+		voxels[n++] = vox;
 	}
+
+	*numVoxels = n;
 
 	return res;
 }
 
-static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxelMapGPU, unsigned int mapIndex)
+static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, unsigned int mapIndex, DNchunkGPU chunk)
 {
+	//bind buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
+
 	//variables that belong to the oldest chunk:
 	int maxTime = 0;
 	int maxTimeIndex = -1;
@@ -454,9 +507,9 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 			maxTimeMapIndex = -1;
 			break;
 		}
-		else if(voxelMapGPU[currentIndex].lastUsed > maxTime) //else, check if it is older than the current oldest
+		else if(mapGPU[currentIndex].lastUsed > maxTime) //else, check if it is older than the current oldest
 		{
-			maxTime = voxelMapGPU[currentIndex].lastUsed;
+			maxTime = mapGPU[currentIndex].lastUsed;
 			maxTimeIndex = i;
 			maxTimeMapIndex = currentIndex;
 		}
@@ -510,22 +563,163 @@ static void _DN_stream_voxel_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* voxel
 		DN_FREE(oldChunkData);
 	}
 
-	if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded and store old data (to maintain semi-baked lighting)
+	if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded
 	{
 		map->map[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag != 0 ? 1 : 0;
-		voxelMapGPU[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag;
+		mapGPU[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag;
+
+		for(int i = 0; i < map->numNodes; i++)
+			if(DN_FLATTEN_INDEX(map->testLayout[i].chunkPos, map->mapSize) == maxTimeMapIndex)
+			{
+				map->testLayout[i].used = false;
+				break;
+			}
 	}
 
-	voxelMapGPU[mapIndex].flag = 2; //set the new tile's flag to loaded
+	mapGPU[mapIndex].flag = 2; //set the new tile's flag to loaded
 	map->map[mapIndex].flag = 2;
-	voxelMapGPU[mapIndex].lastUsed = 0;
-	voxelMapGPU[mapIndex].index = maxTimeIndex;
+	mapGPU[mapIndex].lastUsed = 0;
+	mapGPU[mapIndex].index = maxTimeIndex;
+	map->gpuChunkLayout[maxTimeIndex] = pos;
 
 	//load in new data:
-	DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map->chunks[map->map[mapIndex].index]);
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &gpuChunk);
-	map->chunks[map->map[mapIndex].index].updated = false;
-	map->gpuChunkLayout[maxTimeIndex] = pos;
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &chunk);
+}
+
+static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, unsigned int mapIndex, unsigned int numVoxels, DNvoxelGPU* voxels)
+{
+	//bind buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glTestBufferID);
+
+	//calculate needed node size:
+	unsigned int nodeSize = 16;
+	while(nodeSize < numVoxels)
+		nodeSize *= 2;
+
+	//loop over and find the smallest and least used node:
+	int smallestNode = INT32_MAX; //smallest open node found
+	int smallestNodeI = -1; //index of the smallest open node
+	unsigned int maxTime = 0;
+	unsigned long emptySpace = 0; //how much unused space is found, used to determine if a resize is needed
+	for(int i = 0; i < map->numNodes; i++)
+	{
+		if(!map->testLayout[i].used)
+			emptySpace += map->testLayout[i].size;
+
+		if(map->testLayout[i].size < nodeSize)
+			continue;
+
+		unsigned int time = map->testLayout[i].used ? mapGPU[DN_FLATTEN_INDEX(map->testLayout[i].chunkPos, map->mapSize)].lastUsed : UINT32_MAX;
+		if(time > maxTime || (time == UINT32_MAX && map->testLayout[i].size < smallestNode))
+		{
+			maxTime = time;
+			smallestNode = map->testLayout[i].size;
+			smallestNodeI = i;
+		}
+
+		if(smallestNode == nodeSize && maxTime == UINT32_MAX)
+			break;
+	}
+
+	//if there isn't enough space, double the size of the voxel buffer:
+	if(smallestNodeI < 0 && emptySpace < nodeSize)
+	{
+		size_t newCap = fmin(map->voxelCap * 2, map->chunkCap * 512);
+		DN_ERROR_LOG("DN NOTE - MAXIMUM GPU VOXEL LIMIT REACHED... RESIZING TO %zi VOXELS\n", newCap);
+
+		//create a temporary buffer to store the old voxel data (opengl doesnt have a "realloc" function)
+		void* oldVoxelData = DN_MALLOC(sizeof(DNvoxelGPU) * map->voxelCap);
+		if(!oldVoxelData)
+		{
+			DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY VOXEL STORAGE\n");
+			return;
+		}
+
+		//get old data:
+		glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * map->voxelCap, oldVoxelData);
+
+		//resize buffer:
+		if(!DN_set_max_voxels_gpu(map, newCap + 512))
+		{
+			DN_FREE(oldVoxelData);
+			return;
+		}
+
+		//send back old data:
+		glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * map->voxelCap, oldVoxelData);
+
+		//resize chunk layout memory:
+		struct DNchunkDataNode* newTestLayout = DN_REALLOC(map->testLayout, sizeof(*map->testLayout) * (newCap / 16));
+		if(!newTestLayout)
+		{
+			DN_ERROR_LOG("DN ERROR - UNABLE TO ALLOCATE MEMORY FOR NEW TEST LAYOUT\n");
+			DN_FREE(oldVoxelData);
+			return;
+		}
+		map->testLayout = newTestLayout;
+
+		//clear new chunk layout memory:
+		int newNumNodes = map->numNodes + (newCap - map->voxelCap) / 512;
+		for(int i = map->numNodes; i < newNumNodes; i++)
+		{
+			map->testLayout[i].used = false;
+			map->testLayout[i].size = 512;
+			map->testLayout[i].startPos = map->voxelCap + (i - map->numNodes) * 512;
+		}
+
+		smallestNode = 512;
+		smallestNodeI = map->numNodes;
+
+		map->numNodes = newNumNodes;
+		map->voxelCap = newCap;
+		DN_FREE(oldVoxelData);
+	}
+
+	if(smallestNodeI < 0)
+	{
+		mapGPU[mapIndex].flag = 1;
+		map->map[mapIndex].flag = 1;
+		map->gpuChunkLayout[mapGPU[mapIndex].index].x = -1;
+
+		return;
+	}
+
+	if(smallestNode > nodeSize)
+	{
+		int numAdded = 0;
+		while(smallestNode > nodeSize)
+		{
+			smallestNode /= 2;
+			numAdded++;
+		}
+
+		int orgStartPos = map->testLayout[smallestNodeI].startPos;
+		memmove(&map->testLayout[smallestNodeI + numAdded], &map->testLayout[smallestNodeI], sizeof(*map->testLayout) * (map->numNodes - smallestNodeI));
+
+		int mult = 1;
+		for(int i = smallestNodeI; i <= smallestNodeI + numAdded; i++)
+		{
+			map->testLayout[i].size = nodeSize * mult;
+			map->testLayout[i].startPos = orgStartPos + (i == smallestNodeI ? 0 : nodeSize * mult);
+			map->testLayout[i].used = false;
+
+			if(i > smallestNodeI)
+				mult *= 2;
+		}
+
+		map->numNodes += numAdded;
+	}
+
+	if(map->testLayout[smallestNodeI].used)
+	{
+		mapGPU[DN_FLATTEN_INDEX(map->testLayout[smallestNodeI].chunkPos, map->mapSize)].flag = 1;
+		map->gpuChunkLayout[mapGPU[DN_FLATTEN_INDEX(map->testLayout[smallestNodeI].chunkPos, map->mapSize)].index].x = -1;
+	}
+
+	map->testLayout[smallestNodeI].used = true;
+	map->testLayout[smallestNodeI].chunkPos = pos;
+	mapGPU[mapIndex].testIndex = map->testLayout[smallestNodeI].startPos;
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, map->testLayout[smallestNodeI].startPos * sizeof(DNvoxelGPU), numVoxels * sizeof(DNvoxelGPU), voxels);
 }
 
 static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
@@ -537,9 +731,6 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
 	DNchunkHandle* voxelMapGPU = (DNchunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
-
-	//bind the chunk buffer so it can be updated:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
 
 	if(op != DN_WRITE && requests != DN_REQUEST_NONE)
 		map->numLightingRequests = 0;
@@ -553,11 +744,13 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 		int mapIndex = DN_FLATTEN_INDEX(pos, map->mapSize);    //the map index for the cpu-side memory
 
 		DNchunkHandle GPUcell = voxelMapGPU[mapIndex];
+		bool cellVisible = (GPUcell.flag & 0xF0) > 0;
+		GPUcell.flag = GPUcell.flag & 0x0F;
 
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || GPUcell.visible == 1) && (GPUcell.index % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].index].updated))
+			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || cellVisible) && (GPUcell.index % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].index].updated))
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
@@ -585,16 +778,63 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 				map->gpuChunkLayout[GPUcell.index].x = -1;
 			}
 
-			if(GPUcell.flag == 2 && map->chunks[map->map[mapIndex].index].updated)
+			/*if(GPUcell.flag == 2 && map->chunks[map->map[mapIndex].index].updated)
 			{
 				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map->chunks[map->map[mapIndex].index]);
 				glBufferSubData(GL_SHADER_STORAGE_BUFFER, GPUcell.index * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &gpuChunk);
 				map->chunks[map->map[mapIndex].index].updated = false;
-			}
+			}*/
 
 			//if flag = 3 (requested), try to load a new chunk:
 			if(GPUcell.flag == 3 && map->map[mapIndex].flag != 0)
-				_DN_stream_voxel_chunk(map, pos, voxelMapGPU, mapIndex);
+			{
+				unsigned int numVoxels;
+				DNvoxelGPU gpuVoxels[512];
+				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map->chunks[map->map[mapIndex].index], &numVoxels, gpuVoxels);
+
+				_DN_stream_chunk(map, pos, voxelMapGPU, mapIndex, gpuChunk);
+				_DN_stream_voxels(map, pos, voxelMapGPU, mapIndex, numVoxels, gpuVoxels);
+			}
+		}
+	}
+
+	//sort the test layout (bubble sort LOL):
+	for(int i = 0; i < map->numNodes - 1; i++)
+	{
+		//sort:
+		struct DNchunkDataNode cur = map->testLayout[i];
+		struct DNchunkDataNode next = map->testLayout[i + 1];
+
+		if(cur.used)
+			continue;
+
+		if(next.used || next.size < cur.size)
+		{			
+			if(next.used)
+			{
+				glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glTestBufferID);
+				glCopyBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_SHADER_STORAGE_BUFFER, next.startPos * sizeof(DNvoxelGPU), map->voxelCap * sizeof(DNvoxelGPU), next.size * sizeof(DNvoxelGPU));
+				glCopyBufferSubData(GL_SHADER_STORAGE_BUFFER, GL_SHADER_STORAGE_BUFFER, map->voxelCap * sizeof(DNvoxelGPU), (next.startPos - cur.size) * sizeof(DNvoxelGPU), next.size * sizeof(DNvoxelGPU));
+
+				voxelMapGPU[DN_FLATTEN_INDEX(next.chunkPos, map->mapSize)].testIndex = next.startPos - cur.size;
+			}
+
+			next.startPos -= cur.size;
+			cur.startPos += next.size;
+
+			map->testLayout[i] = next;
+			map->testLayout[i + 1] = cur;
+		}
+
+		//merge:
+		if(!next.used && cur.size == next.size && cur.size < 512)
+		{
+			map->testLayout[i].size *= 2;
+
+			if(i < map->numNodes - 2)
+				memmove(&map->testLayout[i + 1], &map->testLayout[i + 2], sizeof(*map->testLayout) * (map->numNodes - i - 2));
+			
+			map->numNodes--;
 		}
 	}
 
@@ -603,92 +843,9 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
 }
 
-static void _DN_sync_gpu_nonstreamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
-{
-	if(op != DN_READ)
-	{
-		//send chunks:
-		glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
-
-		if(map->chunkCap == map->chunkCapGPU) //if chunk buffer was not resized, only send the updated chunks:
-		{
-			for(int i = 0; i < map->chunkCap; i++)
-			{
-				DNchunk chunk = map->chunks[i];
-				if(chunk.used && chunk.updated)
-				{
-					DNchunkGPU gpuChunk = _DN_chunk_to_gpu(chunk);
-					glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &gpuChunk);
-					map->chunks[i].updated = 0;
-					map->map[DN_FLATTEN_INDEX(chunk.pos, map->mapSize)].flag = 2;
-				}
-			}
-		}
-		else //resize and reupload buffer if a new size is needed:
-		{
-			glBufferData(GL_SHADER_STORAGE_BUFFER, map->chunkCap * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
-			map->chunkCapGPU = map->chunkCap;
-
-			for(int i = 0; i < map->chunkCap; i++)
-				if(map->chunks[i].used)
-				{
-					DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map->chunks[i]);
-					glBufferSubData(GL_SHADER_STORAGE_BUFFER, i * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &gpuChunk);
-
-					map->chunks[i].updated = 0;
-					map->map[DN_FLATTEN_INDEX(map->chunks[i].pos, map->mapSize)].flag = 2;
-				}
-		}
-	}
-
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
-	DNchunkHandle* gpuMap = glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
-
-	if(op != DN_WRITE && requests != DN_REQUEST_NONE)
-		map->numLightingRequests = 0;
-
-	unsigned int maxIndex = map->mapSize.x * map->mapSize.y * map->mapSize.z;
-	for(int i = 0; i < maxIndex; i++)
-	{
-		DNchunkHandle cell = gpuMap[i]; //if we are going to upload a new map, use data from that new map instead of old data
-
-		if(op != DN_READ)
-		{
-			if(cell.flag != map->map[i].flag)
-				gpuMap[i].flag = cell.flag = map->map[i].flag;
-
-			if(cell.index != map->map[i].index)
-				gpuMap[i].index = cell.index = map->map[i].index;
-		}
-
-		if(op != DN_WRITE)
-		{
-			if(requests != DN_REQUEST_NONE && cell.flag >= 1 && (requests == DN_REQUEST_LOADED || cell.visible == 1))
-			{
-				if(map->numLightingRequests >= map->lightingRequestCap)
-				{
-					size_t newCap = fmin(maxIndex, map->lightingRequestCap * 2);
-					DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUEST MEMORY TO ALLOW FOR %zi REQUESTS\n", newCap);
-					if(!DN_set_max_lighting_requests(map, newCap))
-						break;
-				}
-
-				map->lightingRequests[map->numLightingRequests++].x = cell.index;
-			}
-
-			gpuMap[i].visible = 0;
-		}
-	}
-
-	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-}
-
 void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
 {
-	if(map->streamable)
-		_DN_sync_gpu_streamable(map, op, requests, lightingSplit);
-	else
-		_DN_sync_gpu_nonstreamable(map, op, requests, lightingSplit);
+	_DN_sync_gpu_streamable(map, op, requests, lightingSplit);
 	glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 }
 
@@ -725,6 +882,7 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, map->glTestBufferID);
 	glBindImageTexture(0, outputTexture, 0, GL_FALSE, 0, GL_WRITE_ONLY, GL_RGBA32F);
 
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, materialBuffer);
@@ -795,6 +953,7 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, map->glChunkBufferID);
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, map->glMapBufferID);
+	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 4, map->glTestBufferID);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, lightingRequestBuffer);
 
 	glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT);
@@ -922,6 +1081,19 @@ bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num)
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
 		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE GPU CHUNK BUFFER\n");
+		return false;
+	}
+
+	return true;
+}
+
+bool DN_set_max_voxels_gpu(DNmap* map, unsigned long num)
+{
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glTestBufferID);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE GPU VOXEL BUFFER\n");
 		return false;
 	}
 

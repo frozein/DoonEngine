@@ -52,8 +52,8 @@ typedef struct DNchunk
 typedef struct DNchunkHandle
 {
 	GLuint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
-	GLuint visible;  //whether or not this map tile is visible to the camera (ACCESSIBLE ON GPU ONLY)
 	GLuint lastUsed; //the time, in frames, since the chunk was last used (ACCESSIBLE ON GPU ONLY)
+	GLuint testIndex;
 	GLuint index;    //the index of the chunk that this handle points to. if flag = 0, this is invalid
 } DNchunkHandle;
 
@@ -72,6 +72,17 @@ typedef struct DNmaterial
 //a voxel map, both on the CPU and the GPU
 typedef struct DNmap
 {	
+	struct DNchunkDataNode
+	{
+		bool used;
+		int size;
+		int startPos;
+		DNivec3 chunkPos;
+	}* testLayout;
+	int numNodes;
+	unsigned long voxelCap;
+	GLuint glTestBufferID;
+
 	//opengl handles:
 	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
 	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
@@ -244,6 +255,8 @@ bool DN_set_max_chunks(DNmap* map, unsigned int num);
  * @returns true on success, false on failure
  */
 bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
+
+bool DN_set_max_voxels_gpu(DNmap* map, unsigned long num);
 
 /* Sets the current maximum number of lighting updates the map can request at once. It should never be necessary to call as it is called automatically
  * @param map the map to change
