@@ -305,9 +305,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",   true,  128);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, false, 0);
-	sphereMap = DN_load_map("maps/sphere.voxmap", true,  1024);
+	demoMap   = DN_load_map("maps/demo.voxmap"  ,  32);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  16);
+	sphereMap = DN_load_map("maps/sphere.voxmap",  512);
 
 	demoMap->glCubemapTex = cubemapTex;
 	demoMap->useCubemap = true;
@@ -328,7 +328,7 @@ int main()
 
 	//sync with gpu:
 	//---------------------------------
-	DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
+	//DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 
 	//main loop:
 	//---------------------------------
@@ -391,10 +391,7 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		DN_draw(activeMap, finalTex, view, projection, rasterColorTex, rasterDepthTex);
-
-		if(activeMap->streamable)
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
-
+		DN_sync_gpu(activeMap, DN_READ_WRITE, 1);
 		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
@@ -486,8 +483,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				newVox.albedo = DN_vec3_pow((DNvec3){0.871f, 0.463f, 0.843f}, DN_GAMMA);
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
-				if(!activeMap->streamable)
-					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 			}
 		}
 
@@ -499,8 +494,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			DN_separate_position(hitPos, &mapPos, &localPos);
 
 			DN_remove_voxel(activeMap, mapPos, localPos);
-			if(!activeMap->streamable)
-				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 		}
 }
 

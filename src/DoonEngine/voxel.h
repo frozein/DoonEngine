@@ -51,11 +51,19 @@ typedef struct DNchunk
 //a handle to a voxel chunk, along with some meta-data
 typedef struct DNchunkHandle
 {
-	GLuint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
-	GLuint visible;  //whether or not this map tile is visible to the camera (ACCESSIBLE ON GPU ONLY)
-	GLuint lastUsed; //the time, in frames, since the chunk was last used (ACCESSIBLE ON GPU ONLY)
-	GLuint index;    //the index of the chunk that this handle points to. if flag = 0, this is invalid
+	GLuint flag;       //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
+	GLuint lastUsed;   //the time, in frames, since the chunk was last used (ACCESSIBLE ON GPU ONLY)
+	GLuint voxelIndex; //the index to the voxel data for the chunk that this handle points to (ACCESSIBLE ON GPU ONLY)
+	GLuint chunkIndex; //the index of the chunk that this handle points to. if flag = 0, this is invalid
 } DNchunkHandle;
+
+//represents a group of voxels on the GPU
+typedef struct DNvoxelNode
+{
+	unsigned int size; //the node's size, in DNvoxels
+	size_t startPos;   //the node's start position, in DNvoxels
+	DNivec3 chunkPos;  //the position of the chunk that owns the node, if invalid, the node is unused
+} DNvoxelNode;
 
 //material properties for a voxel
 typedef struct DNmaterial
@@ -74,23 +82,26 @@ typedef struct DNmap
 {	
 	//opengl handles:
 	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
-	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer in the GPU
+	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer on the GPU
+	GLuint glVoxelBufferID;			  //READ ONLY | The openGL buffer ID for the voxel buffer on the GPU
 
 	//data parameters:
 	DNuvec3 mapSize; 	    		  //READ ONLY | The size, in DNchunks, of the map
-	unsigned int chunkCap;			  //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
-	unsigned int chunkCapGPU; 		  //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
-	unsigned int nextChunk;			  //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
-	unsigned int numLightingRequests; //READ ONLY | The number of chunks queued to have their lighting updated
-	unsigned int lightingRequestCap;  //READ ONLY | The maximum number of chunks that can be stored in lightingRequests
-	bool streamable;				  //READ ONLY | Whether or not this map supports dynamically streaming chunks to the GPU, reducing VRAM usage but reducing performance
+	size_t chunkCap;                  //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
+	size_t chunkCapGPU;               //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
+	size_t nextChunk;                 //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
+	size_t voxelCap;				  //READ ONLY | The current number of DNvoxels that are stored GPU-side by this map
+	size_t numVoxelNodes;             //READ ONLY | The current number of nodes that the GPU voxel data is broken up into
+	size_t numLightingRequests;       //READ ONLY | The number of chunks queued to have their lighting updated
+	size_t lightingRequestCap;        //READ ONLY | The maximum number of chunks that can be stored in lightingRequests
 
 	//data:
 	DNchunkHandle* map; 		 	  //READ-WRITE | The actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNchunk* chunks; 	 		 	  //READ-WRITE | The array of chunks that the map has
 	DNmaterial* materials;			  //READ-WRITE | The array of materials that the map has
 	DNuvec4* lightingRequests;        //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
-	DNivec3* gpuChunkLayout;		  //READ ONLY  | An array representing the chunk layout on the GPU, only used for streamable maps. Represents the position in the map that each chunk is.
+	DNivec3* gpuChunkLayout;		  //READ ONLY  | An array representing the chunk layout on the GPU. Represents the position in the map that each chunk is.
+	DNvoxelNode* gpuVoxelLayout;      //READ ONLY  | An array representing the voxel layout on the GPU
 
 	//camera parameters:
 	DNvec3 camPos; 			  		  //READ-WRITE | The camera's position relative to this map, in DNchunks
@@ -102,27 +113,19 @@ typedef struct DNmap
 	DNvec3 sunDir; 					  //READ-WRITE | The direction pointing towards the sun
 	DNvec3 sunStrength; 			  //READ-WRITE | The strength of sunlight, also determines the color
 	DNvec3 ambientLightStrength; 	  //READ-WRITE | The minimum lighting for every voxel
-	unsigned int diffuseBounceLimit;  //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
+	unsigned int diffuseBounceLimit; //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
 	unsigned int specBounceLimit; 	  //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
 	float shadowSoftness; 			  //READ-WRITE | How soft shadows from direct light appear
 
 	//sky parameters:
 	bool useCubemap;				  //READ-WRITE | Whether or not the map should sample a cubemap for the sky color, otherwise a gradient will be used
 	unsigned int glCubemapTex;		  //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
-	DNvec3 skyGradientBot;				  //READ-WRITE | If the map does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
-	DNvec3 skyGradientTop;				  //READ-WRITE | If the map does NOT sample a cubemap, the color at the top of the gradient for the sky color
+	DNvec3 skyGradientBot;			  //READ-WRITE | If the map does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
+	DNvec3 skyGradientTop;			  //READ-WRITE | If the map does NOT sample a cubemap, the color at the top of the gradient for the sky color
 
 	unsigned int frameNum;			  //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
 	float lastTime;					  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNmap;
-
-//represents the types of chunks that can be requested for lighting updates
-typedef enum DNchunkRequests
-{
-	DN_REQUEST_VISIBLE, //will request all visible chunks to have their lighting updated
-	DN_REQUEST_LOADED,  //will request all loaded chunks to have their lighting updated
-	DN_REQUEST_NONE 	//will not request any chunks, leaves the lightingRequest buffer the same as it was previously
-} DNchunkRequests;
 
 //represents memory operations
 typedef enum DNmemOp
@@ -143,11 +146,10 @@ void DN_quit();
 /*Creates a new DNmap with the specified parameters 
  * @param mapSize the size, in DNchunks, of the map
  * @param textureSize the size, in pixels, of the texture that is rendered to
- * @param streamable whether or not the map will be streamable, allowing chunks to be dynamically streamed to the GPU every frame
- * @param minChunks for streamable maps only. determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
+ * @param minChunks determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
  * @returns the new map or NULL if the map creation failed in any way
  */
-DNmap* DN_create_map(DNuvec3 mapSize, bool streamable, unsigned int minChunks);
+DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks);
 /* Deletes a DNmap, should be called whenever a map is no longer needed to avoid memory leaks
  * @param map the map to delete
  */
@@ -156,11 +158,10 @@ void DN_delete_map(DNmap* map);
 /* Loads a DNmap from a file
  * @param filePath the path to the file to load from
  * @param textureSize the size, in pixels, of the texture that is rendered to
- * @param streamable whether or not the map will be streamable, allowing chunks to be dynamically streamed to the GPU every frame
- * @param minChunks for streamable maps only. determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
+ * @param minChunks determines the minimum number of chunks that will be loaded on the GPU. If set too low, the map may lag for the first few frames. 
  * @returns the loaded map or NULL, on failure
  */
-DNmap* DN_load_map(const char* filePath, bool streamable, unsigned int minChunks);
+DNmap* DN_load_map(const char* filePath, unsigned int minChunks);
 /* Saves a DNmap to a file
  * @param filePath the path of the file to save to
  * @param map the map to save
@@ -214,13 +215,12 @@ unsigned int DN_add_chunk(DNmap* map, DNivec3 pos);
  */
 void DN_remove_chunk(DNmap* map, DNivec3 pos);
 
-/* Updates the gpu-side data for a map. For non-streamable maps, this only needs to be called after edits to the map. For streamable maps, this should be called every frame (or every few frames)
+/* Updates the gpu-side data for a map, this should be called every frame (or every few frames)
  * @param map the map to sync
  * @param op the operation to perform on the map. DN_READ will only query the gpu for visible chunks. DN_WRITE will upload voxel data to the GPU if updated or requested. DN_READ_WRITE will do both
- * @param requests which chunks to request to be added into the lightingRequest buffer. See the definition of DNchunkRequests for more information
  * @param lightingSplit the number of frames to split the lighting calculation over. For example, if this is set to 5 only 1/5 of the chunks will have their lighting updated each frame, increasing performace
  */
-void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit);
+void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
@@ -243,7 +243,13 @@ bool DN_set_max_chunks(DNmap* map, unsigned int num);
  * @param num the new maximum number of chunks
  * @returns true on success, false on failure
  */
-bool DN_set_max_chunks_gpu(DNmap* map, unsigned int num);
+bool DN_set_max_chunks_gpu(DNmap* map, size_t num);
+/* Set's a map's maximum bumber of voxels in VRAM. It should never be necessary to call as it is called automatically
+ * @param map the map to change
+ * @param num the new maximum number of chunks
+ * @returns true on success, false on failure
+ */
+bool DN_set_max_voxels_gpu(DNmap* map, size_t num);
 
 /* Sets the current maximum number of lighting updates the map can request at once. It should never be necessary to call as it is called automatically
  * @param map the map to change

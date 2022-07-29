@@ -38,14 +38,15 @@ struct Chunk //a chunk of voxels
 	ivec3 pos;				 //the chunk's position within the map
 	uint numIndirectSamples; //the number of diffuse lighting samples this chunk has taken
 
-	CompressedVoxel voxels[8][8][8]; //the grid of voxels
+	uint partialCounts[3];	 //used to speed up the bitcounting, represents the number of voxels that exist before the 1/4, 1/2, and 3/4 point
+	uint bitMask[16];		 //represents the grid of voxels, each bit represents a single voxel
 };
 
 struct ChunkHandle //a handle to a Chunk
 {
 	uint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
-	uint visible;  //whether or not the chunk is visible to the camera
 	uint lastUsed; //the time since the chunk was last used
+	uint testIndex;
 	uint index;    //the index of the chunk in the chunk buffer
 };
 
@@ -67,7 +68,7 @@ layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains
 	ChunkHandle map[];
 };
 
-layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
+layout(std430, binding = 1) restrict buffer chunkBuffer //the buffer that contains all of the chunks
 {
 	Chunk chunks[];
 };
@@ -75,6 +76,11 @@ layout(std140, binding = 1) restrict buffer chunkBuffer //the buffer that contai
 layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer that contains all of the materials
 {
 	Material materials[256];
+};
+
+layout(std140, binding = 4) restrict buffer testBuffer //test buffer lol
+{
+	CompressedVoxel voxels[];
 };
 
 uniform vec3 sunStrength;     //the amount of light the sun emits
@@ -113,19 +119,35 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 {
 	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
+	if(map[index].lastUsed > 0)
+		map[index].lastUsed = 0;
+		
 	return map[index];
 }
 
-CompressedVoxel get_voxel(uint chunk, ivec3 pos) //returns the voxel of a chunk at a position
+uint get_voxel_index(uint chunk, uint mapIndex, ivec3 chunkPos)
 {
-	return chunks[chunk].voxels[pos.x][pos.y][pos.z];
+	uint localIndex = chunkPos.x + CHUNK_SIZE.x * (chunkPos.y + CHUNK_SIZE.y * chunkPos.z);
+	uint bitMaskIndex = localIndex >> 5;
+
+	uint voxNum = (bitMaskIndex > 3) ? chunks[chunk].partialCounts[(bitMaskIndex >> 2) - 1] : 0;
+
+	for(uint i = bitMaskIndex & ~3; i <= bitMaskIndex; i++)
+	{
+		uint bits = chunks[chunk].bitMask[i];
+		if(i == bitMaskIndex)
+			bits &= (1 << (localIndex & 31)) - 1;
+
+		voxNum += bitCount(bits);
+	}
+
+	return map[mapIndex].testIndex + voxNum;
 }
 
-bool does_voxel_exist(uint chunk, ivec3 localPos) //returns true if the voxel at the position is solid (not empty)
+bool does_voxel_exist(uint chunk, ivec3 chunkPos) //returns true if the voxel at the position is solid (not empty)
 {
-	CompressedVoxel voxel = get_voxel(chunk, localPos);
-	uint material = voxel.normal & 0xFF;
-	return material < 255;
+	uint index = chunkPos.x + CHUNK_SIZE.x * (chunkPos.y + CHUNK_SIZE.y * chunkPos.z);
+	return bool((chunks[chunk].bitMask[index >> 5] >> (index & 0x1F)) & 1);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -197,6 +219,8 @@ vec3 orgRayPos;		//used to determine ray's distance, set to the ray's original o
 //0 = no hit, 1 = hit voxel, 2 = past max depth
 int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPos, float maxDepth, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
 {
+	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+
 	ivec3 pos = ivec3(floor(rayPos));    //the position within the chunk
 	vec3 deltaDist = abs(invRayDir);     //the distance the ray has to travel to move one unit in each direction
 	ivec3 rayStep = ivec3(sign(rayDir)); //the direction the ray steps
@@ -208,8 +232,9 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPo
 		if (does_voxel_exist(chunk, pos) && !ignoreFirst)
 		{
 			//decompress the voxel and find its material:
-			CompressedVoxel compressed = get_voxel(chunk, pos);
+			CompressedVoxel compressed = voxels[get_voxel_index(chunk, mapIndex, pos)];
 			voxel = decompress_voxel(compressed);
+
 			Material material = materials[voxel.material];
 
 			if(material.opacity < 1.0 && voxel.material < 255)
@@ -278,6 +303,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 
 		//check if a solid chunk has been hit:
 		ChunkHandle mapTile = get_map_tile(pos);
+		mapTile.flag = mapTile.flag & 0x0F;
 		if (mapTile.flag == 2)
 		{
 			//advance ray to chunk edge:
@@ -296,18 +322,12 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
-
-				uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
-
-				if(map[index].lastUsed > 0)
-					map[index].lastUsed = 0;
-
 				return true;
 			}
 			else if(stepResult == 2)
 				return false;
 		}
-		else if(mapTile.flag == 1)
+		else if(mapTile.flag != 0)
 		{
 			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 			map[index].flag = 3;
