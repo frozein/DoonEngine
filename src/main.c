@@ -305,9 +305,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",  64);
+	demoMap   = DN_load_map("maps/demo.voxmap"  ,  64);
 	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  32);
-	sphereMap = DN_load_map("maps/sphere.voxmap",  512);
+	sphereMap = DN_load_map("maps/sphere.voxmap",  1024);
 
 	demoMap->glCubemapTex = cubemapTex;
 	demoMap->useCubemap = true;

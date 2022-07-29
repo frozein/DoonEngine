@@ -106,27 +106,6 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 	//---------------------------------
 	DNmap* map = DN_MALLOC(sizeof(DNmap));
 
-	//alloc buffer with size minChunks * maximum chunk size
-	//temp -> 32-512
-
-	map->numVoxelNodes = minChunks;
-	map->voxelCap = 512 * minChunks;
-	map->gpuVoxelLayout = DN_MALLOC(sizeof(DNvoxelNode) * (map->voxelCap / 16));
-	for(int i = 0; i < minChunks; i++)
-	{
-		map->gpuVoxelLayout[i].chunkPos.x = -1;
-		map->gpuVoxelLayout[i].size = 512;
-		map->gpuVoxelLayout[i].startPos = i * 512;
-	}
-
-	if(!_DN_gen_shader_storage_buffer(&map->glVoxelBufferID, sizeof(DNvoxelGPU) * (map->voxelCap + 512)))
-	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR TEST\n");
-		return NULL;
-	}
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glVoxelBufferID);
-	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
-
 	//generate buffers:
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&map->glMapBufferID, sizeof(DNchunkHandle) * mapSize.x * mapSize.y * mapSize.x))
@@ -146,7 +125,13 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
-	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
+
+	if(!_DN_gen_shader_storage_buffer(&map->glVoxelBufferID, sizeof(DNvoxelGPU) * (map->voxelCap + 512)))
+	{
+		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR VOXELS\n");
+		return NULL;
+	}
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glVoxelBufferID);
 
 	//allocate CPU memory:
 	//---------------------------------
@@ -195,6 +180,22 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 
 	for(int i = 0; i < numChunks; i++)
 		map->gpuChunkLayout[i].x = -1;
+
+	map->numVoxelNodes = minChunks;
+	map->voxelCap = 512 * minChunks;
+	map->gpuVoxelLayout = DN_MALLOC(sizeof(DNvoxelNode) * (map->voxelCap / 16));
+	if(!map->gpuVoxelLayout)
+	{
+		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR GPU VOXEL LAYOUT\n");
+		return NULL;
+	}
+
+	for(int i = 0; i < minChunks; i++)
+	{
+		map->gpuVoxelLayout[i].chunkPos.x = -1;
+		map->gpuVoxelLayout[i].size = 512;
+		map->gpuVoxelLayout[i].startPos = i * 512;
+	}
 
 	//set data parameters:
 	//---------------------------------
