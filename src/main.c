@@ -305,9 +305,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap"  ,  64);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  32);
-	sphereMap = DN_load_map("maps/sphere.voxmap",  1024);
+	demoMap   = DN_load_map("maps/demo.voxmap"  ,  32);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  16);
+	sphereMap = DN_load_map("maps/sphere.voxmap",  512);
 
 	demoMap->glCubemapTex = cubemapTex;
 	demoMap->useCubemap = true;
@@ -391,7 +391,7 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		DN_draw(activeMap, finalTex, view, projection, rasterColorTex, rasterDepthTex);
-		DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
+		DN_sync_gpu(activeMap, DN_READ_WRITE, 1);
 		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:

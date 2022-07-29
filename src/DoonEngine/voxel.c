@@ -623,6 +623,13 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, un
 		return;
 	}
 
+	//unload old one if overwritten:
+	if(DN_in_map_bounds(map, map->gpuVoxelLayout[smallestNodeI].chunkPos))
+	{
+		mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].flag = 1;
+		map->gpuChunkLayout[mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].chunkIndex].x = -1;
+	}
+
 	//edit layout if needed:
 	if(smallestNode > nodeSize)
 	{
@@ -650,20 +657,13 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, un
 		map->numVoxelNodes += numAdded;
 	}
 
-	//unload old one if overwritten:
-	if(DN_in_map_bounds(map, map->gpuVoxelLayout[smallestNodeI].chunkPos))
-	{
-		mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].flag = 1;
-		map->gpuChunkLayout[mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].chunkIndex].x = -1;
-	}
-
 	//send data:
 	map->gpuVoxelLayout[smallestNodeI].chunkPos = pos;
 	mapGPU[mapIndex].voxelIndex = map->gpuVoxelLayout[smallestNodeI].startPos;
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, map->gpuVoxelLayout[smallestNodeI].startPos * sizeof(DNvoxelGPU), numVoxels * sizeof(DNvoxelGPU), voxels);
 }
 
-static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
+void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 {
 	map->frameNum++;
 	if(map->frameNum >= lightingSplit)
@@ -673,8 +673,8 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
 	DNchunkHandle* voxelMapGPU = (DNchunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
-	if(op != DN_WRITE && requests != DN_REQUEST_NONE)
-		map->numLightingRequests = 0;
+	//set lighting requests to 0:
+	map->numLightingRequests = 0;
 
 	//loop through every map tile:
 	for(int z = 0; z < map->mapSize.z; z++)
@@ -691,7 +691,7 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(requests != DN_REQUEST_NONE && GPUcell.flag == 2 && (requests == DN_REQUEST_LOADED || cellVisible) && (GPUcell.chunkIndex % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].chunkIndex].updated))
+			if(GPUcell.flag == 2 && cellVisible && (GPUcell.chunkIndex % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].chunkIndex].updated))
 			{
 				if(map->numLightingRequests >= map->lightingRequestCap)
 				{
@@ -712,11 +712,22 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 		{
 			//if a chunk was added to the cpu map, request it to be added to the gpu map:
 			if(map->map[mapIndex].flag != 0 && GPUcell.flag == 0)
+			{
 				voxelMapGPU[mapIndex].flag = 1;
+				GPUcell.flag = 1;
+				map->chunks[map->map[mapIndex].chunkIndex].updated = false;
+			}
 			else if(map->map[mapIndex].flag == 0 && GPUcell.flag != 0)
 			{
 				voxelMapGPU[mapIndex].flag = 0;
+				GPUcell.flag = 0;
 				map->gpuChunkLayout[GPUcell.chunkIndex].x = -1;
+				for(int i = 0; i < map->numVoxelNodes; i++)
+					if(DN_in_map_bounds(map, map->gpuVoxelLayout[i].chunkPos) && DN_FLATTEN_INDEX(map->gpuVoxelLayout[i].chunkPos, map->mapSize) == mapIndex)
+					{
+						map->gpuVoxelLayout[i].chunkPos.x = -1;
+						break;
+					}
 			}
 
 			//if updated, unload and request it to let the streaming system handle it
@@ -803,11 +814,6 @@ static void _DN_sync_gpu_streamable(DNmap* map, DNmemOp op, DNchunkRequests requ
 	//unmap:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
-}
-
-void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit)
-{
-	_DN_sync_gpu_streamable(map, op, requests, lightingSplit);
 	glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
 }
 
@@ -1038,6 +1044,9 @@ bool DN_set_max_chunks(DNmap* map, unsigned int num)
 
 bool DN_set_max_chunks_gpu(DNmap* map, size_t num)
 {
+	//bind buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
+
 	//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
 	void* oldChunkData = DN_MALLOC(sizeof(DNchunkGPU) * map->chunkCapGPU);
 	if(!oldChunkData)
@@ -1050,7 +1059,6 @@ bool DN_set_max_chunks_gpu(DNmap* map, size_t num)
 	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNchunkGPU) * map->chunkCapGPU, oldChunkData);
 
 	//resize buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
@@ -1083,6 +1091,9 @@ bool DN_set_max_chunks_gpu(DNmap* map, size_t num)
 
 bool DN_set_max_voxels_gpu(DNmap* map, size_t num)
 {
+	//bind buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glVoxelBufferID);
+
 	//create a temporary buffer to store the old voxel data (opengl doesnt have a "realloc" function)
 	void* oldVoxelData = DN_MALLOC(sizeof(DNvoxelGPU) * map->voxelCap);
 	if(!oldVoxelData)
@@ -1095,7 +1106,6 @@ bool DN_set_max_voxels_gpu(DNmap* map, size_t num)
 	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * map->voxelCap, oldVoxelData);
 
 	//resize buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glVoxelBufferID);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + 512) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
@@ -1118,8 +1128,8 @@ bool DN_set_max_voxels_gpu(DNmap* map, size_t num)
 	map->gpuVoxelLayout = newGpuVoxelLayout;
 
 	//clear new chunk layout memory:
-	int newNumNodes = map->numVoxelNodes + (num - map->voxelCap) / 512;
-	for(int i = map->numVoxelNodes; i < newNumNodes; i++)
+	size_t newNumNodes = map->numVoxelNodes + (num - map->voxelCap) / 512;
+	for(size_t i = map->numVoxelNodes; i < newNumNodes; i++)
 	{
 		map->gpuVoxelLayout[i].chunkPos.x = -1;
 		map->gpuVoxelLayout[i].size = 512;

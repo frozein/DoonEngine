@@ -127,14 +127,6 @@ typedef struct DNmap
 	float lastTime;					  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNmap;
 
-//represents the types of chunks that can be requested for lighting updates
-typedef enum DNchunkRequests
-{
-	DN_REQUEST_VISIBLE, //will request all visible chunks to have their lighting updated
-	DN_REQUEST_LOADED,  //will request all loaded chunks to have their lighting updated
-	DN_REQUEST_NONE 	//will not request any chunks, leaves the lightingRequest buffer the same as it was previously
-} DNchunkRequests;
-
 //represents memory operations
 typedef enum DNmemOp
 {
@@ -226,10 +218,9 @@ void DN_remove_chunk(DNmap* map, DNivec3 pos);
 /* Updates the gpu-side data for a map, this should be called every frame (or every few frames)
  * @param map the map to sync
  * @param op the operation to perform on the map. DN_READ will only query the gpu for visible chunks. DN_WRITE will upload voxel data to the GPU if updated or requested. DN_READ_WRITE will do both
- * @param requests which chunks to request to be added into the lightingRequest buffer. See the definition of DNchunkRequests for more information
  * @param lightingSplit the number of frames to split the lighting calculation over. For example, if this is set to 5 only 1/5 of the chunks will have their lighting updated each frame, increasing performace
  */
-void DN_sync_gpu(DNmap* map, DNmemOp op, DNchunkRequests requests, unsigned int lightingSplit);
+void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
