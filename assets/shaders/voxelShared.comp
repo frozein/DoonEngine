@@ -119,6 +119,9 @@ bool in_chunk_bounds(ivec3 pos) //returns whether a position is in bounds in a c
 ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 {
 	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
+	if(map[index].lastUsed > 0)
+		map[index].lastUsed = 0;
+		
 	return map[index];
 }
 
@@ -319,12 +322,6 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
 				intersection = intersect_AABB(invRayDir, rayPos, voxelPos, voxelPos + INV_CHUNK_SIZE); //find exactly where the ray intersects
 				rayPos += rayDir * (intersection.x + EPSILON); //add so that new pos is inside the voxel
-
-				uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
-
-				if(map[index].lastUsed > 0)
-					map[index].lastUsed = 0;
-
 				return true;
 			}
 			else if(stepResult == 2)
@@ -333,7 +330,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 		else if(mapTile.flag != 0)
 		{
 			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
-			map[index].flag |= 3;
+			map[index].flag = 3;
 			return false;
 		}
 

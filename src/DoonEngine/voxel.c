@@ -577,7 +577,7 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, un
 	int smallestNode = INT32_MAX; //smallest open node found
 	int smallestNodeI = -1; //index of the smallest open node
 	unsigned int maxTime = 0;
-	unsigned long emptySpace = 0; //how much unused space is found, used to determine if a resize is needed
+	size_t emptySpace = 0; //how much unused space is found, used to determine if a resize is needed
 	for(int i = 0; i < map->numVoxelNodes; i++)
 	{
 		if(!DN_in_map_bounds(map, map->gpuVoxelLayout[i].chunkPos))
@@ -601,7 +601,7 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, un
 	}
 
 	//if there isn't enough space, double the size of the voxel buffer:
-	if(smallestNodeI < 0 && emptySpace < nodeSize)
+	if((smallestNodeI < 0 || maxTime <= 1) && emptySpace < nodeSize)
 	{
 		size_t newCap = fmin(map->voxelCap * 2, map->chunkCap * 512);
 		DN_ERROR_LOG("DN NOTE - MAXIMUM GPU VOXEL LIMIT REACHED... RESIZING TO %zi VOXELS\n", newCap);
@@ -614,7 +614,7 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, un
 	}
 
 	//if no suitable node was found, make sure to unload corresponding chunk:
-	if(smallestNodeI < 0)
+	if(smallestNodeI < 0 || maxTime <= 1)
 	{
 		mapGPU[mapIndex].flag = 1;
 		map->map[mapIndex].flag = 1;
