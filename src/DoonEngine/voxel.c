@@ -126,6 +126,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
 
+	map->voxelCap = 512 * numChunks;
 	if(!_DN_gen_shader_storage_buffer(&map->glVoxelBufferID, sizeof(DNvoxelGPU) * (map->voxelCap + 512)))
 	{
 		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR VOXELS\n");
@@ -181,8 +182,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 	for(int i = 0; i < numChunks; i++)
 		map->gpuChunkLayout[i].x = -1;
 
-	map->numVoxelNodes = minChunks;
-	map->voxelCap = 512 * minChunks;
+	map->numVoxelNodes = numChunks;
 	map->gpuVoxelLayout = DN_MALLOC(sizeof(DNvoxelNode) * (map->voxelCap / 16));
 	if(!map->gpuVoxelLayout)
 	{
@@ -190,7 +190,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 		return NULL;
 	}
 
-	for(int i = 0; i < minChunks; i++)
+	for(int i = 0; i < numChunks; i++)
 	{
 		map->gpuVoxelLayout[i].chunkPos.x = -1;
 		map->gpuVoxelLayout[i].size = 512;
