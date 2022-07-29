@@ -38,7 +38,8 @@ struct Chunk //a chunk of voxels
 	ivec3 pos;				 //the chunk's position within the map
 	uint numIndirectSamples; //the number of diffuse lighting samples this chunk has taken
 
-	uint bitMask[16];
+	uint partialCounts[3];	 //used to speed up the bitcounting, represents the number of voxels that exist before the 1/4, 1/2, and 3/4 point
+	uint bitMask[16];		 //represents the grid of voxels, each bit represents a single voxel
 };
 
 struct ChunkHandle //a handle to a Chunk
@@ -123,14 +124,16 @@ ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 
 uint get_voxel_index(uint chunk, uint mapIndex, ivec3 chunkPos)
 {
-	uint voxNum = 0;
 	uint localIndex = chunkPos.x + CHUNK_SIZE.x * (chunkPos.y + CHUNK_SIZE.y * chunkPos.z);
 	uint bitMaskIndex = localIndex >> 5;
-	for(int i = 0; i <= bitMaskIndex; i++)
+
+	uint voxNum = (bitMaskIndex > 3) ? chunks[chunk].partialCounts[(bitMaskIndex >> 2) - 1] : 0;
+
+	for(uint i = bitMaskIndex & ~3; i <= bitMaskIndex; i++)
 	{
 		uint bits = chunks[chunk].bitMask[i];
 		if(i == bitMaskIndex)
-			bits &= (1 << (localIndex & 0x1F)) - 1;
+			bits &= (1 << (localIndex & 31)) - 1;
 
 		voxNum += bitCount(bits);
 	}

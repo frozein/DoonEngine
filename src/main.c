@@ -305,9 +305,9 @@ int main()
 
 	//load maps:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap",   true,  64);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5}, true,  32);
-	sphereMap = DN_load_map("maps/sphere.voxmap", true,  512);
+	demoMap   = DN_load_map("maps/demo.voxmap",  64);
+	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  32);
+	sphereMap = DN_load_map("maps/sphere.voxmap",  512);
 
 	demoMap->glCubemapTex = cubemapTex;
 	demoMap->useCubemap = true;
@@ -391,10 +391,7 @@ int main()
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 		DN_draw(activeMap, finalTex, view, projection, rasterColorTex, rasterDepthTex);
-
-		if(activeMap->streamable)
-			DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
-
+		DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_VISIBLE, 1);
 		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
@@ -472,11 +469,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
 		if(DN_step_map(activeMap, DN_cam_dir(activeMap->camOrient), activeMap->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
-			DNivec3 mapPos;
-			DNivec3 localPos;
-			DN_separate_position(hitPos, &mapPos, &localPos);
-			printf("%i, %i, %i\n", localPos.x, localPos.y, localPos.z);
-			/*DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
+			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
 			DNivec3 mapPos;
 			DNivec3 localPos;
@@ -490,9 +483,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				newVox.albedo = DN_vec3_pow((DNvec3){0.871f, 0.463f, 0.843f}, DN_GAMMA);
 
 				DN_set_voxel(activeMap, mapPos, localPos, newVox);
-				if(!activeMap->streamable)
-					DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
-			}*/
+			}
 		}
 
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
@@ -503,8 +494,6 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			DN_separate_position(hitPos, &mapPos, &localPos);
 
 			DN_remove_voxel(activeMap, mapPos, localPos);
-			if(!activeMap->streamable)
-				DN_sync_gpu(activeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
 		}
 }
 
