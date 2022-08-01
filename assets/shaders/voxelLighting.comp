@@ -1,10 +1,8 @@
 //INCLUDES "voxelShared.comp"
 #version 430 core
+layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-//NOTE: can't use "CHUNK_SIZE" constant here because local_size must be a literal on some gpus
-layout(local_size_x = 8, local_size_y = 8, local_size_z = 8) in; //local group size of chunk
-
-layout(std140, binding = 3) restrict readonly buffer lightingRequestBuffer //a buffer that holds all of the chunks that are set to have their lighting updated
+layout(std430, binding = 3) restrict readonly buffer lightingRequestBuffer //a buffer that holds all of the chunks that are set to have their lighting updated
 {
 	uint chunkIndices[];
 };
@@ -191,15 +189,16 @@ void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout
 void main()
 {
 	//find positions:
-	uint chunkIndex = chunkIndices[gl_WorkGroupID.x];
+	uint chunkIndex = chunkIndices[gl_WorkGroupID.x] >> 4;
 	ivec3 mapPos = ivec3(chunks[chunkIndex].pos.xyz);
-	ivec3 chunkPos = ivec3(gl_LocalInvocationID);
+	uint voxNum = gl_LocalInvocationID.x + (chunkIndices[gl_WorkGroupID.x] & 15) * gl_WorkGroupSize.x;
+	ivec3 chunkPos = get_voxel_position(chunkIndex, voxNum);
 
-	if(!does_voxel_exist(chunkIndex, chunkPos))
+	if(!in_chunk_bounds(chunkPos))
 		return;
 
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-	uint voxelIndex = get_voxel_index(chunkIndex, mapIndex, chunkPos);
+	uint voxelIndex = map[mapIndex].testIndex + voxNum;
 	CompressedVoxel compressed = voxels[voxelIndex];
 	Voxel thisVoxel = decompress_voxel(compressed);
 	Material thisMaterial = materials[thisVoxel.material];
@@ -238,6 +237,7 @@ void main()
 	{
 		for(int i = 0; i < updatedDiffuseSamples; i++)
 		{
+			diffuseLight += ambientStrength;
 			diffuse_ray(thisVoxel.normal + EPSILON, rayPos, thisVoxel, time * (i + 1), diffuseLight);
 			shadow_ray(rayPos, time * (i + 1 + updatedDiffuseSamples), diffuseLight);
 		}
@@ -247,7 +247,7 @@ void main()
 
 	//clamp to avoid compression errors:
 	specLight 	 = clamp(specLight,    vec3(0.0), vec3(1.0));
-	diffuseLight = clamp(diffuseLight, vec3(ambientStrength), vec3(1.0));
+	diffuseLight = clamp(diffuseLight, vec3(0.0), vec3(1.0));
 
 	//determine how to write diffuse:
 	uvec3 writeDiffuseLight = uvec3(round(diffuseLight * 65535));

@@ -40,10 +40,11 @@ typedef struct DNcompressedVoxel
 //a chunk of voxels, voxels are stored this way to save memory and accelerate ray casting
 typedef struct DNchunk
 {
-	DNivec3 pos; 	  //the chunk's position within the entire map
-	GLuint used; 	  //whether the chunk is currently in use (chunks can be empty)
-	GLuint updated;   //whether the chunk has updates not yet pushed to the GPU
-	GLuint numVoxels; //the number of filled voxels this chunk contains, used to identify empty chunks for removal
+	DNivec3 pos;         //the chunk's position within the entire map
+	GLuint used;         //whether the chunk is currently in use (chunks can be empty)
+	GLuint updated;      //whether the chunk has updates not yet pushed to the GPU
+	GLuint numVoxels;    //the number of filled voxels this chunk contains, used to identify empty chunks for removal
+	GLuint numVoxelsGpu; //the number of voxels this chunk stores on the GPU
 
 	DNcompressedVoxel voxels[8][8][8]; //the grid of voxels in this chunk, of size DN_CHUNK_SIZE
 } DNchunk;
@@ -99,7 +100,7 @@ typedef struct DNmap
 	DNchunkHandle* map; 		 	  //READ-WRITE | The actual map. An array with length = mapSize.x * mapSize.y * mapSize.z
 	DNchunk* chunks; 	 		 	  //READ-WRITE | The array of chunks that the map has
 	DNmaterial* materials;			  //READ-WRITE | The array of materials that the map has
-	DNuvec4* lightingRequests;        //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
+	GLuint* lightingRequests;         //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
 	DNivec3* gpuChunkLayout;		  //READ ONLY  | An array representing the chunk layout on the GPU. Represents the position in the map that each chunk is.
 	DNvoxelNode* gpuVoxelLayout;      //READ ONLY  | An array representing the voxel layout on the GPU
 
@@ -113,7 +114,7 @@ typedef struct DNmap
 	DNvec3 sunDir; 					  //READ-WRITE | The direction pointing towards the sun
 	DNvec3 sunStrength; 			  //READ-WRITE | The strength of sunlight, also determines the color
 	DNvec3 ambientLightStrength; 	  //READ-WRITE | The minimum lighting for every voxel
-	unsigned int diffuseBounceLimit; //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
+	unsigned int diffuseBounceLimit;  //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
 	unsigned int specBounceLimit; 	  //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
 	float shadowSoftness; 			  //READ-WRITE | How soft shadows from direct light appear
 

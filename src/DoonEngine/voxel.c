@@ -20,7 +20,8 @@ GLprogram drawProgram = 0;
 
 unsigned int maxLightingRequests = 1024;
 
-#define WORKGROUP_SIZE 16
+#define DRAW_WORKGROUP_SIZE 16
+#define LIGHTING_WORKGROUP_SIZE 32
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU STRUCTS:
@@ -65,7 +66,7 @@ bool DN_init()
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, materialBuffer);
 
-	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(DNuvec4) * maxLightingRequests))
+	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(GLuint) * maxLightingRequests))
 	{
 		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
 		return false;
@@ -165,7 +166,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 		return NULL;
 	}
 
-	map->lightingRequests = DN_MALLOC(sizeof(DNuvec4) * numChunks);
+	map->lightingRequests = DN_MALLOC(sizeof(GLuint) * numChunks);
 	if(!map->lightingRequests)
 	{
 		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR LIGHTING REQUESTS\n");
@@ -693,15 +694,16 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 			//if chunk is loaded and visible, add to lighting request buffer:
 			if(GPUcell.flag == 2 && cellVisible && (GPUcell.chunkIndex % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].chunkIndex].updated))
 			{
-				if(map->numLightingRequests >= map->lightingRequestCap)
+				if(map->numLightingRequests + (512 / LIGHTING_WORKGROUP_SIZE) >= map->lightingRequestCap)
 				{
-					size_t newCap = fmin(map->mapSize.x * map->mapSize.y * map->mapSize.z, map->lightingRequestCap * 2);
+					size_t newCap = map->lightingRequestCap * 2;
 					DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUEST MEMORY TO ALLOW FOR %zi REQUESTS\n", newCap);
 					if(!DN_set_max_lighting_requests(map, newCap))
 						break;
 				}
 
-				map->lightingRequests[map->numLightingRequests++].x = GPUcell.chunkIndex;
+				for(int i = 0; i < map->chunks[map->map[mapIndex].chunkIndex].numVoxelsGpu; i += LIGHTING_WORKGROUP_SIZE)
+					map->lightingRequests[map->numLightingRequests++] = (GPUcell.chunkIndex << 4) | (i / LIGHTING_WORKGROUP_SIZE);;
 			}
 
 			//increase the "time last used" flag:
@@ -754,6 +756,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 				unsigned int numVoxels;
 				DNvoxelGPU gpuVoxels[512];
 				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(map, map->chunks[map->map[mapIndex].chunkIndex], &numVoxels, gpuVoxels);
+				map->chunks[map->map[mapIndex].chunkIndex].numVoxelsGpu = numVoxels;
 
 				_DN_stream_chunk(map, pos, voxelMapGPU, mapIndex, gpuChunk);
 				_DN_stream_voxels(map, pos, voxelMapGPU, mapIndex, numVoxels, gpuVoxels);
@@ -908,7 +911,7 @@ void DN_draw(DNmap* map, unsigned int outputTexture, DNmat4 view, DNmat4 project
 	DN_program_uniform_mat4(drawProgram, "invProjectionMat", &invProjection);
 	glUniform3uiv(glGetUniformLocation(drawProgram, "mapSize"), 1, (GLuint*)&map->mapSize);
 
-	glDispatchCompute(w / WORKGROUP_SIZE, h / WORKGROUP_SIZE, 1);
+	glDispatchCompute(w / DRAW_WORKGROUP_SIZE, h / DRAW_WORKGROUP_SIZE, 1);
 	glMemoryBarrier(GL_SHADER_IMAGE_ACCESS_BARRIER_BIT | GL_SHADER_STORAGE_BARRIER_BIT);
 }
 
@@ -933,7 +936,7 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 			newSize *= 2;
 
 		DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUESTS BUFFER TO ACCOMODATE %zi REQUESTS\n", newSize);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, newSize * sizeof(DNuvec4), NULL, GL_DYNAMIC_DRAW);
+		glBufferData(GL_SHADER_STORAGE_BUFFER, newSize * sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
 		if(glGetError() == GL_OUT_OF_MEMORY)
 		{
 			DN_ERROR_LOG("DN ERROR - FAILED TO RESIZE LIGHTING REQUESTS BUFFER\n");
@@ -942,7 +945,7 @@ void DN_update_lighting(DNmap* map, unsigned int numDiffuseSamples, unsigned int
 		maxLightingRequests = newSize;
 	}
 
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(DNuvec4), map->lightingRequests);
+	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, map->numLightingRequests  * sizeof(GLuint), map->lightingRequests);
 
 	DN_program_uniform_uint(lightingProgram, "useCubemap", map->useCubemap);
 	if(map->useCubemap)
@@ -1144,7 +1147,7 @@ bool DN_set_max_voxels_gpu(DNmap* map, size_t num)
 
 bool DN_set_max_lighting_requests(DNmap* map, unsigned int num)
 {
-	DNuvec4* newRequests = DN_REALLOC(map->lightingRequests, sizeof(DNuvec4) * num);
+	GLuint* newRequests = DN_REALLOC(map->lightingRequests, sizeof(GLuint) * num);
 
 	if(!newRequests)
 	{

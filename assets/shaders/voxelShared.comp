@@ -144,10 +144,60 @@ uint get_voxel_index(uint chunk, uint mapIndex, ivec3 chunkPos)
 	return map[mapIndex].testIndex + voxNum;
 }
 
+ivec3 get_voxel_position(uint chunk, uint voxNum)
+{
+	uint count = 0;
+	uint pos = 0;
+
+	uint startIndex = 0;
+	for(int i = 0; i < 3; i++)
+	{
+		if(chunks[chunk].partialCounts[i] < voxNum)
+		{
+			count = chunks[chunk].partialCounts[i];
+			pos += 128;
+			startIndex += 4;
+		}
+		else
+			break;
+	}
+
+	voxNum++; //we are trying to find the Nth voxel, so if voxNum is 0 we want the 1st voxel
+
+	for(uint i = startIndex; i < 16; i++)
+	{
+		if(count == voxNum)
+			break;
+
+		uint bitCount = bitCount(chunks[chunk].bitMask[i]);
+		if(count + bitCount >= voxNum)
+		{
+			uint bitNum = 0;
+			while(count < voxNum)
+			{
+				count += (chunks[chunk].bitMask[i] >> bitNum) & 1;
+				bitNum++;
+				pos++;
+			}
+		}
+		else
+		{
+			count += bitCount;
+			pos += 32;
+		}
+	}
+	pos--;
+
+	if(count < voxNum)
+		return ivec3(-1, -1, -1);
+	else	
+		return ivec3(pos % 8, (pos / 8) % 8, pos / 64);
+}
+
 bool does_voxel_exist(uint chunk, ivec3 chunkPos) //returns true if the voxel at the position is solid (not empty)
 {
 	uint index = chunkPos.x + CHUNK_SIZE.x * (chunkPos.y + CHUNK_SIZE.y * chunkPos.z);
-	return bool((chunks[chunk].bitMask[index >> 5] >> (index & 0x1F)) & 1);
+	return bool((chunks[chunk].bitMask[index >> 5] >> (index & 31)) & 1);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//

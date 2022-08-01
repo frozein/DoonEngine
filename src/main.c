@@ -326,10 +326,6 @@ int main()
 	treeMap->materials[0].specular = 0.0f;
 	treeMap->materials[0].opacity = 1.0f;
 
-	//sync with gpu:
-	//---------------------------------
-	//DN_sync_gpu(treeMap, DN_READ_WRITE, DN_REQUEST_LOADED, 1);
-
 	//main loop:
 	//---------------------------------
 	float lastFrame = glfwGetTime();
