@@ -47,6 +47,15 @@ typedef struct DNchunkGPU
 	GLuint padding;
 } DNchunkGPU;
 
+//a handle to a voxel chunk, along with some meta-data
+typedef struct DNchunkHandleGPU
+{
+	GLuint flag;       //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
+	GLuint lastUsed;   //the time, in frames, since the chunk was last used (ACCESSIBLE ON GPU ONLY)
+	GLuint voxelIndex; //the index to the voxel data for the chunk that this handle points to (ACCESSIBLE ON GPU ONLY)
+	GLuint chunkIndex; //the index of the chunk that this handle points to. if flag = 0, this is invalid
+} DNchunkHandleGPU;
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //INITIALIZATION:
 
@@ -109,7 +118,7 @@ DNmap* DN_create_map(DNuvec3 mapSize, unsigned int minChunks)
 
 	//generate buffers:
 	//---------------------------------
-	if(!_DN_gen_shader_storage_buffer(&map->glMapBufferID, sizeof(DNchunkHandle) * mapSize.x * mapSize.y * mapSize.x))
+	if(!_DN_gen_shader_storage_buffer(&map->glMapBufferID, sizeof(DNchunkHandleGPU) * mapSize.x * mapSize.y * mapSize.x))
 	{
 		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR MAP\n");
 		return NULL;
@@ -496,7 +505,7 @@ static DNchunkGPU _DN_chunk_to_gpu(DNmap* map, DNchunk chunk, int* numVoxels, DN
 	return res;
 }
 
-static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, unsigned int mapIndex, DNchunkGPU chunk)
+static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, DNchunkGPU chunk)
 {
 	//bind buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glChunkBufferID);
@@ -564,7 +573,7 @@ static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, uns
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &chunk);
 }
 
-static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandle* mapGPU, unsigned int mapIndex, unsigned int numVoxels, DNvoxelGPU* voxels)
+static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, unsigned int numVoxels, DNvoxelGPU* voxels)
 {
 	//bind buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glVoxelBufferID);
@@ -672,7 +681,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 
 	//map the buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
-	DNchunkHandle* voxelMapGPU = (DNchunkHandle*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
+	DNchunkHandleGPU* voxelMapGPU = (DNchunkHandleGPU*)glMapBuffer(GL_SHADER_STORAGE_BUFFER, GL_READ_WRITE);
 
 	//set lighting requests to 0:
 	map->numLightingRequests = 0;
@@ -685,7 +694,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 		DNivec3 pos = {x, y, z};
 		int mapIndex = DN_FLATTEN_INDEX(pos, map->mapSize);    //the map index for the cpu-side memory
 
-		DNchunkHandle GPUcell = voxelMapGPU[mapIndex];
+		DNchunkHandleGPU GPUcell = voxelMapGPU[mapIndex];
 		bool cellVisible = (GPUcell.flag & 0xF0) > 0;
 		GPUcell.flag = GPUcell.flag & 0x0F;
 
@@ -1020,7 +1029,7 @@ bool DN_set_map_size(DNmap* map, DNuvec3 size)
 
 	//allocate new gpu buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, map->glMapBufferID);
-	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNchunkHandle) * size.x * size.y * size.z, map->map, GL_DYNAMIC_DRAW);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNchunkHandleGPU) * size.x * size.y * size.z, map->map, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
 		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE MAP BUFFER\n");
