@@ -47,13 +47,12 @@ typedef struct DNchunkGPU
 	GLuint padding;
 } DNchunkGPU;
 
-//a handle to a voxel chunk, along with some meta-data
+//a handle to a voxel chunk, as stored on the GPU
 typedef struct DNchunkHandleGPU
 {
 	GLuint flag;       //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
-	GLuint lastUsed;   //the time, in frames, since the chunk was last used (ACCESSIBLE ON GPU ONLY)
-	GLuint voxelIndex; //the index to the voxel data for the chunk that this handle points to (ACCESSIBLE ON GPU ONLY)
-	GLuint chunkIndex; //the index of the chunk that this handle points to. if flag = 0, this is invalid
+	GLuint lastUsed;   //the time, in frames, since the chunk was last used
+	GLuint voxelIndex; //the index to the voxel data for the chunk that this handle points to
 } DNchunkHandleGPU;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -552,8 +551,7 @@ static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU, 
 
 	if(maxTimeMapIndex >= 0) //if the chunk was previously loaded, set its flag to unloaded
 	{
-		map->map[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag != 0 ? 1 : 0;
-		mapGPU[maxTimeMapIndex].flag = map->map[maxTimeMapIndex].flag;
+		mapGPU[maxTimeMapIndex].flag = 1;
 
 		for(int i = 0; i < map->numVoxelNodes; i++)
 			if(DN_in_map_bounds(map, map->gpuVoxelLayout[i].chunkPos) && DN_FLATTEN_INDEX(map->gpuVoxelLayout[i].chunkPos, map->mapSize) == maxTimeMapIndex)
@@ -563,10 +561,8 @@ static void _DN_stream_chunk(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU, 
 			}
 	}
 
-	mapGPU[mapIndex].flag = 2; //set the new tile's flag to loaded
-	map->map[mapIndex].flag = 2;
+	mapGPU[mapIndex].flag = (maxTimeIndex << 4) | 2; //set the new tile's flag to loaded
 	mapGPU[mapIndex].lastUsed = 0;
-	mapGPU[mapIndex].chunkIndex = maxTimeIndex;
 	map->gpuChunkLayout[maxTimeIndex] = pos;
 
 	//load in new data:
@@ -626,9 +622,8 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU,
 	//if no suitable node was found, make sure to unload corresponding chunk:
 	if(smallestNodeI < 0 || maxTime <= 1)
 	{
+		map->gpuChunkLayout[mapGPU[mapIndex].flag >> 4].x = -1;
 		mapGPU[mapIndex].flag = 1;
-		map->map[mapIndex].flag = 1;
-		map->gpuChunkLayout[mapGPU[mapIndex].chunkIndex].x = -1;
 
 		return;
 	}
@@ -636,8 +631,8 @@ static void _DN_stream_voxels(DNmap* map, DNivec3 pos, DNchunkHandleGPU* mapGPU,
 	//unload old one if overwritten:
 	if(DN_in_map_bounds(map, map->gpuVoxelLayout[smallestNodeI].chunkPos))
 	{
+		map->gpuChunkLayout[mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].flag >> 4].x = -1;
 		mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].flag = 1;
-		map->gpuChunkLayout[mapGPU[DN_FLATTEN_INDEX(map->gpuVoxelLayout[smallestNodeI].chunkPos, map->mapSize)].chunkIndex].x = -1;
 	}
 
 	//edit layout if needed:
@@ -695,13 +690,14 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 		int mapIndex = DN_FLATTEN_INDEX(pos, map->mapSize);    //the map index for the cpu-side memory
 
 		DNchunkHandleGPU GPUcell = voxelMapGPU[mapIndex];
-		bool cellVisible = (GPUcell.flag & 0xF0) > 0;
-		GPUcell.flag = GPUcell.flag & 0x0F;
+		bool cellVisible = (GPUcell.flag & 4) > 0;
+		unsigned int cellChunkIndex = GPUcell.flag >> 4;
+		GPUcell.flag = GPUcell.flag & 3;
 
 		if(op != DN_WRITE)
 		{
 			//if chunk is loaded and visible, add to lighting request buffer:
-			if(GPUcell.flag == 2 && cellVisible && (GPUcell.chunkIndex % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].chunkIndex].updated))
+			if(GPUcell.flag == 2 && cellVisible && (cellChunkIndex % lightingSplit == map->frameNum || map->chunks[map->map[mapIndex].chunkIndex].updated))
 			{
 				if(map->numLightingRequests + (512 / LIGHTING_WORKGROUP_SIZE) >= map->lightingRequestCap)
 				{
@@ -712,7 +708,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 				}
 
 				for(int i = 0; i < map->chunks[map->map[mapIndex].chunkIndex].numVoxelsGpu; i += LIGHTING_WORKGROUP_SIZE)
-					map->lightingRequests[map->numLightingRequests++] = (GPUcell.chunkIndex << 4) | (i / LIGHTING_WORKGROUP_SIZE);;
+					map->lightingRequests[map->numLightingRequests++] = (cellChunkIndex << 4) | (i / LIGHTING_WORKGROUP_SIZE);;
 			}
 
 			//increase the "time last used" flag:
@@ -732,7 +728,7 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 			{
 				voxelMapGPU[mapIndex].flag = 0;
 				GPUcell.flag = 0;
-				map->gpuChunkLayout[GPUcell.chunkIndex].x = -1;
+				map->gpuChunkLayout[cellChunkIndex].x = -1;
 				for(int i = 0; i < map->numVoxelNodes; i++)
 					if(DN_in_map_bounds(map, map->gpuVoxelLayout[i].chunkPos) && DN_FLATTEN_INDEX(map->gpuVoxelLayout[i].chunkPos, map->mapSize) == mapIndex)
 					{
@@ -744,9 +740,8 @@ void DN_sync_gpu(DNmap* map, DNmemOp op, unsigned int lightingSplit)
 			//if updated, unload and request it to let the streaming system handle it
 			if(GPUcell.flag == 2 && map->chunks[map->map[mapIndex].chunkIndex].updated)
 			{
-				map->map[mapIndex].flag = map->map[mapIndex].flag != 0 ? 1 : 0;
-				voxelMapGPU[mapIndex].flag = map->map[mapIndex].flag;
-				map->gpuChunkLayout[GPUcell.chunkIndex].x = -1;
+				voxelMapGPU[mapIndex].flag = 3;
+				map->gpuChunkLayout[cellChunkIndex].x = -1;
 
 				for(int i = 0; i < map->numVoxelNodes; i++)
 					if(DN_in_map_bounds(map, map->gpuVoxelLayout[i].chunkPos) && DN_FLATTEN_INDEX(map->gpuVoxelLayout[i].chunkPos, map->mapSize) == mapIndex)

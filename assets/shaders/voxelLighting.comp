@@ -84,8 +84,8 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 			ivec3 hitMapPos = ivec3(rayPos);
 			uint thisMapIndex = mapPos.x    + mapSize.x * (mapPos.y    + mapSize.y * mapPos.z   );
 			uint hitMapIndex  = hitMapPos.x + mapSize.x * (hitMapPos.y + mapSize.y * hitMapPos.z);
-			if((map[thisMapIndex].flag & 0xF0) > 0)
-				map[hitMapIndex].flag |= 0xF0;
+			if((map[thisMapIndex].flags & 4) > 0)
+				map[hitMapIndex].flags |= 4;
 
 			//check if hit voxel is adjacent (meant that this voxel is occluded):
 			vec3 dist = abs(floor(rayPos * CHUNK_SIZE) - floor(lastPos * CHUNK_SIZE));
@@ -198,7 +198,7 @@ void main()
 		return;
 
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
-	uint voxelIndex = map[mapIndex].testIndex + voxNum;
+	uint voxelIndex = map[mapIndex].voxelIndex + voxNum;
 	CompressedVoxel compressed = voxels[voxelIndex];
 	Voxel thisVoxel = decompress_voxel(compressed);
 	Material thisMaterial = materials[thisVoxel.material];
@@ -260,10 +260,10 @@ void main()
 	voxels[voxelIndex].diffuseLight = encode_uint_RGBA(uvec4(writeUpper.y, writeLower.y, writeUpper.z, writeLower.z));
 
 	//set visible to false:
-	map[mapIndex].flag &= 0x0F;
+	map[mapIndex].flags &= ~4;
 
 	//increase number of samples:
-	if(voxelIndex == map[mapIndex].testIndex)
+	if(voxNum == 0)
 		chunks[chunkIndex].numIndirectSamples++;
 
 	return;

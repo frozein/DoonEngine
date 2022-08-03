@@ -49,10 +49,11 @@ typedef struct DNchunk
 	DNcompressedVoxel voxels[8][8][8]; //the grid of voxels in this chunk, of size DN_CHUNK_SIZE
 } DNchunk;
 
+//a handle to a chunk, along with some meta-data
 typedef struct DNchunkHandle
 {
-	unsigned char flag;
-	unsigned int chunkIndex;
+	unsigned char flag;      //0 = does not exist, 1 = loaded on CPU, in the future, may be used for streaming from disk
+	unsigned int chunkIndex; //the index at which the chunk's data can be found, invalid if flag = 0
 } DNchunkHandle;
 
 //represents a group of voxels on the GPU

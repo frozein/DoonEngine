@@ -44,10 +44,9 @@ struct Chunk //a chunk of voxels
 
 struct ChunkHandle //a handle to a Chunk
 {
-	uint flag;     //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
-	uint lastUsed; //the time since the chunk was last used
-	uint testIndex;
-	uint index;    //the index of the chunk in the chunk buffer
+	uint flags;      //layout: loaded flag (2 bits, 0 = DnE, 1 = unloaded, 2 = loaded, 3 = requested) | visible flag (1 bit)
+	uint lastUsed;   //the time since the chunk was last used
+	uint voxelIndex; //the starting index of this chunk's voxels
 };
 
 struct Material
@@ -63,7 +62,7 @@ struct Material
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-layout(std140, binding = 0) restrict buffer mapBuffer //the buffer that contains the chunk map
+layout(std430, binding = 0) restrict buffer mapBuffer //the buffer that contains the chunk map
 {
 	ChunkHandle map[];
 };
@@ -78,7 +77,7 @@ layout(std140, binding = 2) restrict readonly buffer materialBuffer //the buffer
 	Material materials[256];
 };
 
-layout(std140, binding = 4) restrict buffer testBuffer //test buffer lol
+layout(std140, binding = 4) restrict buffer voxelBuffer
 {
 	CompressedVoxel voxels[];
 };
@@ -121,7 +120,7 @@ ChunkHandle get_map_tile(ivec3 pos) //returns the value of the map at a position
 	uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 	if(map[index].lastUsed > 0)
 		map[index].lastUsed = 0;
-		
+
 	return map[index];
 }
 
@@ -141,7 +140,7 @@ uint get_voxel_index(uint chunk, uint mapIndex, ivec3 chunkPos)
 		voxNum += bitCount(bits);
 	}
 
-	return map[mapIndex].testIndex + voxNum;
+	return map[mapIndex].voxelIndex + voxNum;
 }
 
 ivec3 get_voxel_position(uint chunk, uint voxNum)
@@ -353,8 +352,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 
 		//check if a solid chunk has been hit:
 		ChunkHandle mapTile = get_map_tile(pos);
-		mapTile.flag = mapTile.flag & 0x0F;
-		if (mapTile.flag == 2)
+		if ((mapTile.flags & 3) == 2)
 		{
 			//advance ray to chunk edge:
 			vec2 intersection = intersect_AABB(invRayDir, rayPos, pos, pos + 1.0); //find exactly where the ray intersects
@@ -366,7 +364,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			int stepResult = step_chunk(mapTile.index, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, voxel, chunkPos, colorAdd, colorMult);
+			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, voxel, chunkPos, colorAdd, colorMult);
 			if(stepResult == 1)
 			{
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
@@ -377,10 +375,10 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 			else if(stepResult == 2)
 				return false;
 		}
-		else if(mapTile.flag != 0)
+		else if((mapTile.flags & 3) != 0)
 		{
 			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
-			map[index].flag = 3;
+			map[index].flags = 3;
 			return false;
 		}
 

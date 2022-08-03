@@ -121,7 +121,7 @@ void main()
 			uvec3 mapPos = uvec3(floor(rayPos));
 			uint index = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
 
-			map[index].flag |= 0xF0;
+			map[index].flags |= 4;
 		}
 		else
 		{
