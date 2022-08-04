@@ -35,11 +35,11 @@ void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum s
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 //maps:
-DNmap* activeMap;
+DNvolume* activeVol;
 
-DNmap* treeMap;
-DNmap* demoMap;
-DNmap* sphereMap;
+DNvolume* treeVol;
+DNvolume* demoVol;
+DNvolume* sphereVol;
 
 //rasterization textures:
 GLuint rasterColorTex;
@@ -303,28 +303,28 @@ int main()
 		return -1;
 	}
 
-	//load maps:
+	//load volumes:
 	//---------------------------------
-	demoMap   = DN_load_map("maps/demo.voxmap"  ,  32);
-	treeMap   = DN_create_map((DNuvec3){5, 5, 5},  16);
-	sphereMap = DN_load_map("maps/sphere.voxmap",  512);
+	demoVol   = DN_load_volume("maps/demo.voxmap"  ,  32);
+	treeVol   = DN_create_volume((DNuvec3){5, 5, 5},  16);
+	sphereVol = DN_load_volume("maps/sphere.voxmap",  512);
 
-	demoMap->glCubemapTex = cubemapTex;
-	demoMap->useCubemap = true;
+	demoVol->glCubemapTex = cubemapTex;
+	demoVol->useCubemap = true;
 
-	activeMap = demoMap;
+	activeVol = demoVol;
 
 	//load model:
 	//---------------------------------
 	DNvoxelModel model;
 	DN_load_vox_file("models/tree.vox", 0, &model);
 	DN_calculate_model_normals(2, &model);
-	DN_place_model_into_map(treeMap, model, (DNivec3){0, 0, 0});
+	DN_place_model_into_volume(treeVol, model, (DNivec3){0, 0, 0});
 
-	treeMap->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
-	treeMap->materials[0].emissive = false;
-	treeMap->materials[0].specular = 0.0f;
-	treeMap->materials[0].opacity = 1.0f;
+	treeVol->sunDir = (DNvec3){-1.0f, 1.0f, -1.0f};
+	treeVol->materials[0].emissive = false;
+	treeVol->materials[0].specular = 0.0f;
+	treeVol->materials[0].opacity = 1.0f;
 
 	//main loop:
 	//---------------------------------
@@ -355,12 +355,12 @@ int main()
 
 		//update cam transform:
 		//---------------------------------
-		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){activeMap->camOrient.x, activeMap->camOrient.y, 0.0f}));
+		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){activeVol->camOrient.x, activeVol->camOrient.y, 0.0f}));
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 
 		DNmat4 view;
 		DNmat4 projection;
-		DN_set_view_projection_matrices(activeMap, (float)SCREEN_H / SCREEN_W, 0.1f, 100.0f, &view, &projection);
+		DN_set_view_projection_matrices(activeVol, (float)SCREEN_H / SCREEN_W, 0.1f, 100.0f, &view, &projection);
 		
 		//rasterize objects:
 		//---------------------------------
@@ -386,9 +386,9 @@ int main()
 		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-		DN_draw(activeMap, finalTex, view, projection, rasterColorTex, rasterDepthTex);
-		DN_sync_gpu(activeMap, DN_READ_WRITE, 1);
-		DN_update_lighting(activeMap, 1, 1000, glfwGetTime());
+		DN_draw(activeVol, finalTex, view, projection, rasterColorTex, rasterDepthTex);
+		DN_sync_gpu(activeVol, DN_READ_WRITE, 1);
+		DN_update_lighting(activeVol, 1, 1000, glfwGetTime());
 
 		//render final quad to the screen:
 		//---------------------------------
@@ -409,9 +409,9 @@ int main()
 
 	//clean up and close:
 	//---------------------------------
-	DN_delete_map(treeMap);
-	DN_delete_map(demoMap);
-	DN_delete_map(sphereMap);
+	DN_delete_volume(treeVol);
+	DN_delete_volume(demoVol);
+	DN_delete_volume(sphereVol);
 	DN_quit();
 
 	glDeleteFramebuffers(1, &rasterFBO);
@@ -447,13 +447,13 @@ void mouse_pos_callback(GLFWwindow *window, double x, double y)
 	offsetX *= sens;
 	offsetY *= sens;
 
-	activeMap->camOrient.y -= offsetX;
-	activeMap->camOrient.x -= offsetY;
+	activeVol->camOrient.y -= offsetX;
+	activeVol->camOrient.x -= offsetY;
 
-	if(activeMap->camOrient.x > 89.0f)
-		activeMap->camOrient.x = 89.0f;
-	if(activeMap->camOrient.x < -89.0f)
-		activeMap->camOrient.x = -89.0f;
+	if(activeVol->camOrient.x > 89.0f)
+		activeVol->camOrient.x = 89.0f;
+	if(activeVol->camOrient.x < -89.0f)
+		activeVol->camOrient.x = -89.0f;
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -463,7 +463,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 	DNivec3 hitNormal;
 
 	if(button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
-		if(DN_step_map(activeMap, DN_cam_dir(activeMap->camOrient), activeMap->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		if(DN_step_map(activeVol, DN_cam_dir(activeVol->camOrient), activeVol->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
 			DNivec3 newPos = {hitPos.x + hitNormal.x, hitPos.y + hitNormal.y, hitPos.z + hitNormal.z};
 
@@ -471,35 +471,35 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 			DNivec3 localPos;
 			DN_separate_position(newPos, &mapPos, &localPos);
 
-			if(DN_in_map_bounds(activeMap, mapPos))
+			if(DN_in_map_bounds(activeVol, mapPos))
 			{
 				DNvoxel newVox;
 				newVox.material = 0;
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
 				newVox.albedo = DN_vec3_pow((DNvec3){0.871f, 0.463f, 0.843f}, DN_GAMMA);
 
-				DN_set_voxel(activeMap, mapPos, localPos, newVox);
+				DN_set_voxel(activeVol, mapPos, localPos, newVox);
 			}
 		}
 
 	if(button == GLFW_MOUSE_BUTTON_RIGHT && action == GLFW_PRESS)
-		if(DN_step_map(activeMap, DN_cam_dir(activeMap->camOrient), activeMap->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
+		if(DN_step_map(activeVol, DN_cam_dir(activeVol->camOrient), activeVol->camPos, 64, &hitPos, &hitVoxel, &hitNormal))
 		{
 			DNivec3 mapPos;
 			DNivec3 localPos;
 			DN_separate_position(hitPos, &mapPos, &localPos);
 
-			DN_remove_voxel(activeMap, mapPos, localPos);
+			DN_remove_voxel(activeVol, mapPos, localPos);
 		}
 }
 
 void scroll_callback(GLFWwindow* window, double offsetX, double offsetY)
 {
-    activeMap->camFOV -= (float)offsetY;
-    if (activeMap->camFOV < 45.0f)
-        activeMap->camFOV = 45.0f;
-    if (activeMap->camFOV > 90.0f)
-        activeMap->camFOV = 90.0f; 
+    activeVol->camFOV -= (float)offsetY;
+    if (activeVol->camFOV < 45.0f)
+        activeVol->camFOV = 45.0f;
+    if (activeVol->camFOV > 90.0f)
+        activeVol->camFOV = 90.0f; 
 }
 
 void process_input(GLFWwindow *window)
@@ -510,35 +510,35 @@ void process_input(GLFWwindow *window)
 		glfwSetWindowShouldClose(window, true);
 
 	if(glfwGetKey(window, GLFW_KEY_1) == GLFW_PRESS)
-		activeMap->camViewMode = 0;
+		activeVol->camViewMode = 0;
 	if(glfwGetKey(window, GLFW_KEY_2) == GLFW_PRESS)
-		activeMap->camViewMode = 1;
+		activeVol->camViewMode = 1;
 	if(glfwGetKey(window, GLFW_KEY_3) == GLFW_PRESS)
-		activeMap->camViewMode = 2;
+		activeVol->camViewMode = 2;
 	if(glfwGetKey(window, GLFW_KEY_4) == GLFW_PRESS)
-		activeMap->camViewMode = 3;
+		activeVol->camViewMode = 3;
 	if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
-		activeMap->camViewMode = 4;
+		activeVol->camViewMode = 4;
 
 	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
-		activeMap = demoMap;
+		activeVol = demoVol;
 	if(glfwGetKey(window, GLFW_KEY_F2) == GLFW_PRESS)
-		activeMap = treeMap;
+		activeVol = treeVol;
 	if(glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS)
-		activeMap = sphereMap;
+		activeVol = sphereVol;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-		activeMap->camPos = DN_vec3_add(activeMap->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		activeVol->camPos = DN_vec3_add(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		activeMap->camPos = DN_vec3_subtract(activeMap->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		activeVol->camPos = DN_vec3_subtract(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		activeMap->camPos = DN_vec3_subtract(activeMap->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
+		activeVol->camPos = DN_vec3_subtract(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-		activeMap->camPos = DN_vec3_add(activeMap->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
+		activeVol->camPos = DN_vec3_add(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
-		activeMap->camPos.y += camSpeed; 
+		activeVol->camPos.y += camSpeed; 
 	if(glfwGetKey(window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS)
-		activeMap->camPos.y -= camSpeed;
+		activeVol->camPos.y -= camSpeed;
 }
 
 void framebuffer_size_callback(GLFWwindow* window, int w, int h)
