@@ -29,7 +29,7 @@ unsigned int maxLightingRequests = 1024;
 //a single voxel, as stored on the GPU
 typedef struct DNvoxelGPU
 {
-	GLuint normal; 		 //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
+	GLuint normal;       //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
 	GLuint directLight;  //used to store how much direct light the voxel receives,   not updated CPU-side
 	GLuint specLight;    //used to store how much specular light the voxel receives, not updated CPU-side
 	GLuint diffuseLight; //used to store how much diffuse light the voxel receives,  not updated CPU-side

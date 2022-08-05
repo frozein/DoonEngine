@@ -25,7 +25,7 @@
 //a single voxel
 typedef struct DNvoxel
 {
-	DNvec3 normal; 	  //the normal (direction the voxel points towards)
+	DNvec3 normal;    //the normal (direction the voxel points towards)
 	uint8_t material; //the index into the materials array, in the range [0, 255] (NOTE: a material of 255 represents an empty voxel)
 	DNvec3 albedo;    //the "base color" (the percentage of light that gets reflected)
 } DNvoxel;
@@ -67,7 +67,7 @@ typedef struct DNvoxelNode
 //material properties for a voxel
 typedef struct DNmaterial
 {
-	DNvec3 padding;		//for gpu alignment
+	DNvec3 padding;     //for gpu alignment
 
 	GLuint emissive;    //whether or not the voxel emits light, represented as a uint for GPU memory alignment
 	GLfloat opacity;    //the voxel's opacity, in the range [0.0, 1.0]
@@ -80,50 +80,50 @@ typedef struct DNmaterial
 typedef struct DNvolume
 {	
 	//opengl handles:
-	GLuint glMapBufferID;   		  //READ ONLY | The openGL buffer ID for the map buffer on the GPU
-	GLuint glChunkBufferID;			  //READ ONLY | The openGL buffer ID for the chunk buffer on the GPU
-	GLuint glVoxelBufferID;			  //READ ONLY | The openGL buffer ID for the voxel buffer on the GPU
+	GLuint glMapBufferID;            //READ ONLY | The openGL buffer ID for the map buffer on the GPU
+	GLuint glChunkBufferID;          //READ ONLY | The openGL buffer ID for the chunk buffer on the GPU
+	GLuint glVoxelBufferID;          //READ ONLY | The openGL buffer ID for the voxel buffer on the GPU
 
 	//data parameters:
-	DNuvec3 mapSize; 	    		  //READ ONLY | The size, in DNchunks, of the map
-	size_t chunkCap;                  //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
-	size_t chunkCapGPU;               //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
-	size_t nextChunk;                 //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
-	size_t voxelCap;				  //READ ONLY | The current number of DNvoxels that are stored GPU-side by this map
-	size_t numVoxelNodes;             //READ ONLY | The current number of nodes that the GPU voxel data is broken up into
-	size_t numLightingRequests;       //READ ONLY | The number of chunks queued to have their lighting updated
-	size_t lightingRequestCap;        //READ ONLY | The maximum number of chunks that can be stored in lightingRequests
+	DNuvec3 mapSize;                 //READ ONLY | The size, in DNchunks, of the map
+	size_t chunkCap;                 //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
+	size_t chunkCapGPU;              //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
+	size_t nextChunk;                //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
+	size_t voxelCap;                 //READ ONLY | The current number of DNvoxels that are stored GPU-side by this map
+	size_t numVoxelNodes;            //READ ONLY | The current number of nodes that the GPU voxel data is broken up into
+	size_t numLightingRequests;      //READ ONLY | The number of chunks queued to have their lighting updated
+	size_t lightingRequestCap;       //READ ONLY | The maximum number of chunks that can be stored in lightingRequests
 
 	//data:
-	DNchunkHandle* map; 		 	  //READ-WRITE | The map of chunks. An array with length = mapSize.x * mapSize.y * mapSize.z
-	DNchunk* chunks; 	 		 	  //READ-WRITE | The array of chunks that the volume has
-	DNmaterial* materials;			  //READ-WRITE | The array of materials that the volume has
-	GLuint* lightingRequests;         //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
-	DNivec3* gpuChunkLayout;		  //READ ONLY  | An array representing the chunk layout on the GPU. Represents the position in the map that each chunk is.
-	DNvoxelNode* gpuVoxelLayout;      //READ ONLY  | An array representing the voxel layout on the GPU
+	DNchunkHandle* map;              //READ-WRITE | The map of chunks. An array with length = mapSize.x * mapSize.y * mapSize.z
+	DNchunk* chunks;                 //READ-WRITE | The array of chunks that the volume has
+	DNmaterial* materials;           //READ-WRITE | The array of materials that the volume has
+	GLuint* lightingRequests;        //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
+	DNivec3* gpuChunkLayout;         //READ ONLY  | An array representing the chunk layout on the GPU. Represents the position in the map that each chunk is.
+	DNvoxelNode* gpuVoxelLayout;     //READ ONLY  | An array representing the voxel layout on the GPU
 
 	//camera parameters:
-	DNvec3 camPos; 			  		  //READ-WRITE | The camera's position relative to this map, in DNchunks
-	DNvec3 camOrient; 		  		  //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
-	float camFOV; 			 		  //READ-WRITE | The camera's field of view, measured in degrees
-	unsigned int camViewMode; 		  //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = normals
+	DNvec3 camPos;                   //READ-WRITE | The camera's position relative to this map, in DNchunks
+	DNvec3 camOrient;                //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
+	float camFOV;                    //READ-WRITE | The camera's field of view, measured in degrees
+	unsigned int camViewMode;        //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = normals
 
 	//lighting parameters:
-	DNvec3 sunDir; 					  //READ-WRITE | The direction pointing towards the sun
-	DNvec3 sunStrength; 			  //READ-WRITE | The strength of sunlight, also determines the color
-	DNvec3 ambientLightStrength; 	  //READ-WRITE | The minimum lighting for every voxel
-	unsigned int diffuseBounceLimit;  //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
-	unsigned int specBounceLimit; 	  //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
-	float shadowSoftness; 			  //READ-WRITE | How soft shadows from direct light appear
+	DNvec3 sunDir;                   //READ-WRITE | The direction pointing towards the sun
+	DNvec3 sunStrength;              //READ-WRITE | The strength of sunlight, also determines the color
+	DNvec3 ambientLightStrength;     //READ-WRITE | The minimum lighting for every voxel
+	unsigned int diffuseBounceLimit; //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
+	unsigned int specBounceLimit;    //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
+	float shadowSoftness;            //READ-WRITE | How soft shadows from direct light appear
 
 	//sky parameters:
-	bool useCubemap;				  //READ-WRITE | Whether or not the volume should sample a cubemap for the sky color, otherwise a gradient will be used
-	unsigned int glCubemapTex;		  //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
-	DNvec3 skyGradientBot;			  //READ-WRITE | If the volume does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
-	DNvec3 skyGradientTop;			  //READ-WRITE | If the volume does NOT sample a cubemap, the color at the top of the gradient for the sky color
+	bool useCubemap;                 //READ-WRITE | Whether or not the volume should sample a cubemap for the sky color, otherwise a gradient will be used
+	unsigned int glCubemapTex;       //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
+	DNvec3 skyGradientBot;           //READ-WRITE | If the volume does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
+	DNvec3 skyGradientTop;           //READ-WRITE | If the volume does NOT sample a cubemap, the color at the top of the gradient for the sky color
 
-	unsigned int frameNum;			  //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
-	float lastTime;					  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
+	unsigned int frameNum;           //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
+	float lastTime;                  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNvolume;
 
 //represents memory operations
