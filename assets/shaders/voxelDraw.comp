@@ -76,8 +76,9 @@ void main()
 	{
 		if(intersection.x > 0) //only increment rayPos if outside the box
 			rayPos += rayDir * (intersection.x + EPSILON);
+		vec3 finalNormal = normal_AABB(rayPos, vec3(0.0), mapSize);
 
-		if(step_map(rayDir, invRayDir, rayPos, maxDepth, false, finalVoxel, finalColorAdd, finalColorMult))
+		if(step_map(rayDir, invRayDir, rayPos, maxDepth, false, finalNormal, finalVoxel, finalColorAdd, finalColorMult))
 		{
 			finalMaterial = materials[finalVoxel.material];
 			finalVoxel.specLight     *= finalMaterial.specular;
@@ -111,9 +112,14 @@ void main()
 				finalColor = pow(finalMaterial.emissive ? finalVoxel.albedo : finalVoxel.specLight, vec3(INV_GAMMA));
 				break;
 			}
-			case 4: //normal
+			case 4: //per-voxel normal
 			{
 				finalColor = vec3(abs(finalVoxel.normal));
+				break;
+			}
+			case 5: //face normal
+			{
+				finalColor = vec3(abs(finalNormal));
 				break;
 			}
 			}

@@ -106,7 +106,7 @@ typedef struct DNvolume
 	DNvec3 camPos;                   //READ-WRITE | The camera's position relative to this map, in DNchunks
 	DNvec3 camOrient;                //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
 	float camFOV;                    //READ-WRITE | The camera's field of view, measured in degrees
-	unsigned int camViewMode;        //READ-WRITE | The camera's view mode, 0 = normal; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = normals
+	unsigned int camViewMode;        //READ-WRITE | The camera's view mode, 0 = full lighting; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = per-voxel normals; 5 = per-face normals
 
 	//lighting parameters:
 	DNvec3 sunDir;                   //READ-WRITE | The direction pointing towards the sun

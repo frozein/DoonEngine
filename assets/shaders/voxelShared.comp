@@ -239,6 +239,16 @@ vec2 intersect_AABB(vec3 invRayDir, vec3 rayPos, vec3 boxMin, vec3 boxMax) //ret
     return vec2(tNear, tFar);
 }
 
+vec3 normal_AABB(vec3 intersectPos, vec3 boxMin, vec3 boxMax) //returns the normal of an AABB at a point
+{
+	vec3 c = (boxMin + boxMax) * 0.5;
+	vec3 p = intersectPos - c;
+	vec3 d = (boxMax - boxMin) * 0.5;
+	const float bias = 1.0 + EPSILON;
+
+	return normalize(trunc(p / d * bias));
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 vec3 sky_color(vec3 rayDir)
@@ -251,13 +261,14 @@ vec3 sky_color(vec3 rayDir)
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos) //steps through one tile with the DDA algorithm
+void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3 mapPos, out vec3 normal) //steps through one tile with the DDA algorithm
 {
 	//branchless dda code from here: https://www.shadertoy.com/view/4dX3zl
 
 	bvec3 mask = lessThanEqual(sideDist.xyz, min(sideDist.yzx, sideDist.zxy));
 	sideDist += vec3(mask) * deltaDist;
 	mapPos += ivec3(mask) * rayStep;
+	normal = vec3(mask) * -rayStep;
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -266,7 +277,7 @@ uint lastVox = 255; //used for transparent voxels
 vec3 orgRayPos;		//used to determine ray's distance, set to the ray's original origin position (before advancing to bounding box)
 
 //0 = no hit, 1 = hit voxel, 2 = past max depth
-int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPos, float maxDepth, bool ignoreFirst, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
+int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out ivec3 chunkPos, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
 {
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
 
@@ -313,7 +324,7 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPo
 			lastVox = 255;
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, pos);
+		iterate_DDA(deltaDist, rayStep, sideDist, pos, hitNormal);
 		ignoreFirst = false;
 
 		//check if past the maximum depth:
@@ -329,7 +340,7 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, vec3 rayPo
 	return 0;
 }
 
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
+bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult) //steps a ray through the map (not individual chunks), returns true if something was hit
 {
 	colorAdd = vec3(0.0); //added to the final color to account for transparency
 	colorMult = 1.0;      //multiplied with the final color to account for transparency
@@ -364,7 +375,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 
 			//step through the chunk:
 			ivec3 chunkPos;
-			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, voxel, chunkPos, colorAdd, colorMult);
+			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, hitNormal, voxel, chunkPos, colorAdd, colorMult);
 			if(stepResult == 1)
 			{
 				vec3 voxelPos = pos + chunkPos * INV_CHUNK_SIZE;
@@ -383,7 +394,7 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 		}
 
 		//iterate the dda algorithm:
-		iterate_DDA(deltaDist, rayStep, sideDist, pos);
+		iterate_DDA(deltaDist, rayStep, sideDist, pos, hitNormal);
 		ignoreFirst = false;
 	}
 

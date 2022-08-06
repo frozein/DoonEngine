@@ -519,6 +519,8 @@ void process_input(GLFWwindow *window)
 		activeVol->camViewMode = 3;
 	if(glfwGetKey(window, GLFW_KEY_5) == GLFW_PRESS)
 		activeVol->camViewMode = 4;
+	if(glfwGetKey(window, GLFW_KEY_6) == GLFW_PRESS)
+		activeVol->camViewMode = 5;
 
 	if(glfwGetKey(window, GLFW_KEY_F1) == GLFW_PRESS)
 		activeVol = demoVol;
