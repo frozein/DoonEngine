@@ -56,13 +56,16 @@ struct ChunkHandle
 //a material, determines how light rays interact with a voxel
 struct Material
 {
-	vec3 padding;     //for alignment
+	vec2 padding;       //for alignment
 
-	bool emissive;    //whether or not the voxel emits light
-	float opacity;    //the opacity of the voxel
-	float specular;   //what percentage of rays are specular, the other percent are diffuse
-	uint reflectType; //only applies to specular voxels. whether or not they will reflect the sky color
-	uint shininess;   //the greater the number, the closer the specular rays are to perfect reflection
+	bool emissive;      //whether or not the voxel emits light
+
+	float opacity;      //the opacity of the voxel
+	float refractIndex; //the voxel's refractive index
+
+	float specular;     //what percentage of rays are specular, the other percent are diffuse
+	uint reflectType;   //only applies to specular voxels. whether or not they will reflect the sky color
+	uint shininess;     //the greater the number, the closer the specular rays are to perfect reflection
 };
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -310,13 +313,17 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-uint lastVox = 255; //used for transparent voxels
-vec3 orgRayPos;     //used to determine ray's distance, set to the ray's original origin position (before advancing to bounding box)
+bool enableRefraction = false;
+
+uint lastVoxID = 255;       //the last hit voxel's albedo and material, used to determine if a new transparent "block" was hit
+float lastVoxRefract = 1.0; //the last hit voxel's refraction index, used to determine how much we need to refract
+vec3 orgRayPos;             //used to determine ray's distance, set to the ray's original origin position (before advancing to bounding box)
 
 //steps a ray through a chunk. RETURNS: 0 = no hit, 1 = hit voxel, 2 = past max depth
-int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult) //steps a ray through a chunk, returns true if something was hit
+int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult, out bool refracted) //steps a ray through a chunk, returns true if something was hit
 {
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
+	refracted = false;
 
 	ivec3 pos;
 	vec3 deltaDist;
@@ -335,20 +342,31 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, inout vec3
 			voxel = decompress_voxel(compressed);
 
 			Material material = materials[voxel.material];
-
-			if(material.opacity < 1.0 && voxel.material < 255)
+			uint thisVoxID = (compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF);
+			if(material.opacity < 1.0)
 			{
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
-				if(lastVox != ((compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF)))
+				if(lastVoxID != thisVoxID)
 				{
 					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
+
+					if(enableRefraction)
+					{
+						refracted = true;
+						rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
+						
+						vec3 normal = dot(voxel.normal, rayDir) < 0.0 ? normalize(voxel.normal) : hitNormal;
+						rayDir = refract(rayDir, normal, lastVoxRefract / material.refractIndex);
+						invRayDir = 1 / rayDir;
+
+						init_DDA(rayDir, invRayDir, rayPos, pos, deltaDist, rayStep, sideDist);
+						lastSideDist = vec3(0.0);
+					}
+
+					lastVoxID = thisVoxID;
+					lastVoxRefract = material.refractIndex;
 				}
-
-				uint index = chunks[chunk].pos.x + mapSize.x * (chunks[chunk].pos.y + mapSize.y * chunks[chunk].pos.z);
-
-				if(map[index].lastUsed > 0)
-					map[index].lastUsed = 0;
 			}
 			else
 			{
@@ -356,11 +374,28 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, inout vec3
 				rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
 				return 1;
 			}
-
-			lastVox = (compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF);
 		}
-		else
-			lastVox = 255;
+		else if(lastVoxID != 255)
+		{
+			if(enableRefraction)
+			{
+				refracted = true;
+				rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
+				
+				vec3 oldRayDir = rayDir;
+				vec3 normal = dot(-voxel.normal, rayDir) < 0.0 ? normalize(-voxel.normal) : hitNormal;
+				rayDir = refract(rayDir, normal, lastVoxRefract);
+				if(rayDir == vec3(0.0)) //total internal reflection causes too much lag (rays bounce too much)
+					rayDir = oldRayDir;
+				invRayDir = 1 / rayDir;
+
+				init_DDA(rayDir, invRayDir, rayPos, pos, deltaDist, rayStep, sideDist);
+				lastSideDist = vec3(0.0);
+			}
+
+			lastVoxID = 255;
+			lastVoxRefract = 1.0;
+		}
 
 		//iterate the dda algorithm:
 		lastSideDist = sideDist;
@@ -381,7 +416,7 @@ int step_chunk(uint chunk, ivec3 mapPos, vec3 rayDir, vec3 invRayDir, inout vec3
 }
 
 //steps a ray through the map, returns true if a voxel was hit
-bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
+bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
 {
 	colorAdd = vec3(0.0); //added to the final color to account for transparency
 	colorMult = 1.0;      //multiplied with the final color to account for transparency
@@ -412,7 +447,8 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 			chunkRayPos = clamp(chunkRayPos, vec3(EPSILON), CHUNK_SIZE - EPSILON); //try to reduce noise. TODO: remove noise entirely
 
 			//step through the chunk:
-			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, hitNormal, voxel, colorAdd, colorMult);
+			bool refracted;
+			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, hitNormal, voxel, colorAdd, colorMult, refracted);
 			if(stepResult == 1)
 			{
 				rayPos = pos + chunkRayPos * INV_CHUNK_SIZE;
@@ -420,6 +456,13 @@ bool step_map(vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bo
 			}
 			else if(stepResult == 2)
 				return false;
+
+			if(refracted)
+			{
+				rayPos = pos + chunkRayPos * INV_CHUNK_SIZE;
+				init_DDA(rayDir, invRayDir, rayPos, pos, deltaDist, rayStep, sideDist);
+				lastSideDist = vec3(0.0);
+			}
 		}
 		else if((mapTile.flags & 3) != 0)
 		{

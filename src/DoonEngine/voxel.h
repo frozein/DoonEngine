@@ -67,13 +67,16 @@ typedef struct DNvoxelNode
 //material properties for a voxel
 typedef struct DNmaterial
 {
-	DNvec3 padding;     //for gpu alignment
+	DNvec2 padding;     //for gpu alignment
 
-	GLuint emissive;    //whether or not the voxel emits light, represented as a uint for GPU memory alignment
-	GLfloat opacity;    //the voxel's opacity, in the range [0.0, 1.0]
-	GLfloat specular;   //the percent of light reflected specularly by a voxel in the range [0.0, 1.0]
-	GLuint reflectType; //only for materials where specular > 0.0; 0 = do not reflect the sky color, 1 = reflect the sky color, 2 = specular highlight only (much faster to calculate)
-	GLuint shininess;   //only for materials where specular > 0.0; determines how perfect the reflcetions are, the greater this number, the closer to a perfect mirror
+	GLuint emissive;      //whether or not the voxel emits light, represented as a uint for GPU memory alignment
+
+	GLfloat opacity;      //the voxel's opacity, in the range [0.0, 1.0]
+	GLfloat refractIndex; //the voxel's refractive index
+
+	GLfloat specular;     //the percent of light reflected specularly by a voxel in the range [0.0, 1.0]
+	GLuint reflectType;   //only for materials where specular > 0.0; 0 = do not reflect the sky color, 1 = reflect the sky color, 2 = specular highlight only (much faster to calculate)
+	GLuint shininess;     //only for materials where specular > 0.0; determines how perfect the reflcetions are, the greater this number, the closer to a perfect mirror
 } DNmaterial;
 
 //a voxel volume, both on the CPU and the GPU

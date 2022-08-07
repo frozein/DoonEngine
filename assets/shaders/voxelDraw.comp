@@ -10,7 +10,7 @@ layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output tex
 uniform sampler2D colorSample;   //the color of any rasterized objects
 uniform sampler2D depthSample;   //the depth of any rasterized objects
 
-uniform uint viewMode            //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
+uniform uint viewMode;           //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
 uniform bool composeRasterized;  //whether or not this scene is being composed with rasterized objects
 
 uniform mat4 invViewMat;         //the inverse of the view matrix used for rasterization
@@ -19,8 +19,18 @@ uniform mat4 invProjectionMat;   //the inverse of the projection matrix used for
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+vec3 background_color(float maxDepth, vec2 texCoords, vec3 rayDir)
+{
+	if(maxDepth < 0.0)
+		return sky_color(rayDir);
+	else
+		return texture(colorSample, texCoords).xyz;
+}
+
 void main()
 {
+	enableRefraction = true;
+
 	Voxel finalVoxel;       //the final voxel that is hit
 	Material finalMaterial; //the material of the final voxel hit
 	vec3 finalColorAdd;     //added to the final color to account for transparency
@@ -38,7 +48,6 @@ void main()
 	vec3 invRayDir = 1.0 / rayDir;
 
 	float maxDepth;
-	vec3 backgroundColor;
 	if(composeRasterized)
 	{
 		maxDepth = texture(depthSample, texCoords).x * 2.0 - 1.0;
@@ -49,27 +58,19 @@ void main()
 			vec4 viewSpacePos = invProjectionMat * clipSpacePos;
 			viewSpacePos /= viewSpacePos.w;
 			maxDepth = length(viewSpacePos.xyz);
-
-			backgroundColor = texture(colorSample, texCoords).xyz;
 		}
 		else
-		{
 			maxDepth = -1.0; //if maxDepth is negative, it will not be tested
-			backgroundColor = sky_color(rayDir);
-		}
 	}
 	else
-	{
 		maxDepth = -1.0;
-		backgroundColor = sky_color(rayDir);
-	}
 
 	//check if ray hits the map at all:
 	vec2 intersection = intersect_AABB(invRayDir, rayPos, vec3(0.0), mapSize);
 
 	if(intersection.x > intersection.y || intersection.y < 0) //make sky color if no intersection at all
 	{
-		finalColor = backgroundColor;
+		finalColor = background_color(maxDepth, texCoords, rayDir);
 		finalColor = pow(finalColor, vec3(INV_GAMMA));
 	}
 	else //if the map is hit, step through it
@@ -131,7 +132,7 @@ void main()
 		}
 		else
 		{
-			finalColor = backgroundColor * finalColorMult + finalColorAdd;
+			finalColor = background_color(maxDepth, texCoords, rayDir) * finalColorMult + finalColorAdd;
 			finalColor = pow(finalColor, vec3(INV_GAMMA));
 		}
 	}

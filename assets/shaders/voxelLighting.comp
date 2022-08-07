@@ -198,6 +198,8 @@ void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout
 
 void main()
 {
+	enableRefraction = false; //refraction is too messy to look good at the per-voxel scale
+
 	//find positions:
 	uint chunkIndex = chunkIndices[gl_WorkGroupID.x] >> 4;
 	ivec3 mapPos = ivec3(chunks[chunkIndex].pos.xyz);

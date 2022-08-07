@@ -305,9 +305,9 @@ int main()
 
 	//load volumes:
 	//---------------------------------
-	demoVol   = DN_load_volume("maps/demo.voxmap"  ,  32);
-	treeVol   = DN_create_volume((DNuvec3){5, 5, 5},  16);
-	sphereVol = DN_load_volume("maps/sphere.voxmap",  512);
+	demoVol   = DN_load_volume("volumes/demo.voxvol"  ,  32);
+	treeVol   = DN_create_volume((DNuvec3){5, 5, 5}   ,  16);
+	sphereVol = DN_load_volume("volumes/sphere.voxvol",  512);
 
 	demoVol->glCubemapTex = cubemapTex;
 	demoVol->useCubemap = true;
