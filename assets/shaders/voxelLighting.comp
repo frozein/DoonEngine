@@ -2,19 +2,19 @@
 #version 430 core
 layout(local_size_x = 32, local_size_y = 1, local_size_z = 1) in;
 
-layout(std430, binding = 3) restrict readonly buffer lightingRequestBuffer //a buffer that holds all of the chunks that are set to have their lighting updated
+//holds all of the chunks that are set to have their lighting updated
+layout(std430, binding = 3) restrict readonly buffer lightingRequestBuffer
 {
-	uint chunkIndices[];
+	uint chunkIndices[]; //layout: chunk index (28 bits) | voxel offset (4 bits)
 };
 
-uniform float time; //for random seeding
+uniform float time;               //for random seeding
 uniform uint numDiffuseSamples;   //the number of diffuse lighting samples to take
 uniform uint maxDiffuseSamples;   //the maximum number of diffuse samples that can be stored
 uniform uint diffuseBounceLimit;  //the maximum number of times a diffuse light ray can bounce
 uniform uint specularBounceLimit; //the maximum number of times a specular light ray can bounce
-
-uniform vec3 sunDir;           //the vector pointing towards the sun, must be normalized
-uniform float shadowSoftness;  //how soft the shadows appear
+uniform vec3 sunDir;              //the vector pointing towards the sun, must be normalized
+uniform float shadowSoftness;     //how soft the shadows appear
 
 uniform vec3 camPos; //the position of the camera
 
@@ -24,22 +24,26 @@ const vec3 spherePoints[15] = { vec3(0.000000, 1.000000, 0.000000), vec3(-0.3798
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-float rand(float seed) //returns a random float between -1 and 1
+//returns a random float between -1 and 1
+float rand(float seed)
 {
     return fract(sin(seed) * 43758.5453) * 2.0 - 1.0;
 }
 
-vec2 rand2(float seed) //returns a vec2 of random floats between -1 and 1
+//returns a vec2 of random floats between -1 and 1
+vec2 rand2(float seed)
 {
 	return vec2(rand(seed), rand(seed * 2.0));
 }
 
-vec3 rand3(float seed) //returns a vec3 of random floats between -1 and 1
+//returns a vec3 of random floats between -1 and 1
+vec3 rand3(float seed)
 {
 	return vec3(rand(seed), rand(seed * 2.0), rand(seed * 3.0));
 }
 
-vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
+//returns a vec3 of random floats between -1 and 1 that is inside the unit sphere (mag < 1) 
+vec3 rand_unit_sphere(float seed)
 {
 	while(true)
 	{
@@ -53,7 +57,8 @@ vec3 rand_unit_sphere(float seed) //returns a vec3 of random floats between -1 a
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-void shadow_ray(vec3 rayPos, float seed, inout vec3 color) //returns true if the shadow ray hit the map
+//casts a shadow ray and adds the light it receives to color
+void shadow_ray(vec3 rayPos, float seed, inout vec3 color)
 {
 	Voxel hitVoxel; //not used
 	vec3 updatedSunDir = normalize(sunDir * shadowSoftness + rand_unit_sphere(seed)) + EPSILON;
@@ -65,7 +70,8 @@ void shadow_ray(vec3 rayPos, float seed, inout vec3 color) //returns true if the
 		color += sunStrength * colorMult + colorAdd;
 }
 
-void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflectType, inout vec3 color) //casts out a specular ray and adds the appropriate color to color
+//casts out a specular ray and adds the appropriate color to color
+void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albedo, uint reflectType, inout vec3 color)
 {
 	Voxel hitVoxel;
 	Material hitMaterial;
@@ -134,7 +140,8 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 	}
 }
 
-void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout vec3 color) //increments color and numSamples depending on the voxel hit
+//casts a diffuse ray from a voxel and adds the received lighting to color
+void diffuse_ray(vec3 normal, vec3 rayPos, Voxel initialVoxel, float seed, inout vec3 color)
 {
 	Voxel hitVoxel = initialVoxel; //stores the voxel that the ray hits
 	vec3 hitNormal = normal;       //stores the normal of the hit voxel
