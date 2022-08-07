@@ -1,6 +1,7 @@
 //INCLUDES "voxelShared.comp"
 #version 430 core
 #define INV_GAMMA 0.4545 //for gamma correction (1 / 2.2)
+#line 4+1
 
 layout(local_size_x = 16, local_size_y = 16) in;          //16x16 local group size
 layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output texture
@@ -10,7 +11,7 @@ layout(rgba32f, binding = 0) uniform image2D colorOutput; //the color output tex
 uniform sampler2D colorSample;   //the color of any rasterized objects
 uniform sampler2D depthSample;   //the depth of any rasterized objects
 
-uniform uint viewMode            //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
+uniform uint viewMode;           //what is displayed, 0 = lighting, 1 = albedo, 2 = diffuse light, 3 - specular light, 4 = normals
 uniform bool composeRasterized;  //whether or not this scene is being composed with rasterized objects
 
 uniform mat4 invViewMat;         //the inverse of the view matrix used for rasterization
