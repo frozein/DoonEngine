@@ -351,10 +351,11 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
 					colorMult *= 1.0 - material.opacity;
 
-					if(enableRefraction)
+					float rayDist = min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
+					if(enableRefraction && rayDist > 0.0)
 					{
 						refracted = true;
-						rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
+						rayPos += rayDir * (rayDist + EPSILON);
 						
 						vec3 normal = dot(voxel.normal, rayDir) < 0.0 ? normalize(voxel.normal) : hitNormal;
 						rayDir = refract(rayDir, normal, lastVoxRefract / material.refractIndex);
