@@ -260,13 +260,9 @@ void DN_delete_volume(DNvolume* vol)
 //FILE I/O:
 
 //compresses a chunk to be stored on disk, returns the size, in bytes, of the compressed chunk
-uint16_t _DN_compress_chunk(DNchunk chunk, char* mem)
+uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 {
-	//compression is currently only RLE on material indices
-
 	//COMPRESSION TODO:
-	//remove map from storage
-	//remove unused 8 bits of albedo
 	//palette for color
 	//palette for normals
 
@@ -274,6 +270,9 @@ uint16_t _DN_compress_chunk(DNchunk chunk, char* mem)
 
 	memcpy(&mem[writePos], &chunk.pos, sizeof(DNivec3));
 	writePos += sizeof(DNivec3);
+
+	if(!DN_in_map_bounds(vol, chunk.pos))
+		return writePos;
 
 	for(int i = 0; i < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; i++)
 	{
@@ -300,11 +299,13 @@ uint16_t _DN_compress_chunk(DNchunk chunk, char* mem)
 
 				uint32_t normal = chunk.voxels[pos2.x][pos2.y][pos2.z].normal;
 				uint8_t normals[3] = {(normal >> 16) & 0xFF, (normal >> 8) & 0xFF, normal & 0xFF};
+				memcpy(&mem[writePos], normals, sizeof(uint8_t) * 3);
+				writePos += sizeof(uint8_t) * 3;
 
-				memcpy(&mem[writePos], &normals, sizeof(uint8_t) * 3);
-				writePos += sizeof(normals);
-				memcpy(&mem[writePos], &chunk.voxels[pos2.x][pos2.y][pos2.z].albedo, sizeof(uint32_t));
-				writePos += sizeof(uint32_t);
+				uint32_t albedo = chunk.voxels[pos2.x][pos2.y][pos2.z].albedo;
+				uint8_t albedos[3] = {(albedo >> 24) & 0xFF, (albedo >> 16) & 0xFF, (albedo >> 8) & 0xFF};
+				memcpy(&mem[writePos], albedos, sizeof(uint8_t) * 3);
+				writePos += sizeof(uint8_t) * 3;
 			}
 			else
 				break;
@@ -317,7 +318,7 @@ uint16_t _DN_compress_chunk(DNchunk chunk, char* mem)
 	return (uint16_t)writePos;
 }
 
-void _DN_decompress_chunk(char* mem, DNchunk* chunk)
+void _DN_decompress_chunk(char* mem, DNvolume* vol, DNchunk* chunk)
 {
 	size_t readPos = 0;
 
@@ -327,6 +328,9 @@ void _DN_decompress_chunk(char* mem, DNchunk* chunk)
 	chunk->updated = false;
 	chunk->numVoxels = 0;
 	chunk->numVoxelsGpu = 0;
+
+	if(!DN_in_map_bounds(vol, chunk->pos))
+		return;
 
 	unsigned int numVoxelsRead = 0;
 	while(numVoxelsRead < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z)
@@ -350,13 +354,14 @@ void _DN_decompress_chunk(char* mem, DNchunk* chunk)
 			else
 			{
 				uint8_t normals[3];
-				memcpy(&normals, &mem[readPos], sizeof(uint8_t) * 3);
-				readPos += sizeof(normals);
-				uint32_t normal = (material << 24) | (normals[0] << 16) | (normals[1] << 8) | normals[2];
-				chunk->voxels[pos.x][pos.y][pos.z].normal = normal;
+				memcpy(normals, &mem[readPos], sizeof(uint8_t) * 3);
+				readPos += sizeof(uint8_t) * 3;
+				chunk->voxels[pos.x][pos.y][pos.z].normal = (material << 24) | (normals[0] << 16) | (normals[1] << 8) | normals[2];
 
-				memcpy(&chunk->voxels[pos.x][pos.y][pos.z].albedo, &mem[readPos], sizeof(uint32_t));
-				readPos += sizeof(uint32_t);
+				uint8_t albedos[3];
+				memcpy(albedos, &mem[readPos], sizeof(uint8_t) * 3);
+				readPos += sizeof(uint8_t) * 3;
+				chunk->voxels[pos.x][pos.y][pos.z].albedo = (albedos[0] << 24) | (albedos[1] << 16) | (albedos[2] << 8);
 
 				chunk->numVoxels++;
 			}
@@ -380,16 +385,11 @@ DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 
 	DNvolume* vol;
 
-	//read map size and map:
+	//read map size:
 	//---------------------------------
 	DNuvec3 mapSize;
 	fread(&mapSize, sizeof(DNuvec3), 1, fptr);
 	vol = DN_create_volume(mapSize, minChunks);
-	fread(vol->map, sizeof(DNchunkHandle), vol->mapSize.x * vol->mapSize.y * vol->mapSize.z, fptr);
-
-	//make sure nothing seems loaded on gpu:
-	for(int i = 0; i < vol->mapSize.x * vol->mapSize.y * vol->mapSize.z; i++)
-		vol->map[i].flag = fmin(vol->map[i].flag, 1);
 
 	//read chunk cap and chunks:
 	//---------------------------------
@@ -400,10 +400,17 @@ DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 	char* compressedMem = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
 	for(int i = 0; i < chunkCap; i++)
 	{
-		uint16_t compressedSize; //TODO remove this, should be possible to not store
+		uint16_t compressedSize;
 		fread(&compressedSize, sizeof(uint16_t), 1, fptr);
 		fread(compressedMem, compressedSize, 1, fptr);
-		_DN_decompress_chunk(compressedMem, &vol->chunks[i]);
+		_DN_decompress_chunk(compressedMem, vol, &vol->chunks[i]);
+
+		if(DN_in_map_bounds(vol, vol->chunks[i].pos))
+		{
+			unsigned int mapIndex = DN_FLATTEN_INDEX(vol->chunks[i].pos, mapSize);
+			vol->map[mapIndex].flag = 1;
+			vol->map[mapIndex].chunkIndex = i;
+		}
 	}
 	DN_FREE(compressedMem);
 
@@ -452,7 +459,6 @@ bool DN_save_volume(const char* filePath, DNvolume* vol)
 	//write map size and map:
 	//---------------------------------
 	fwrite(&vol->mapSize, sizeof(DNuvec3), 1, fptr);
-	fwrite(vol->map, sizeof(DNchunkHandle), vol->mapSize.x * vol->mapSize.y * vol->mapSize.z, fptr);
 	
 	//write chunk cap and chunks:
 	//---------------------------------
@@ -461,7 +467,7 @@ bool DN_save_volume(const char* filePath, DNvolume* vol)
 	char* compressedBuffer = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
 	for(int i = 0; i < vol->chunkCap; i++)
 	{
-		uint16_t compressedSize = _DN_compress_chunk(vol->chunks[i], compressedBuffer);
+		uint16_t compressedSize = _DN_compress_chunk(vol->chunks[i], vol, compressedBuffer);
 		fwrite(&compressedSize, sizeof(uint16_t), 1, fptr);
 		fwrite(compressedBuffer, compressedSize, 1, fptr);
 	}
