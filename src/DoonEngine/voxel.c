@@ -256,6 +256,117 @@ void DN_delete_volume(DNvolume* vol)
 	DN_FREE(vol);
 }
 
+//--------------------------------------------------------------------------------------------------------------------------------//
+//FILE I/O:
+
+//compresses a chunk to be stored on disk, returns the size, in bytes, of the compressed chunk
+uint16_t _DN_compress_chunk(DNchunk chunk, char* mem)
+{
+	//compression is currently only RLE on material indices
+
+	//COMPRESSION TODO:
+	//remove map from storage
+	//remove unused 8 bits of albedo
+	//palette for color
+	//palette for normals
+
+	size_t writePos = 0;
+
+	memcpy(&mem[writePos], &chunk.pos, sizeof(DNivec3));
+	writePos += sizeof(DNivec3);
+
+	for(int i = 0; i < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; i++)
+	{
+		DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+		uint8_t material = chunk.voxels[pos.x][pos.y][pos.z].normal >> 24;
+		
+		memcpy(&mem[writePos], &material, sizeof(uint8_t));
+		writePos += sizeof(uint8_t);
+
+		size_t numPos = writePos;
+		writePos += sizeof(uint8_t);
+
+		uint8_t num = 0;
+		int j;
+		for(j = i; j < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; j++)
+		{
+			DNivec3 pos2 = {j % DN_CHUNK_SIZE.x, (j / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, j / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+
+			if(num < UINT8_MAX && (chunk.voxels[pos2.x][pos2.y][pos2.z].normal >> 24) == material)
+			{
+				num++;
+				if(material == 255)
+					continue;
+
+				uint32_t normal = chunk.voxels[pos2.x][pos2.y][pos2.z].normal;
+				uint8_t normals[3] = {(normal >> 16) & 0xFF, (normal >> 8) & 0xFF, normal & 0xFF};
+
+				memcpy(&mem[writePos], &normals, sizeof(uint8_t) * 3);
+				writePos += sizeof(normals);
+				memcpy(&mem[writePos], &chunk.voxels[pos2.x][pos2.y][pos2.z].albedo, sizeof(uint32_t));
+				writePos += sizeof(uint32_t);
+			}
+			else
+				break;
+		}
+
+		memcpy(&mem[numPos], &num, sizeof(uint8_t));
+		i = j - 1;
+	}
+
+	return (uint16_t)writePos;
+}
+
+void _DN_decompress_chunk(char* mem, DNchunk* chunk)
+{
+	size_t readPos = 0;
+
+	memcpy(&chunk->pos, &mem[readPos], sizeof(DNivec3));
+	readPos += sizeof(DNivec3);
+	
+	chunk->updated = false;
+	chunk->numVoxels = 0;
+	chunk->numVoxelsGpu = 0;
+
+	unsigned int numVoxelsRead = 0;
+	while(numVoxelsRead < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z)
+	{
+		uint8_t material;
+		memcpy(&material, &mem[readPos], sizeof(uint8_t));
+		readPos += sizeof(uint8_t);
+
+		uint8_t num;
+		memcpy(&num, &mem[readPos], sizeof(uint8_t));
+		readPos += sizeof(uint8_t);
+
+		for(int i = numVoxelsRead; i < numVoxelsRead + num; i++)
+		{
+			DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+
+			if(material == 255)
+			{
+				chunk->voxels[pos.x][pos.y][pos.z].normal = UINT32_MAX;
+			}
+			else
+			{
+				uint8_t normals[3];
+				memcpy(&normals, &mem[readPos], sizeof(uint8_t) * 3);
+				readPos += sizeof(normals);
+				uint32_t normal = (material << 24) | (normals[0] << 16) | (normals[1] << 8) | normals[2];
+				chunk->voxels[pos.x][pos.y][pos.z].normal = normal;
+
+				memcpy(&chunk->voxels[pos.x][pos.y][pos.z].albedo, &mem[readPos], sizeof(uint32_t));
+				readPos += sizeof(uint32_t);
+
+				chunk->numVoxels++;
+			}
+		}
+
+		numVoxelsRead += num;
+	}
+}
+
+//decompresses a chunk stored on disk
 DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 {
 	//open file:
@@ -285,7 +396,16 @@ DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 	unsigned int chunkCap;
 	fread(&chunkCap, sizeof(unsigned int), 1, fptr);
 	DN_set_max_chunks(vol, chunkCap);
-	fread(vol->chunks, sizeof(DNchunk), vol->chunkCap, fptr);
+
+	char* compressedMem = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
+	for(int i = 0; i < chunkCap; i++)
+	{
+		uint16_t compressedSize; //TODO remove this, should be possible to not store
+		fread(&compressedSize, sizeof(uint16_t), 1, fptr);
+		fread(compressedMem, compressedSize, 1, fptr);
+		_DN_decompress_chunk(compressedMem, &vol->chunks[i]);
+	}
+	DN_FREE(compressedMem);
 
 	//read materials:
 	//---------------------------------
@@ -337,7 +457,15 @@ bool DN_save_volume(const char* filePath, DNvolume* vol)
 	//write chunk cap and chunks:
 	//---------------------------------
 	fwrite(&vol->chunkCap, sizeof(unsigned int), 1, fptr);
-	fwrite(vol->chunks, sizeof(DNchunk), vol->chunkCap, fptr);
+
+	char* compressedBuffer = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
+	for(int i = 0; i < vol->chunkCap; i++)
+	{
+		uint16_t compressedSize = _DN_compress_chunk(vol->chunks[i], compressedBuffer);
+		fwrite(&compressedSize, sizeof(uint16_t), 1, fptr);
+		fwrite(compressedBuffer, compressedSize, 1, fptr);
+	}
+	DN_FREE(compressedBuffer);
 
 	//write materials:
 	//---------------------------------
@@ -380,14 +508,13 @@ unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos)
 
 	do
 	{
-		if(!vol->chunks[i].used) //if an empty chunk is found, use that one:
+		if(!DN_in_map_bounds(vol, vol->chunks[i].pos)) //if an empty chunk is found, use that one:
 		{
 			int mapIndex = DN_FLATTEN_INDEX(pos, vol->mapSize);
 			vol->map[mapIndex].chunkIndex = i;
 			vol->map[mapIndex].flag = 1;
 
 			vol->chunks[i].pos = (DNivec3){pos.x, pos.y, pos.z};
-			vol->chunks[i].used = true;
 			vol->nextChunk = (i == vol->chunkCap - 1) ? (0) : (i + 1);
 
 			return i;
@@ -415,7 +542,6 @@ unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos)
 
 	//set chunk:
 	vol->chunks[i].pos = (DNivec3){pos.x, pos.y, pos.z};
-	vol->chunks[i].used = true;
 	vol->nextChunk = (i == vol->chunkCap - 1) ? (0) : (i + 1);
 
 	return i;
@@ -435,7 +561,7 @@ void DN_remove_chunk(DNvolume* vol, DNivec3 pos)
 //returns whether a voxel's face is visible
 static bool _DN_check_face_visible(DNvolume* vol, DNchunk chunk, DNivec3 pos)
 {
-	return !DN_in_chunk_bounds(pos) || (chunk.voxels[pos.x][pos.y][pos.z].normal & 0xFF) == 255 || vol->materials[chunk.voxels[pos.x][pos.y][pos.z].normal & 0xFF].opacity < 1.0f;
+	return !DN_in_chunk_bounds(pos) || (chunk.voxels[pos.x][pos.y][pos.z].normal >> 24) == 255 || vol->materials[chunk.voxels[pos.x][pos.y][pos.z].normal >> 24].opacity < 1.0f;
 }
 
 //converts a DNchunk to a DNchunkGPU
@@ -463,7 +589,7 @@ static DNchunkGPU _DN_chunk_to_gpu(DNvolume* vol, DNchunk chunk, int* numVoxels,
 			res.partialCounts[(index >> 7) - 1] = n;
 
 		//exit if voxel is empty or if not visible:
-		if((chunk.voxels[x][y][z].normal & 0xFF) == 255)
+		if((chunk.voxels[x][y][z].normal >> 24) == 255)
 			continue;
 
 		bool visible = false;
@@ -1027,14 +1153,8 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size)
 
 	//remove chunks that are no longer indexed:
 	for(int i = 0; i < vol->chunkCap; i++)
-	{
-		if(!vol->chunks[i].used)
-			continue;
-
-		DNivec3 pos = vol->chunks[i].pos;
-		if(!DN_in_map_bounds(vol, pos))
+		if(!DN_in_map_bounds(vol, vol->chunks[i].pos))
 			_DN_clear_chunk(vol, i);
-	}
 
 	//allocate new gpu buffer:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
@@ -1215,7 +1335,7 @@ void DN_set_compressed_voxel(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos, DN
 	unsigned int mapIndex = DN_FLATTEN_INDEX(mapPos, vol->mapSize);
 	if(vol->map[mapIndex].flag == 0)
 	{
-		if((voxel.normal & 0xFF) == 255) //if adding an empty voxel to an empty chunk, just return
+		if((voxel.normal >> 24) == 255) //if adding an empty voxel to an empty chunk, just return
 			return;
 
 		DN_add_chunk(vol, mapPos);
@@ -1224,8 +1344,8 @@ void DN_set_compressed_voxel(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos, DN
 	unsigned int chunkIndex = vol->map[mapIndex].chunkIndex;
 
 	//change number of voxels in map:
-	unsigned int oldMat = vol->chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].normal & 0xFF;
-	unsigned int newMat = voxel.normal & 0xFF;
+	unsigned int oldMat = vol->chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].normal >> 24;
+	unsigned int newMat = voxel.normal >> 24;
 
 	if(oldMat == 255 && newMat < 255) //if old voxel was empty and new one is not, increment the number of voxels
 		vol->chunks[chunkIndex].numVoxels++;
@@ -1274,7 +1394,7 @@ bool DN_does_chunk_exist(DNvolume* vol, DNivec3 pos)
 
 bool DN_does_voxel_exist(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos)
 {
-	unsigned int material = DN_get_compressed_voxel(vol, mapPos, chunkPos).normal & 0xFF;
+	unsigned int material = DN_get_compressed_voxel(vol, mapPos, chunkPos).normal >> 24;
 	return material < 255;
 }
 
@@ -1401,7 +1521,7 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
 	voxel.albedo = DN_vec3_clamp(voxel.albedo, 0.0f, 1.0f);
 
-	DNuvec4 normal = {(GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255), voxel.material};
+	DNuvec4 normal = {voxel.material, (GLuint)((voxel.normal.x * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.y * 0.5 + 0.5) * 255), (GLuint)((voxel.normal.z * 0.5 + 0.5) * 255)};
 	DNuvec4 albedo = {(GLuint)(voxel.albedo.x * 255), (GLuint)(voxel.albedo.y * 255), (GLuint)(voxel.albedo.z * 255), 0};
 
 	res.normal = _DN_encode_uint_RGBA(normal);
@@ -1417,9 +1537,9 @@ DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel)
 	DNuvec4 normal = _DN_decode_uint_RGBA(voxel.normal);
 	DNuvec4 albedo = _DN_decode_uint_RGBA(voxel.albedo);
 
-	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.x, normal.y, normal.z}, 0.00392156862);
+	DNvec3 scaledNormal = DN_vec3_scale((DNvec3){normal.y, normal.z, normal.w}, 0.00392156862);
 	res.normal = (DNvec3){(scaledNormal.x - 0.5) * 2.0, (scaledNormal.y - 0.5) * 2.0, (scaledNormal.z - 0.5) * 2.0};
-	res.material = normal.w;
+	res.material = normal.x;
 	res.albedo = DN_vec3_scale((DNvec3){albedo.x, albedo.y, albedo.z}, 0.00392156862);
 
 	return res;
@@ -1447,7 +1567,7 @@ static bool _DN_gen_shader_storage_buffer(unsigned int* dest, size_t size)
 
 static void _DN_clear_chunk(DNvolume* vol, unsigned int index)
 {
-	vol->chunks[index].used = false;
+	vol->chunks[index].pos = (DNivec3){-1, -1, -1};
 	vol->chunks[index].updated = false;
 	vol->chunks[index].numVoxels = 0;
 

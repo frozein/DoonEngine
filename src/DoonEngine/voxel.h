@@ -33,16 +33,15 @@ typedef struct DNvoxel
 //a compressed voxel, this is how voxels are actually stored in memory
 typedef struct DNcompressedVoxel
 {
-	GLuint normal; //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
-	GLuint albedo; //layout: albedo.r (8 bits) | albedo.g (8 bits) | albedo.b (8 bits) | unused (8 bits)
+	unsigned int normal; //layout: material index (8 bits) | normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits)
+	unsigned int albedo; //layout: albedo.r       (8 bits) | albedo.g (8 bits) | albedo.b (8 bits) | unused   (8 bits)
 } DNcompressedVoxel;
 
 //a chunk of voxels, voxels are stored this way to save memory and accelerate ray casting
 typedef struct DNchunk
 {
 	DNivec3 pos;         //the chunk's position within the entire map
-	GLuint used;         //whether the chunk is currently in use (chunks can be empty)
-	GLuint updated;      //whether the chunk has updates not yet pushed to the GPU
+	bool updated;        //whether the chunk has updates not yet pushed to the GPU
 	GLuint numVoxels;    //the number of filled voxels this chunk contains, used to identify empty chunks for removal
 	GLuint numVoxelsGpu; //the number of voxels this chunk stores on the GPU
 

@@ -241,8 +241,8 @@ Voxel decompress_voxel(CompressedVoxel compressed)
 	uvec3 diffuseLower = uvec3(specLightRead.w, diffuseLightRead.y, diffuseLightRead.w);
 	vec3 diffuseLight  = vec3(diffuseUpper | diffuseLower);
 
-	res.normal       = (vec3(normalRead.xyz) * 0.00392156862 - 0.5) * 2.0;
-	res.material     = normalRead.w;
+	res.normal       = (vec3(normalRead.yzw) * 0.00392156862 - 0.5) * 2.0;
+	res.material     = normalRead.x;
 	res.albedo       = vec3(albedoRead.xyz) * 0.00392156862;
 	res.diffuseLight = vec3(diffuseLight * 0.0000152590219);
 	res.specLight    = vec3(albedoRead.w, specLightRead.xy) * 0.00392156862;
@@ -342,7 +342,7 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 			voxel = decompress_voxel(compressed);
 
 			Material material = materials[voxel.material];
-			uint thisVoxID = (compressed.albedo & 0xFFFFFF00) | (compressed.normal & 0xFF);
+			uint thisVoxID = (compressed.albedo & 0xFFFFFF00) | (compressed.normal >> 24);
 			if(material.opacity < 1.0)
 			{
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
