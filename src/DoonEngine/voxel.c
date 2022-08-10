@@ -259,119 +259,268 @@ void DN_delete_volume(DNvolume* vol)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //FILE I/O:
 
+//byte vec3
+typedef struct DNbvec3
+{
+	uint8_t x, y, z;
+} DNbvec3;
+
+//helper func for compression:
+static void _write_buffer(char** dest, void* src, size_t size)
+{
+	memcpy(*dest, src, size);
+	*dest += size;
+}
+
+//helper func for compression:
+static void _read_buffer(void* dest, char** src, size_t size)
+{
+	memcpy(dest, *src, size);
+	*src += size;
+}
+
 //compresses a chunk to be stored on disk, returns the size, in bytes, of the compressed chunk
 uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 {
-	//COMPRESSION TODO:
-	//palette for color
-	//palette for normals
+	char* orgMem = mem; //used to determine total size of compressed chunk
+	_write_buffer(&mem, &chunk.pos, sizeof(DNivec3));
 
-	size_t writePos = 0;
-
-	memcpy(&mem[writePos], &chunk.pos, sizeof(DNivec3));
-	writePos += sizeof(DNivec3);
-
+	//if chunk is unused, dont write any more data:
 	if(!DN_in_map_bounds(vol, chunk.pos))
-		return writePos;
+		return sizeof(DNivec3);
 
+	//determine if palette is needed + generate palette:
+	uint8_t numNormal = 0;
+	uint8_t numAlbedo = 0;
+	DNbvec3 normalPalette[256]; //TODO: maybe implement a hashmap so that this is faster
+	DNbvec3 albedoPalette[256];
+
+	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
+	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
+	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+	{
+		if((chunk.voxels[x][y][z].normal >> 24) == 255)
+			continue;
+
+		//get the albedo and normal for current voxel:
+		uint32_t readNormal = chunk.voxels[x][y][z].normal;
+		uint32_t readAlbedo = chunk.voxels[x][y][z].albedo;
+		DNbvec3 normal = {(readNormal >> 16) & 0xFF, (readNormal >> 8 ) & 0xFF, readNormal & 0xFF};
+		DNbvec3 albedo = {(readAlbedo >> 24) & 0xFF, (readAlbedo >> 16) & 0xFF, (readAlbedo >> 8) & 0xFF};
+
+		//search for normal in palette, if palette is under size limit:
+		if(numNormal < chunk.numVoxels / 2)
+		{
+			bool found = false;
+			for(int i = 0; i < numNormal; i++)
+				if(normalPalette[i].x == normal.x && normalPalette[i].y == normal.y && normalPalette[i].z == normal.z)
+				{
+					found = true;
+					break;
+				}
+
+			if(!found)
+			{
+				normalPalette[numNormal] = normal;
+				numNormal++;
+			}
+		}
+
+		//search for albedo in palette, if palette is under size limit:
+		if(numAlbedo < chunk.numVoxels / 2)
+		{
+			bool found = false;
+			for(int i = 0; i < numAlbedo; i++)
+				if(albedoPalette[i].x == albedo.x && albedoPalette[i].y == albedo.y && albedoPalette[i].z == albedo.z)
+				{
+					found = true;
+					break;
+				}
+
+			if(!found)
+			{
+				albedoPalette[numAlbedo] = albedo;
+				numAlbedo++;
+			}
+		}
+	}
+
+	//write normal palette data, or set palette size to 0 if it is too big:
+	if(numNormal < chunk.numVoxels / 2)
+	{
+		_write_buffer(&mem, &numNormal, sizeof(uint8_t));
+		_write_buffer(&mem, normalPalette, sizeof(DNbvec3) * numNormal);
+	}
+	else
+	{
+		numNormal = 0;
+		_write_buffer(&mem, &numNormal, sizeof(uint8_t));
+	}
+
+	//write albedo palette data, or set palette size to 0 if it is too big:
+	if(numAlbedo < chunk.numVoxels / 2)
+	{
+		_write_buffer(&mem, &numAlbedo, sizeof(uint8_t));
+		_write_buffer(&mem, albedoPalette, sizeof(DNbvec3) * numAlbedo);
+	}
+	else
+	{
+		numAlbedo = 0;
+		_write_buffer(&mem, &numAlbedo, sizeof(uint8_t));
+	}
+
+	//loop over each voxel and look to compress it:
 	for(int i = 0; i < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; i++)
 	{
 		DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
 		uint8_t material = chunk.voxels[pos.x][pos.y][pos.z].normal >> 24;
-		
-		memcpy(&mem[writePos], &material, sizeof(uint8_t));
-		writePos += sizeof(uint8_t);
+		_write_buffer(&mem, &material, sizeof(uint8_t));
 
-		size_t numPos = writePos;
-		writePos += sizeof(uint8_t);
+		char* numMem = mem; //where to write the number of voxels in the run length (determined later on)
+		mem += sizeof(uint8_t);
 
+		//loop over and determine run length:
 		uint8_t num = 0;
 		int j;
 		for(j = i; j < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; j++)
 		{
 			DNivec3 pos2 = {j % DN_CHUNK_SIZE.x, (j / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, j / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
 
+			//if the voxels share a material, write the next one:
 			if(num < UINT8_MAX && (chunk.voxels[pos2.x][pos2.y][pos2.z].normal >> 24) == material)
 			{
 				num++;
 				if(material == 255)
 					continue;
 
-				uint32_t normal = chunk.voxels[pos2.x][pos2.y][pos2.z].normal;
-				uint8_t normals[3] = {(normal >> 16) & 0xFF, (normal >> 8) & 0xFF, normal & 0xFF};
-				memcpy(&mem[writePos], normals, sizeof(uint8_t) * 3);
-				writePos += sizeof(uint8_t) * 3;
+				//write the normal, or its palette index if a palette is used:
+				uint32_t readNormal = chunk.voxels[pos2.x][pos2.y][pos2.z].normal;
+				DNbvec3 normal = {(readNormal >> 16) & 0xFF, (readNormal >> 8) & 0xFF, readNormal & 0xFF};
+				if(numNormal > 0)
+				{
+					//search for palette index:
+					uint8_t k;
+					for(k = 0; k < numNormal; k++)
+						if(normalPalette[k].x == normal.x && normalPalette[k].y == normal.y && normalPalette[k].z == normal.z)
+							break;
+					
+					_write_buffer(&mem, &k, sizeof(uint8_t));
+				}
+				else
+					_write_buffer(&mem, &normal, sizeof(DNbvec3));
 
-				uint32_t albedo = chunk.voxels[pos2.x][pos2.y][pos2.z].albedo;
-				uint8_t albedos[3] = {(albedo >> 24) & 0xFF, (albedo >> 16) & 0xFF, (albedo >> 8) & 0xFF};
-				memcpy(&mem[writePos], albedos, sizeof(uint8_t) * 3);
-				writePos += sizeof(uint8_t) * 3;
+				//write the albedo, or its palette index if a palette is used:
+				uint32_t readAlbedo = chunk.voxels[pos2.x][pos2.y][pos2.z].albedo;
+				DNbvec3 albedo = {(readAlbedo >> 24) & 0xFF, (readAlbedo >> 16) & 0xFF, (readAlbedo >> 8) & 0xFF};
+				if(numAlbedo > 0)
+				{
+					//search for palette index:
+					uint8_t k;
+					for(k = 0; k < numAlbedo; k++)
+						if(albedoPalette[k].x == albedo.x && albedoPalette[k].y == albedo.y && albedoPalette[k].z == albedo.z)
+							break;
+
+					_write_buffer(&mem, &k, sizeof(uint8_t));
+				}
+				else
+					_write_buffer(&mem, &albedo, sizeof(DNbvec3));
 			}
 			else
 				break;
 		}
 
-		memcpy(&mem[numPos], &num, sizeof(uint8_t));
+		//write number of voxels in current run:
+		memcpy(numMem, &num, sizeof(uint8_t));
 		i = j - 1;
 	}
 
-	return (uint16_t)writePos;
+	//return total size of compressed chunk:
+	return (uint16_t)(mem - orgMem);
 }
 
+//decompresses a chunk stored on disk
 void _DN_decompress_chunk(char* mem, DNvolume* vol, DNchunk* chunk)
 {
-	size_t readPos = 0;
-
-	memcpy(&chunk->pos, &mem[readPos], sizeof(DNivec3));
-	readPos += sizeof(DNivec3);
+	_read_buffer(&chunk->pos, &mem, sizeof(DNivec3));
 	
 	chunk->updated = false;
 	chunk->numVoxels = 0;
 	chunk->numVoxelsGpu = 0;
 
+	//if chunk is unused, don't read any more data:
 	if(!DN_in_map_bounds(vol, chunk->pos))
 		return;
 
+	//read palettes (if they are used):
+	uint8_t numNormal = 0;
+	uint8_t numAlbedo = 0;
+	DNbvec3 normalPalette[256];
+	DNbvec3 albedoPalette[256];
+
+	_read_buffer(&numNormal, &mem, sizeof(uint8_t));
+	if(numNormal > 0)
+		_read_buffer(normalPalette, &mem, sizeof(DNbvec3) * numNormal);
+
+	_read_buffer(&numAlbedo, &mem, sizeof(uint8_t));
+	if(numAlbedo > 0)
+		_read_buffer(albedoPalette, &mem, sizeof(DNbvec3) * numAlbedo);
+
+	//read individual voxels:
 	unsigned int numVoxelsRead = 0;
 	while(numVoxelsRead < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z)
 	{
 		uint8_t material;
-		memcpy(&material, &mem[readPos], sizeof(uint8_t));
-		readPos += sizeof(uint8_t);
+		_read_buffer(&material, &mem, sizeof(uint8_t));
 
-		uint8_t num;
-		memcpy(&num, &mem[readPos], sizeof(uint8_t));
-		readPos += sizeof(uint8_t);
+		uint8_t num; //number of voxels in run
+		_read_buffer(&num, &mem, sizeof(uint8_t));
 
 		for(int i = numVoxelsRead; i < numVoxelsRead + num; i++)
 		{
 			DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
 
 			if(material == 255)
-			{
 				chunk->voxels[pos.x][pos.y][pos.z].normal = UINT32_MAX;
-			}
 			else
 			{
-				uint8_t normals[3];
-				memcpy(normals, &mem[readPos], sizeof(uint8_t) * 3);
-				readPos += sizeof(uint8_t) * 3;
-				chunk->voxels[pos.x][pos.y][pos.z].normal = (material << 24) | (normals[0] << 16) | (normals[1] << 8) | normals[2];
+				//read normal, or its palette index if one is used:
+				DNbvec3 normal;
+				if(numNormal > 0)
+				{
+					uint8_t index;
+					_read_buffer(&index, &mem, sizeof(uint8_t));
+					normal = normalPalette[index];
+				}
+				else
+				{
+					_read_buffer(&normal, &mem, sizeof(DNbvec3));
+				}
 
-				uint8_t albedos[3];
-				memcpy(albedos, &mem[readPos], sizeof(uint8_t) * 3);
-				readPos += sizeof(uint8_t) * 3;
-				chunk->voxels[pos.x][pos.y][pos.z].albedo = (albedos[0] << 24) | (albedos[1] << 16) | (albedos[2] << 8);
+				//read albedo, or its palette index if one is used:
+				DNbvec3 albedo;
+				if(numAlbedo > 0)
+				{
+					uint8_t index;
+					_read_buffer(&index, &mem, sizeof(uint8_t));
+					albedo = albedoPalette[index];
+				}
+				else
+				{
+					_read_buffer(&albedo, &mem, sizeof(DNbvec3));
+				}
 
+				//set voxel:
+				chunk->voxels[pos.x][pos.y][pos.z].normal = (material << 24) | (normal.x << 16) | (normal.y << 8) | normal.z;
+				chunk->voxels[pos.x][pos.y][pos.z].albedo = (albedo.x << 24) | (albedo.y << 16) | (albedo.z << 8);
 				chunk->numVoxels++;
 			}
 		}
 
+		//increase total voxels read by the number in the run
 		numVoxelsRead += num;
 	}
 }
 
-//decompresses a chunk stored on disk
 DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 {
 	//open file:
