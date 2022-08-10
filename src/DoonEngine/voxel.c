@@ -292,8 +292,8 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 		return sizeof(DNivec3);
 
 	//determine if palette is needed + generate palette:
-	uint8_t numNormal = 0;
-	uint8_t numAlbedo = 0;
+	unsigned int numNormal = 0;
+	unsigned int numAlbedo = 0;
 	DNbvec3 normalPalette[DN_CHUNK_LENGTH / 2]; //TODO: maybe implement a hashmap so that this is faster
 	DNbvec3 albedoPalette[DN_CHUNK_LENGTH / 2];
 
@@ -350,25 +350,29 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 	//write normal palette data, or set palette size to 0 if it is too big:
 	if(numNormal < chunk.numVoxels / 2)
 	{
-		_write_buffer(&mem, &numNormal, sizeof(uint8_t));
+		uint8_t writeNumNormal = (uint8_t)numNormal;
+		_write_buffer(&mem, &writeNumNormal, sizeof(uint8_t));
 		_write_buffer(&mem, normalPalette, sizeof(DNbvec3) * numNormal);
 	}
 	else
 	{
 		numNormal = 0;
-		_write_buffer(&mem, &numNormal, sizeof(uint8_t));
+		uint8_t writeNumNormal = (uint8_t)numNormal;
+		_write_buffer(&mem, &writeNumNormal, sizeof(uint8_t));
 	}
 
 	//write albedo palette data, or set palette size to 0 if it is too big:
 	if(numAlbedo < chunk.numVoxels / 2)
 	{
-		_write_buffer(&mem, &numAlbedo, sizeof(uint8_t));
+		uint8_t writeNumAlbedo = (uint8_t)numAlbedo;
+		_write_buffer(&mem, &writeNumAlbedo, sizeof(uint8_t));
 		_write_buffer(&mem, albedoPalette, sizeof(DNbvec3) * numAlbedo);
 	}
 	else
 	{
 		numAlbedo = 0;
-		_write_buffer(&mem, &numAlbedo, sizeof(uint8_t));
+		uint8_t writeNumAlbedo = (uint8_t)numAlbedo;
+		_write_buffer(&mem, &writeNumAlbedo, sizeof(uint8_t));
 	}
 
 	//loop over each voxel and look to compress it:
