@@ -14,14 +14,16 @@
 //GLOBAL STATE:
 
 GLuint lightingRequestBuffer = 0;
-GLuint materialBuffer = 0;
+GLuint materialBuffer        = 0;
 GLprogram lightingProgram = 0;
-GLprogram drawProgram = 0;
+GLprogram drawProgram     = 0;
 
 unsigned int maxLightingRequests = 1024;
 
 #define DRAW_WORKGROUP_SIZE 16
 #define LIGHTING_WORKGROUP_SIZE 32
+
+#define GET_MATERIAL_ID(x) ((x) >> 24)
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GPU STRUCTS:
@@ -29,7 +31,7 @@ unsigned int maxLightingRequests = 1024;
 //a single voxel, as stored on the GPU
 typedef struct DNvoxelGPU
 {
-	GLuint normal;       //layout: normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits) | material index (8 bits)
+	GLuint normal;       //layout: material index (8 bits) | normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits)
 	GLuint directLight;  //used to store how much direct light the voxel receives,   not updated CPU-side
 	GLuint specLight;    //used to store how much specular light the voxel receives, not updated CPU-side
 	GLuint diffuseLight; //used to store how much diffuse light the voxel receives,  not updated CPU-side
@@ -38,19 +40,19 @@ typedef struct DNvoxelGPU
 //a chunk of voxels, as stored on the GPU
 typedef struct DNchunkGPU
 {
-	DNivec3 pos;
+	DNivec3 pos;               //this chunk's position within the map
 	GLuint numLightingSamples; //the number of lighting samples this chunk has taken, not updated CPU-side
 
-	GLuint partialCounts[3];
-	GLuint bitMask[16];
+	GLuint partialCounts[3];   //how many voxels exist in this chunk before the 1/4, 1/2, and 3/4 positions, respectively. used to accelerate finding a voxel
+	GLuint bitMask[16];        //a bit mask where each bit represents whether a voxel is present or not
 
-	GLuint padding;
+	GLuint padding;            //for gpu alignment
 } DNchunkGPU;
 
 //a handle to a voxel chunk, as stored on the GPU
 typedef struct DNchunkHandleGPU
 {
-	GLuint flag;       //0 = does not exist, 1 = loaded on CPU but not GPU, 2 = loaded on CPU and GPU, 3 = loaded on CPU and requested on GPU
+	GLuint chunkIndex; //layout: chunk index (28 bits) | visible flag (2 bits) | loaded flag (2 bits)
 	GLuint lastUsed;   //the time, in frames, since the chunk was last used
 	GLuint voxelIndex; //the index to the voxel data for the chunk that this handle points to
 } DNchunkHandleGPU;
@@ -135,8 +137,8 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
 
-	vol->voxelCap = 512 * numChunks;
-	if(!_DN_gen_shader_storage_buffer(&vol->glVoxelBufferID, sizeof(DNvoxelGPU) * (vol->voxelCap + 512)))
+	vol->voxelCap = DN_CHUNK_LENGTH * numChunks;
+	if(!_DN_gen_shader_storage_buffer(&vol->glVoxelBufferID, sizeof(DNvoxelGPU) * (vol->voxelCap + DN_CHUNK_LENGTH)))
 	{
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate voxel buffer");
 		return NULL;
@@ -204,8 +206,8 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	for(int i = 0; i < numChunks; i++)
 	{
 		vol->gpuVoxelLayout[i].chunkPos.x = -1;
-		vol->gpuVoxelLayout[i].size = 512;
-		vol->gpuVoxelLayout[i].startPos = i * 512;
+		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[i].startPos = i * DN_CHUNK_LENGTH;
 	}
 
 	//set data parameters:
@@ -292,14 +294,14 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 	//determine if palette is needed + generate palette:
 	uint8_t numNormal = 0;
 	uint8_t numAlbedo = 0;
-	DNbvec3 normalPalette[256]; //TODO: maybe implement a hashmap so that this is faster
-	DNbvec3 albedoPalette[256];
+	DNbvec3 normalPalette[DN_CHUNK_LENGTH / 2]; //TODO: maybe implement a hashmap so that this is faster
+	DNbvec3 albedoPalette[DN_CHUNK_LENGTH / 2];
 
 	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
 	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
 	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
 	{
-		if((chunk.voxels[x][y][z].normal >> 24) == 255)
+		if(GET_MATERIAL_ID(chunk.voxels[x][y][z].normal) == DN_MATERIAL_EMPTY)
 			continue;
 
 		//get the albedo and normal for current voxel:
@@ -370,10 +372,10 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 	}
 
 	//loop over each voxel and look to compress it:
-	for(int i = 0; i < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; i++)
+	for(int i = 0; i < DN_CHUNK_LENGTH; i++)
 	{
 		DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
-		uint8_t material = chunk.voxels[pos.x][pos.y][pos.z].normal >> 24;
+		uint8_t material = GET_MATERIAL_ID(chunk.voxels[pos.x][pos.y][pos.z].normal);
 		_write_buffer(&mem, &material, sizeof(uint8_t));
 
 		char* numMem = mem; //where to write the number of voxels in the run length (determined later on)
@@ -382,15 +384,15 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 		//loop over and determine run length:
 		uint8_t num = 0;
 		int j;
-		for(j = i; j < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z; j++)
+		for(j = i; j < DN_CHUNK_LENGTH; j++)
 		{
 			DNivec3 pos2 = {j % DN_CHUNK_SIZE.x, (j / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, j / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
 
 			//if the voxels share a material, write the next one:
-			if(num < UINT8_MAX && (chunk.voxels[pos2.x][pos2.y][pos2.z].normal >> 24) == material)
+			if(num < UINT8_MAX && GET_MATERIAL_ID(chunk.voxels[pos2.x][pos2.y][pos2.z].normal) == material)
 			{
 				num++;
-				if(material == 255)
+				if(material == DN_MATERIAL_EMPTY)
 					continue;
 
 				//write the normal, or its palette index if a palette is used:
@@ -467,7 +469,7 @@ void _DN_decompress_chunk(char* mem, DNvolume* vol, DNchunk* chunk)
 
 	//read individual voxels:
 	unsigned int numVoxelsRead = 0;
-	while(numVoxelsRead < DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y * DN_CHUNK_SIZE.z)
+	while(numVoxelsRead < DN_CHUNK_LENGTH)
 	{
 		uint8_t material;
 		_read_buffer(&material, &mem, sizeof(uint8_t));
@@ -479,7 +481,7 @@ void _DN_decompress_chunk(char* mem, DNvolume* vol, DNchunk* chunk)
 		{
 			DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
 
-			if(material == 255)
+			if(material == DN_MATERIAL_EMPTY)
 				chunk->voxels[pos.x][pos.y][pos.z].normal = UINT32_MAX;
 			else
 			{
@@ -544,8 +546,8 @@ DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 
 	//read chunk cap and chunks:
 	//---------------------------------
-	unsigned int chunkCap;
-	fread(&chunkCap, sizeof(unsigned int), 1, fptr);
+	size_t chunkCap;
+	fread(&chunkCap, sizeof(size_t), 1, fptr);
 	DN_set_max_chunks(vol, chunkCap);
 
 	char* compressedMem = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
@@ -615,7 +617,7 @@ bool DN_save_volume(const char* filePath, DNvolume* vol)
 	
 	//write chunk cap and chunks:
 	//---------------------------------
-	fwrite(&vol->chunkCap, sizeof(unsigned int), 1, fptr);
+	fwrite(&vol->chunkCap, sizeof(size_t), 1, fptr);
 
 	char* compressedBuffer = DN_MALLOC(sizeof(DNchunk) * 2); //allocate extra space in case compressed is larger
 	for(int i = 0; i < vol->chunkCap; i++)
@@ -690,7 +692,7 @@ unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos)
 	size_t newCap = fmin(vol->chunkCap * 2, vol->mapSize.x * vol->mapSize.y * vol->mapSize.z);
 
 	char message[256];
-	sprintf(message, "automatically resizing chunk memory to accomodate %zi chunks (%zi bytes)", newCap, newCap * sizeof(DNchunk));
+	sprintf(message, "automatically resizing chunk memory to accomodate %zi chunks (%zi bytes)\n", newCap, newCap * sizeof(DNchunk));
 	m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_NOTE, message);
 
 	i = vol->chunkCap;
@@ -723,7 +725,7 @@ void DN_remove_chunk(DNvolume* vol, DNivec3 pos)
 //returns whether a voxel's face is visible
 static bool _DN_check_face_visible(DNvolume* vol, DNchunk chunk, DNivec3 pos)
 {
-	return !DN_in_chunk_bounds(pos) || (chunk.voxels[pos.x][pos.y][pos.z].normal >> 24) == 255 || vol->materials[chunk.voxels[pos.x][pos.y][pos.z].normal >> 24].opacity < 1.0f;
+	return !DN_in_chunk_bounds(pos) || GET_MATERIAL_ID(chunk.voxels[pos.x][pos.y][pos.z].normal) == DN_MATERIAL_EMPTY || vol->materials[GET_MATERIAL_ID(chunk.voxels[pos.x][pos.y][pos.z].normal)].opacity < 1.0f;
 }
 
 //converts a DNchunk to a DNchunkGPU
@@ -751,7 +753,7 @@ static DNchunkGPU _DN_chunk_to_gpu(DNvolume* vol, DNchunk chunk, int* numVoxels,
 			res.partialCounts[(index >> 7) - 1] = n;
 
 		//exit if voxel is empty or if not visible:
-		if((chunk.voxels[x][y][z].normal >> 24) == 255)
+		if(GET_MATERIAL_ID(chunk.voxels[x][y][z].normal) == DN_MATERIAL_EMPTY)
 			continue;
 
 		bool visible = false;
@@ -843,10 +845,10 @@ static void _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGP
 	if(maxTimeMapIndex >= 0) //if the old chunk was previously loaded, unload it
 	{
 		_DN_unload_chunk(vol, maxTimeMapIndex, maxTimeIndex);
-		mapGPU[maxTimeMapIndex].flag = 1;
+		mapGPU[maxTimeMapIndex].chunkIndex = 1;
 	}
 
-	mapGPU[mapIndex].flag = (maxTimeIndex << 4) | 2; //set the new tile's flag to loaded
+	mapGPU[mapIndex].chunkIndex = (maxTimeIndex << 4) | 2; //set the new tile's flag to loaded
 	mapGPU[mapIndex].lastUsed = 0;
 	vol->gpuChunkLayout[maxTimeIndex] = pos;
 
@@ -900,13 +902,13 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 	//if there isn't enough space, double the size of the voxel buffer:
 	if((maxTimeIndex < 0 || maxTime <= 1) && emptySpace < nodeSize)
 	{
-		size_t newCap = fmin(vol->voxelCap * 2, vol->chunkCap * 512);
+		size_t newCap = fmin(vol->voxelCap * 2, vol->chunkCap * DN_CHUNK_LENGTH);
 
 		char message[256];
 		sprintf(message, "automatically resizing voxel buffer to accomodate %zi GPU voxels (%zi bytes)", newCap, newCap * sizeof(DNvoxelGPU));
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
 
-		maxTimeNodeSize = 512;
+		maxTimeNodeSize = DN_CHUNK_LENGTH;
 		maxTimeIndex = vol->numVoxelNodes;
 
 		if(!DN_set_max_voxels_gpu(vol, newCap))
@@ -916,8 +918,8 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 	//if no suitable node was found, make sure to unload corresponding chunk:
 	if(maxTimeIndex < 0 || maxTime <= 1)
 	{
-		vol->gpuChunkLayout[mapGPU[mapIndex].flag >> 4].x = -1;
-		mapGPU[mapIndex].flag = 1;
+		vol->gpuChunkLayout[mapGPU[mapIndex].chunkIndex >> 4].x = -1;
+		mapGPU[mapIndex].chunkIndex = 1;
 
 		return;
 	}
@@ -925,8 +927,8 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 	//unload old one if overwritten:
 	if(DN_in_map_bounds(vol, vol->gpuVoxelLayout[maxTimeIndex].chunkPos))
 	{
-		vol->gpuChunkLayout[mapGPU[maxTimeMapIndex].flag >> 4].x = -1;
-		mapGPU[maxTimeMapIndex].flag = 1;
+		vol->gpuChunkLayout[mapGPU[maxTimeMapIndex].chunkIndex >> 4].x = -1;
+		mapGPU[maxTimeMapIndex].chunkIndex = 1;
 	}
 
 	//split a node if needed
@@ -990,9 +992,9 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 
 		//get info for current chunk handle:
 		DNchunkHandleGPU gpuHandle = gpuMap[mapIndex];
-		unsigned int gpuFlag = gpuHandle.flag & 3;
-		unsigned int gpuChunkIndex = gpuHandle.flag >> 4;
-		bool gpuVisible = (gpuHandle.flag & 4) > 0;
+		unsigned int gpuFlag = gpuHandle.chunkIndex & 3;
+		unsigned int gpuChunkIndex = gpuHandle.chunkIndex >> 4;
+		bool gpuVisible = (gpuHandle.chunkIndex & 4) > 0;
 
 		if(op != DN_WRITE)
 		{
@@ -1000,7 +1002,7 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 			if(gpuFlag == 2 && gpuVisible && (gpuChunkIndex % lightingSplit == vol->frameNum || vol->chunks[cpuMap[mapIndex].chunkIndex].updated))
 			{
 				//resize the lighting request buffer if not large enough:
-				if(vol->numLightingRequests + (512 / LIGHTING_WORKGROUP_SIZE) >= vol->lightingRequestCap)
+				if(vol->numLightingRequests + (DN_CHUNK_LENGTH / LIGHTING_WORKGROUP_SIZE) >= vol->lightingRequestCap)
 				{
 					size_t newCap = vol->lightingRequestCap * 2;
 
@@ -1026,7 +1028,7 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 			//if a chunk was added to the cpu map, add it to the gpu map:
 			if(cpuMap[mapIndex].flag != 0 && gpuFlag == 0)
 			{
-				gpuMap[mapIndex].flag = 1;
+				gpuMap[mapIndex].chunkIndex = 1;
 				gpuFlag = 1;
 				vol->chunks[cpuMap[mapIndex].chunkIndex].updated = false;
 			}
@@ -1035,7 +1037,7 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 				if(gpuFlag == 2)
 					_DN_unload_chunk(vol, mapIndex, gpuChunkIndex);
 
-				gpuMap[mapIndex].flag = 0;
+				gpuMap[mapIndex].chunkIndex = 0;
 				gpuFlag = 0;
 			}
 
@@ -1044,7 +1046,7 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 			{
 				_DN_unload_chunk(vol, mapIndex, gpuChunkIndex);
 
-				gpuMap[mapIndex].flag = 3;
+				gpuMap[mapIndex].chunkIndex = 3;
 				gpuFlag = 3;
 				vol->chunks[cpuMap[mapIndex].chunkIndex].updated = false;
 			}
@@ -1053,12 +1055,12 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 			if(gpuFlag == 3 && cpuMap[mapIndex].flag != 0)
 			{
 				unsigned int numVoxels;
-				DNvoxelGPU gpuVoxels[512];
+				DNvoxelGPU gpuVoxels[DN_CHUNK_LENGTH];
 				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(vol, vol->chunks[cpuMap[mapIndex].chunkIndex], &numVoxels, gpuVoxels);
 				vol->chunks[cpuMap[mapIndex].chunkIndex].numVoxelsGpu = numVoxels;
 
 				_DN_stream_chunk(vol, pos, gpuMap, mapIndex, gpuChunk);
-				if((gpuMap[mapIndex].flag & 3) == 2) //only stream voxels if the chunk streaming succeeded
+				if((gpuMap[mapIndex].chunkIndex & 3) == 2) //only stream voxels if the chunk streaming succeeded
 					_DN_stream_voxels(vol, pos, gpuMap, mapIndex, numVoxels, gpuVoxels);
 			}
 		}
@@ -1104,7 +1106,7 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 		}
 
 		//merge adjavent empty nodes together:
-		if(!DN_in_map_bounds(vol, next.chunkPos) && cur.size == next.size && cur.size < 512)
+		if(!DN_in_map_bounds(vol, next.chunkPos) && cur.size == next.size && cur.size < DN_CHUNK_LENGTH)
 		{
 			numCopies++;
 
@@ -1426,7 +1428,7 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * vol->voxelCap, oldVoxelData);
 
 	//resize buffer:
-	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + 512) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + DN_CHUNK_LENGTH) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
@@ -1448,12 +1450,12 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	vol->gpuVoxelLayout = newGpuVoxelLayout;
 
 	//clear new chunk layout memory:
-	size_t newNumNodes = vol->numVoxelNodes + (num - vol->voxelCap) / 512;
+	size_t newNumNodes = vol->numVoxelNodes + (num - vol->voxelCap) / DN_CHUNK_LENGTH;
 	for(size_t i = vol->numVoxelNodes; i < newNumNodes; i++)
 	{
 		vol->gpuVoxelLayout[i].chunkPos.x = -1;
-		vol->gpuVoxelLayout[i].size = 512;
-		vol->gpuVoxelLayout[i].startPos = vol->voxelCap + (i - vol->numVoxelNodes) * 512;
+		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[i].startPos = vol->voxelCap + (i - vol->numVoxelNodes) * DN_CHUNK_LENGTH;
 	}
 
 	vol->numVoxelNodes = newNumNodes;
@@ -1510,7 +1512,7 @@ void DN_set_compressed_voxel(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos, DN
 	unsigned int mapIndex = DN_FLATTEN_INDEX(mapPos, vol->mapSize);
 	if(vol->map[mapIndex].flag == 0)
 	{
-		if((voxel.normal >> 24) == 255) //if adding an empty voxel to an empty chunk, just return
+		if(GET_MATERIAL_ID(voxel.normal) == DN_MATERIAL_EMPTY) //if adding an empty voxel to an empty chunk, just return
 			return;
 
 		DN_add_chunk(vol, mapPos);
@@ -1519,12 +1521,12 @@ void DN_set_compressed_voxel(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos, DN
 	unsigned int chunkIndex = vol->map[mapIndex].chunkIndex;
 
 	//change number of voxels in map:
-	unsigned int oldMat = vol->chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].normal >> 24;
-	unsigned int newMat = voxel.normal >> 24;
+	unsigned int oldMat = GET_MATERIAL_ID(vol->chunks[chunkIndex].voxels[chunkPos.x][chunkPos.y][chunkPos.z].normal);
+	unsigned int newMat = GET_MATERIAL_ID(voxel.normal);
 
-	if(oldMat == 255 && newMat < 255) //if old voxel was empty and new one is not, increment the number of voxels
+	if(oldMat == DN_MATERIAL_EMPTY && newMat != DN_MATERIAL_EMPTY) //if old voxel was empty and new one is not, increment the number of voxels
 		vol->chunks[chunkIndex].numVoxels++;
-	else if(oldMat < 255 && newMat == 255) //if old voxel was not empty and new one is, decrement the number of voxels
+	else if(oldMat != DN_MATERIAL_EMPTY && newMat == DN_MATERIAL_EMPTY) //if old voxel was not empty and new one is, decrement the number of voxels
 	{
 		vol->chunks[chunkIndex].numVoxels--;
 
@@ -1569,8 +1571,8 @@ bool DN_does_chunk_exist(DNvolume* vol, DNivec3 pos)
 
 bool DN_does_voxel_exist(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos)
 {
-	unsigned int material = DN_get_compressed_voxel(vol, mapPos, chunkPos).normal >> 24;
-	return material < 255;
+	unsigned int material = GET_MATERIAL_ID(DN_get_compressed_voxel(vol, mapPos, chunkPos).normal);
+	return material != DN_MATERIAL_EMPTY;
 }
 
 #define sign(n) ((n) > 0) ? 1 : (((n) < 0) ? -1 : 0)

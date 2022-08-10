@@ -137,7 +137,7 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 	DNivec3 iMax = {ceilf (max.x), ceilf (max.y), ceilf (max.z)};
 
 	//go 1 more pixel in each direction if removing so that normals can be set:
-	if (voxel.material == 255)
+	if (voxel.material == DN_MATERIAL_EMPTY)
 	{
 		iMin = (DNivec3){iMin.x - 1, iMin.y - 1, iMin.z - 1};
 		iMax = (DNivec3){iMax.x + 1, iMax.y + 1, iMax.z + 1};
@@ -172,14 +172,14 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 
 					if (dist < 0.0)
 					{
-						if (mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == 255))
+						if (mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == DN_MATERIAL_EMPTY))
 						{
-							if (voxel.material != 255)
+							if (voxel.material != DN_MATERIAL_EMPTY)
 								voxel.normal = _DN_calc_normal((DNvec4) { x, y, z, 1.0f }, invTransform, dist, sdf);
 							DN_set_voxel(vol, mapPos, chunkPos, voxel);
 						}
 					}
-					else if (voxel.material == 255)
+					else if (voxel.material == DN_MATERIAL_EMPTY)
 					{
 						if (mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
 						{
@@ -438,7 +438,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 		DNivec3 center = {xC, yC, zC};
 		int iC = DN_FLATTEN_INDEX(center, model->size);
 		DNvoxel voxC = DN_decompress_voxel(model->voxels[iC]);
-		if(voxC.material == 255)
+		if(voxC.material == DN_MATERIAL_EMPTY)
 			continue;
 
 		//loop over its neighbors:
@@ -458,7 +458,7 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			if(iP == iC)
 				continue;
 
-			if(DN_decompress_voxel(model->voxels[iP]).material < 255)
+			if(DN_decompress_voxel(model->voxels[iP]).material != DN_MATERIAL_EMPTY)
 			{
 				//add vector to sum:
 				DNvec3 toCenter = {xP - xC, yP - yC, zP - zC};
@@ -495,7 +495,7 @@ void DN_place_model_into_volume(DNvolume* vol, DNvoxelModel model, DNivec3 pos)
 	{
 		DNivec3 curPos = {x, y, z};
 		int iModel = DN_FLATTEN_INDEX(curPos, model.size);
-		if(DN_decompress_voxel(model.voxels[iModel]).material < 255)
+		if(DN_decompress_voxel(model.voxels[iModel]).material != DN_MATERIAL_EMPTY)
 		{
 			DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
 			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE.x, worldPos.y / DN_CHUNK_SIZE.y, worldPos.z / DN_CHUNK_SIZE.z};

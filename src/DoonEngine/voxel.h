@@ -10,9 +10,13 @@
 
 //the size of each chunk (in voxels):
 #define DN_CHUNK_SIZE ((DNuvec3){8, 8, 8})
+//the total number of voxels in a chunk
+#define DN_CHUNK_LENGTH 512
 
 //the maximum number of materials (NOTE: a material of 255 represents an empty voxel):
 #define DN_MAX_MATERIALS 256
+//the material that represents an empty voxel
+#define DN_MATERIAL_EMPTY 255
 
 //the value used for gamma correction, raise albedo values to this value to convert them to linear color space
 #define DN_GAMMA 2.2f
@@ -25,16 +29,16 @@
 //a single voxel
 typedef struct DNvoxel
 {
-	DNvec3 normal;    //the normal (direction the voxel points towards)
 	uint8_t material; //the index into the materials array, in the range [0, 255] (NOTE: a material of 255 represents an empty voxel)
+	DNvec3 normal;    //the normal (direction the voxel points towards)
 	DNvec3 albedo;    //the "base color" (the percentage of light that gets reflected)
 } DNvoxel;
 
 //a compressed voxel, this is how voxels are actually stored in memory
 typedef struct DNcompressedVoxel
 {
-	unsigned int normal; //layout: material index (8 bits) | normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits)
-	unsigned int albedo; //layout: albedo.r       (8 bits) | albedo.g (8 bits) | albedo.b (8 bits) | unused   (8 bits)
+	uint32_t normal; //layout: material index (8 bits) | normal.x (8 bits) | normal.y (8 bits) | normal.z (8 bits)
+	uint32_t albedo; //layout: albedo.r       (8 bits) | albedo.g (8 bits) | albedo.b (8 bits) | unused   (8 bits)
 } DNcompressedVoxel;
 
 //a chunk of voxels, voxels are stored this way to save memory and accelerate ray casting
@@ -42,8 +46,8 @@ typedef struct DNchunk
 {
 	DNivec3 pos;         //the chunk's position within the entire map
 	bool updated;        //whether the chunk has updates not yet pushed to the GPU
-	GLuint numVoxels;    //the number of filled voxels this chunk contains, used to identify empty chunks for removal
-	GLuint numVoxelsGpu; //the number of voxels this chunk stores on the GPU
+	uint32_t numVoxels;    //the number of filled voxels this chunk contains, used to identify empty chunks for removal
+	uint32_t numVoxelsGpu; //the number of voxels this chunk stores on the GPU
 
 	DNcompressedVoxel voxels[8][8][8]; //the grid of voxels in this chunk, of size DN_CHUNK_SIZE
 } DNchunk;
@@ -51,14 +55,14 @@ typedef struct DNchunk
 //a handle to a chunk, along with some meta-data
 typedef struct DNchunkHandle
 {
-	unsigned char flag;      //0 = does not exist, 1 = loaded on CPU, in the future, may be used for streaming from disk
-	unsigned int chunkIndex; //the index at which the chunk's data can be found, invalid if flag = 0
+	uint8_t flag;        //0 = does not exist, 1 = loaded on CPU, in the future, may be used for streaming from disk
+	uint32_t chunkIndex; //the index at which the chunk's data can be found, invalid if flag = 0
 } DNchunkHandle;
 
 //represents a group of voxels on the GPU
 typedef struct DNvoxelNode
 {
-	unsigned int size; //the node's size, in DNvoxels
+	uint32_t size;     //the node's size, in DNvoxels
 	size_t startPos;   //the node's start position, in DNvoxels
 	DNivec3 chunkPos;  //the position of the chunk that owns the node, if invalid, the node is unused
 } DNvoxelNode;
@@ -66,7 +70,7 @@ typedef struct DNvoxelNode
 //material properties for a voxel
 typedef struct DNmaterial
 {
-	DNvec2 padding;     //for gpu alignment
+	DNvec2 padding;       //for gpu alignment
 
 	GLuint emissive;      //whether or not the voxel emits light, represented as a uint for GPU memory alignment
 
