@@ -69,14 +69,14 @@ bool DN_init()
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&materialBuffer, sizeof(DNmaterial) * DN_MAX_MATERIALS))
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE VOXEL MATERIAL BUFFER\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate material buffer");
 		return false;
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 2, materialBuffer);
 
 	if(!_DN_gen_shader_storage_buffer(&lightingRequestBuffer, sizeof(GLuint) * maxLightingRequests))
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE VOXEL LIGHTING REQUEST BUFFER\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate lighting request buffer");
 		return false;
 	}
 	glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, lightingRequestBuffer);
@@ -88,7 +88,7 @@ bool DN_init()
 
 	if(lighting < 0 || draw < 0)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO COMPILE 1 OR MORE VOXEL SHADERS\n");
+		m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_FATAL, "failed to compile 1 or more voxel shaders");
 		return false;
 	}
 
@@ -119,7 +119,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	//---------------------------------
 	if(!_DN_gen_shader_storage_buffer(&vol->glMapBufferID, sizeof(DNchunkHandleGPU) * mapSize.x * mapSize.y * mapSize.x))
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR MAP\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate map buffer");
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
@@ -130,7 +130,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 
 	if(!_DN_gen_shader_storage_buffer(&vol->glChunkBufferID, sizeof(DNchunkGPU) * numChunks))
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR CHUNKS\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate chunk buffer");
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
@@ -138,7 +138,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	vol->voxelCap = 512 * numChunks;
 	if(!_DN_gen_shader_storage_buffer(&vol->glVoxelBufferID, sizeof(DNvoxelGPU) * (vol->voxelCap + 512)))
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO GENERATE GPU BUFFER FOR VOXELS\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate voxel buffer");
 		return NULL;
 	}
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
@@ -148,7 +148,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	vol->map = DN_MALLOC(sizeof(DNchunkHandle) * mapSize.x * mapSize.y * mapSize.z);
 	if(!vol->map)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR MAP\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for map");
 		return NULL;
 	}
 
@@ -159,7 +159,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	vol->chunks = DN_MALLOC(sizeof(DNchunk) * numChunks);
 	if(!vol->chunks)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR CHUNKS\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for chunks");
 		return NULL;
 	}
 
@@ -170,21 +170,21 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	vol->materials = DN_MALLOC(sizeof(DNmaterial) * DN_MAX_MATERIALS);
 	if(!vol->materials)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR MATERIALS\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for materials");
 		return NULL;
 	}
 
 	vol->lightingRequests = DN_MALLOC(sizeof(GLuint) * numChunks);
 	if(!vol->lightingRequests)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR LIGHTING REQUESTS\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for lighting requests");
 		return NULL;
 	}
 
 	vol->gpuChunkLayout = DN_MALLOC(sizeof(DNivec3) * numChunks);
 	if(!vol->gpuChunkLayout)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR GPU CHUNK LAYOUT\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for GPU chunk layout");
 		return NULL;
 	}
 
@@ -196,7 +196,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	vol->gpuVoxelLayout = DN_MALLOC(sizeof(DNvoxelNode) * (vol->voxelCap / 16));
 	if(!vol->gpuVoxelLayout)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE CPU MEMORY FOR GPU VOXEL LAYOUT\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_FATAL, "failed to allocate memory for GPU voxel layout");
 		return NULL;
 	}
 
@@ -379,7 +379,9 @@ DNvolume* DN_load_volume(const char* filePath, unsigned int minChunks)
 	FILE* fptr = fopen(filePath, "rb");
 	if(!fptr)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO OPEN FILE \"%s\" FOR READING\n", filePath);
+		char message[256];
+		sprintf(message, "failed to open file \"%s\" for reading", filePath);
+		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return NULL;
 	}
 
@@ -452,7 +454,9 @@ bool DN_save_volume(const char* filePath, DNvolume* vol)
 	FILE* fptr = fopen(filePath, "wb");
 	if(!fptr)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO OPEN FILE \"%s\" FOR WRITING\n", filePath);
+		char message[256];
+		sprintf(message, "failed to open file \"%s\" for writing", filePath);
+		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return false;
 	}
 
@@ -535,7 +539,10 @@ unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos)
 
 	//if no empty chunk is found, increase capacity:
 	size_t newCap = fmin(vol->chunkCap * 2, vol->mapSize.x * vol->mapSize.y * vol->mapSize.z);
-	DN_ERROR_LOG("DN NOTE - RESIZING CHUNK MEMORY TO ALLOW FOR %zi CHUNKS\n", newCap);
+
+	char message[256];
+	sprintf(message, "automatically resizing chunk memory to accomodate %zi chunks (%zi bytes)", newCap, newCap * sizeof(DNchunk));
+	m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_NOTE, message);
 
 	i = vol->chunkCap;
 	if(!DN_set_max_chunks(vol, newCap))
@@ -671,7 +678,10 @@ static void _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGP
 	if(maxTime <= 1) //if the oldest chunk is currently in use, double the buffer size
 	{
 		size_t newCap = fmin(vol->chunkCap, vol->chunkCapGPU * 2);
-		DN_ERROR_LOG("DN NOTE - MAXIMUM GPU CHUNK LIMIT REACHED... RESIZING TO %zi CHUNKS\n", newCap);
+
+		char message[256];
+		sprintf(message, "automatically resizing chunk buffer to accomodate %zi GPU chunks (%zi bytes)", newCap, newCap * sizeof(DNchunkGPU));
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
 
 		//set max time variables:
 		maxTimeMapIndex = -1;
@@ -742,7 +752,10 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 	if((maxTimeIndex < 0 || maxTime <= 1) && emptySpace < nodeSize)
 	{
 		size_t newCap = fmin(vol->voxelCap * 2, vol->chunkCap * 512);
-		DN_ERROR_LOG("DN NOTE - MAXIMUM GPU VOXEL LIMIT REACHED... RESIZING TO %zi VOXELS\n", newCap);
+
+		char message[256];
+		sprintf(message, "automatically resizing voxel buffer to accomodate %zi GPU voxels (%zi bytes)", newCap, newCap * sizeof(DNvoxelGPU));
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
 
 		maxTimeNodeSize = 512;
 		maxTimeIndex = vol->numVoxelNodes;
@@ -841,7 +854,11 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 				if(vol->numLightingRequests + (512 / LIGHTING_WORKGROUP_SIZE) >= vol->lightingRequestCap)
 				{
 					size_t newCap = vol->lightingRequestCap * 2;
-					DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUEST MEMORY TO ALLOW FOR %zi REQUESTS\n", newCap);
+
+					char message[256];
+					sprintf(message, "automatically resizing lighting request memory to accomodate %zi requests (%zi bytes)", newCap, newCap * sizeof(GLuint));
+					m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_NOTE, message);
+
 					if(!DN_set_max_lighting_requests(vol, newCap))
 						break;
 				}
@@ -1077,18 +1094,21 @@ void DN_update_lighting(DNvolume* vol, unsigned int numDiffuseSamples, unsigned 
 	//resize lighting request buffer if needed:
 	if(vol->numLightingRequests > maxLightingRequests)
 	{
-		size_t newSize = maxLightingRequests;
-		while(newSize < vol->numLightingRequests )
-			newSize *= 2;
+		size_t newCap = maxLightingRequests;
+		while(newCap < vol->numLightingRequests )
+			newCap *= 2;
 
-		DN_ERROR_LOG("DN NOTE - RESIZING LIGHTING REQUESTS BUFFER TO ACCOMODATE %zi REQUESTS\n", newSize);
-		glBufferData(GL_SHADER_STORAGE_BUFFER, newSize * sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
+		char message[256];
+		sprintf(message, "automatically resizing lighting request buffer to accomodate %zi requests (%zi bytes)", newCap, newCap * sizeof(GLuint));
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
+
+		glBufferData(GL_SHADER_STORAGE_BUFFER, newCap * sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
 		if(glGetError() == GL_OUT_OF_MEMORY)
 		{
-			DN_ERROR_LOG("DN ERROR - FAILED TO RESIZE LIGHTING REQUESTS BUFFER\n");
+			m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to resize lighting request buffer");
 			return;
 		}
-		maxLightingRequests = newSize;
+		maxLightingRequests = newCap;
 	}
 
 	//send lighting requests:
@@ -1136,7 +1156,7 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size)
 	DNchunkHandle* newMap = DN_MALLOC(sizeof(DNchunkHandle) * size.x * size.y * size.z);
 	if(!newMap)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO REALLOCATE VOXEL MAP\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for map");
 		return false;
 	}
 
@@ -1167,7 +1187,7 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size)
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNchunkHandleGPU) * size.x * size.y * size.z, vol->map, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE MAP BUFFER\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate map buffer");
 		return false;
 	}
 
@@ -1180,7 +1200,7 @@ bool DN_set_max_chunks(DNvolume* vol, unsigned int num)
 	DNchunk* newChunks = DN_REALLOC(vol->chunks, sizeof(DNchunk) * num);
 	if(!newChunks)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE CHUNK MEMORY\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for chunks");
 		return false;
 	}
 	vol->chunks = newChunks;
@@ -1202,7 +1222,7 @@ bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num)
 	void* oldChunkData = DN_MALLOC(sizeof(DNchunkGPU) * vol->chunkCapGPU);
 	if(!oldChunkData)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY CHUNK STORAGE\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to allocate temporary chunk memory");
 		return false;
 	}
 
@@ -1213,7 +1233,7 @@ bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num)
 	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE GPU CHUNK BUFFER\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate chunk buffer");
 		DN_FREE(oldChunkData);
 		return false;
 	}
@@ -1225,7 +1245,7 @@ bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num)
 	DNivec3* newChunkLayout = DN_REALLOC(vol->gpuChunkLayout, sizeof(DNivec3) * num);
 	if(!newChunkLayout)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO ALLOCATE MEMORY FOR NEW CHUNK LAYOUT\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for GPU chunk layout");
 		DN_FREE(oldChunkData);
 		return false;
 	}
@@ -1249,7 +1269,7 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	void* oldVoxelData = DN_MALLOC(sizeof(DNvoxelGPU) * vol->voxelCap);
 	if(!oldVoxelData)
 	{
-		DN_ERROR_LOG("DN ERROR - FAILED TO ALLOCATE MEMORY FOR TEMPORARY VOXEL STORAGE\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate temporary chunk memory");
 		return false;
 	}
 
@@ -1260,7 +1280,7 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + 512) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE GPU VOXEL BUFFER\n");
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
 		DN_FREE(oldVoxelData);
 		return false;
 	}
@@ -1272,7 +1292,7 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	DNvoxelNode* newGpuVoxelLayout = DN_REALLOC(vol->gpuVoxelLayout, sizeof(DNvoxelNode) * (num / 16));
 	if(!newGpuVoxelLayout)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO ALLOCATE MEMORY FOR NEW TEST LAYOUT\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for GPU voxel layput");
 		DN_FREE(oldVoxelData);
 		return false;
 	}
@@ -1298,7 +1318,7 @@ bool DN_set_max_lighting_requests(DNvolume* vol, unsigned int num)
 	GLuint* newRequests = DN_REALLOC(vol->lightingRequests, sizeof(GLuint) * num);
 	if(!newRequests)
 	{
-		DN_ERROR_LOG("DN ERROR - UNABLE TO RESIZE LIGHTING REQUEST MEMORY\n");
+		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for lighting requests");
 		return false;
 	}
 

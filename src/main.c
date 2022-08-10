@@ -31,6 +31,8 @@ void scroll_callback(GLFWwindow* window, double offsetX, double offsetY);
 void framebuffer_size_callback(GLFWwindow* window, int w, int h);
 //Prints any OpenGL error or warning messages to the screen
 void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum severity, GLsizei length, const GLchar* message, const void* userParam);
+//Prints any DN message to the console
+void DN_message_callback(DNmessageType type, DNmessageSeverity severity, const char* message);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
@@ -96,6 +98,7 @@ int main()
 	glViewport(0, 0, SCREEN_W, SCREEN_H);
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(message_callback, 0);
+	m_DN_message_callback = DN_message_callback;
 
 	//set callback funcs:
 	//---------------------------------
@@ -146,7 +149,7 @@ int main()
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
+		printf("failed to generate final quad buffer\n");
 		glDeleteVertexArrays(1, &quadBuffer);
 		return -1;
 	}
@@ -155,7 +158,7 @@ int main()
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(quadIndices), quadIndices, GL_STATIC_DRAW);
 	if(glGetError() == GL_OUT_OF_MEMORY)
 	{
-		DN_ERROR_LOG("ERROR - FAILED TO GENERATE FINAL QUAD BUFFER");
+		printf("failed to generate final quad buffer");
 		glDeleteVertexArrays(1, &quadBuffer);
 		return -1;
 	}
@@ -566,7 +569,12 @@ void GLAPIENTRY message_callback(GLenum source, GLenum type, GLuint id, GLenum s
 	if(severity == GL_DEBUG_SEVERITY_NOTIFICATION || type == 0x8250)
 		return;
 
-	DN_ERROR_LOG("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
+	printf("GL CALLBACK: %s type = 0x%x, severity = 0x%x, message = %s\n",
         	 (type == GL_DEBUG_TYPE_ERROR ? "** GL ERROR **" : ""),
         	  type, severity, message );
+}
+
+void DN_message_callback(DNmessageType type, DNmessageSeverity severity, const char* message)
+{
+	printf("DN MESSAGE: type = %d, severity = %d, message = %s\n", type, severity, message);
 }

@@ -43,7 +43,10 @@ int DN_shader_load(GLenum type, const char* path, const char* includePath)
 		GLsizei logLength;
 		char message[1024];
 		glGetShaderInfoLog(shader, 1024, &logLength, message);
-		DN_ERROR_LOG("\n\nINFO LOG - %s%s\n\n\n", message, path);
+
+		char messageFinal[1024 + 256];
+		sprintf(messageFinal, "failed to compile shader at \"%s\" with the following info log:\n%s", path, message);
+		m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, messageFinal);
 
 		glDeleteShader(shader);
 		return -1;
@@ -202,7 +205,8 @@ static char* _DN_add_include_file(char* baseSource, const char* includePath)
 	char* versionStart = strstr(baseSource, "#version");
 	if(versionStart == NULL)
 	{
-		DN_ERROR_LOG("ERROR - SHADER SOURCE FILE DID NOT CONTAIN A #version");
+		m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "shader source file did not contain a #version, unable to include another shader");
+
 		DN_FREE(baseSource);
 		DN_FREE(includeSource);
 		return NULL;
@@ -214,7 +218,7 @@ static char* _DN_add_include_file(char* baseSource, const char* includePath)
 		i++;
 		if(i >= baseLen)
 		{
-			DN_ERROR_LOG("ERROR - END OF SHADER SOURCE FILE REACHED BEFORE END OF #version WAS FOUND");
+			m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "end of shader source file was reached before end of #version was found");
 			DN_FREE(baseSource);
 			DN_FREE(includeSource);
 			return NULL;
@@ -248,21 +252,13 @@ static bool _DN_load_into_buffer(const char* path, char** buffer)
 
 		if(*buffer)
 		{
-			if(fread(*buffer, length, 1, file) == 1)
-			{
-				(*buffer)[length] = '\0';
-				result = true;
-			}
-			else
-			{
-				DN_ERROR_LOG("ERROR - COULD NOT READ FROM FILE %s\n", path);
-				result = false;
-				DN_FREE(*buffer);
-			}
+			fread(*buffer, length, 1, file);
+			(*buffer)[length] = '\0';
+			result = true;
 		}
 		else
 		{
-			DN_ERROR_LOG("ERROR - COULD NOT ALLOCATE MEMORY FOR SHADER SOURCE CODE");
+			m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to allocate memory for shader source code");
 			result = false;
 		}
 
@@ -271,7 +267,9 @@ static bool _DN_load_into_buffer(const char* path, char** buffer)
 	}
 	else
 	{
-		DN_ERROR_LOG("ERROR - COULD NOT OPEN FILE %s\n", path);
+		char message[256];
+		sprintf(message, "failed to open file \"%s\" for reading", path);
+		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return false;
 	}
 }
