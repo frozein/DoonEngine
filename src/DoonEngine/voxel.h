@@ -26,12 +26,17 @@
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+typedef struct DNcolor
+{
+	uint8_t r, g, b;
+} DNcolor;
+
 //a single voxel
 typedef struct DNvoxel
 {
 	uint8_t material; //the index into the materials array, in the range [0, 255] (NOTE: a material of 255 represents an empty voxel)
 	DNvec3 normal;    //the normal (direction the voxel points towards)
-	DNvec3 albedo;    //the "base color" (the percentage of light that gets reflected)
+	DNcolor albedo;   //the "base color" (the percentage of light that gets reflected)
 } DNvoxel;
 
 //a compressed voxel, this is how voxels are actually stored in memory

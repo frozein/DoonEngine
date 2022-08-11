@@ -479,7 +479,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 				DNvoxel newVox;
 				newVox.material = 0;
 				newVox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
-				newVox.albedo = DN_vec3_pow((DNvec3){0.871f, 0.463f, 0.843f}, DN_GAMMA);
+				newVox.albedo = (DNcolor){250, 110, 121};
 
 				DN_set_voxel(activeVol, mapPos, localPos, newVox);
 			}

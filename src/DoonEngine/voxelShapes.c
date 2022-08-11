@@ -412,7 +412,7 @@ bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 
 		vox.material = material >= 0 ? material : pos.w;
 		vox.normal = (DNvec3){0.0f, 1.0f, 0.0f};
-		vox.albedo = DN_vec3_pow((DNvec3){palette[pos.w].x / 255.0f, palette[pos.w].y / 255.0f, palette[pos.w].z / 255.0f}, DN_GAMMA);
+		vox.albedo = (DNcolor){palette[pos.w].x, palette[pos.w].y, palette[pos.w].z};
 
 		DNivec3 pos2 = {pos.x, pos.z, pos.y}; //have to invert z and y because magicavoxel has z as the up axis
 		model->voxels[DN_FLATTEN_INDEX(pos2, model->size)] = DN_compress_voxel(vox);
