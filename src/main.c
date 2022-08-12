@@ -39,9 +39,10 @@ void DN_message_callback(DNmessageType type, DNmessageSeverity severity, const c
 //maps:
 DNvolume* activeVol;
 
-DNvolume* treeVol;
 DNvolume* demoVol;
+DNvolume* treeVol;
 DNvolume* sphereVol;
+DNvolume* cerealVol;
 
 //rasterization textures:
 GLuint rasterColorTex;
@@ -64,8 +65,64 @@ float deltaTime = 0.0f;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
+void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius, int shape, unsigned int numColors, DNcolor* colors, unsigned int material)
+{
+	DN_shape_sphere(vol, bowlVox, pos, radius);
+	bowlVox.material = DN_MATERIAL_EMPTY;
+	DN_shape_sphere(vol, bowlVox, pos, radius - 5.0f);
+	DN_shape_box(vol, bowlVox, (DNvec3){pos.x, pos.y + radius * 0.5f, pos.z}, (DNvec3){radius, radius * 0.5f, radius}, (DNvec3){0.0f, 0.0f, 0.0f});
+
+	int numCereal = 0;
+	switch(shape)
+	{
+	case 0:
+		numCereal = 50;
+		break;
+	case 1:
+		numCereal = 80;
+		break;
+	case 2:
+		numCereal = 70;
+		break;
+	}
+
+	for(int i = 0; i < numCereal; i++)
+	{
+		int a = radius * 2 + 1;
+		int b = radius; 
+		DNivec3 point = {rand() % a - b, -(rand() % b), rand() % a - b};
+
+		if(point.x * point.x + point.y * point.y + point.z * point.z > (radius - 5.0f) * (radius - 5.0f))
+		{
+			i--;
+			continue;
+		}
+
+		DNvoxel cerealVox;
+		cerealVox.material = material;
+		cerealVox.albedo = colors[rand() % numColors];
+		DNvec3 finalPos = {pos.x + point.x, pos.y + point.y, pos.z + point.z};
+		DNvec3 orient = {rand() % 360, rand() % 360, rand() % 360};
+
+		switch(shape)
+		{
+		case 0:
+			DN_shape_torus(vol, cerealVox, finalPos, 5.0f, 3.0f, orient);
+			break;
+		case 1:
+			DN_shape_sphere(vol, cerealVox, finalPos, 5.0f);
+			break;
+		case 2:
+			DN_shape_box(vol, cerealVox, finalPos, (DNvec3){4.0f, 4.0f, 4.0f}, orient);
+			break;
+		}
+	}
+}
+
 int main()
 {
+	srand(1234);
+
 	//init GLFW:
 	//---------------------------------
 	glfwInit();
@@ -306,19 +363,60 @@ int main()
 		return -1;
 	}
 
-	//load volumes:
+	//load volumes from disk:
 	//---------------------------------
 	demoVol   = DN_load_volume("volumes/demo.voxvol"  ,  32);
-	treeVol   = DN_create_volume((DNuvec3){5, 5, 5}   ,  16);
 	sphereVol = DN_load_volume("volumes/sphere.voxvol",  512);
 
 	demoVol->glCubemapTex = cubemapTex;
 	demoVol->useCubemap = true;
 
-	activeVol = demoVol;
-
-	//load model:
+	//create volume with shapes:
 	//---------------------------------
+	cerealVol = DN_create_volume((DNuvec3){20, 20, 20}, 128);
+	DNvoxel vox;
+	cerealVol->sunDir = (DNvec3){-0.5f, 1.0f, -0.5f};
+	cerealVol->glCubemapTex = cubemapTex;
+	cerealVol->useCubemap = true;
+
+	//place bowls:
+	vox.albedo = (DNcolor){240, 240, 240};
+	vox.material = 0;
+	DNcolor rainbowColors[6] = {(DNcolor){242, 19, 19}, (DNcolor){242, 94, 19}, (DNcolor){242, 205, 19}, (DNcolor){34, 222, 13}, (DNcolor){39, 29, 224}, (DNcolor){113, 4, 201}};
+	place_cereal_bowl(cerealVol, vox, (DNvec3){50.0f, 50.0f, 50.0f}, 40.0f, 0, 6, rainbowColors, 0);
+
+	vox.material = 1;
+	DNcolor chocolateColors[3] = {(DNcolor){64, 32, 13}, (DNcolor){87, 65, 51}, (DNcolor){66, 44, 23}};
+	place_cereal_bowl(cerealVol, vox, (DNvec3){110.0f, 80.0f, 115.0f}, 40.0f, 2, 3, chocolateColors, 3);
+
+	vox.albedo = (DNcolor){200, 200, 200};
+	vox.material = 2;
+	DNcolor trixColors[6] = {(DNcolor){4, 201, 192}, (DNcolor){88, 2, 168}, (DNcolor){214, 13, 26}, (DNcolor){227, 101, 5}, (DNcolor){100, 222, 24}, (DNcolor){212, 222, 24}};
+	place_cereal_bowl(cerealVol, vox, (DNvec3){90.0f, 110.0f, 40.0f}, 40.0f, 1, 6, trixColors, 0);
+
+	cerealVol->materials[0].emissive     = false;
+	cerealVol->materials[0].specular     = 0.0f;
+	cerealVol->materials[0].opacity      = 1.0f;
+
+	cerealVol->materials[1].emissive     = false;
+	cerealVol->materials[1].specular     = 1.0f;
+	cerealVol->materials[1].opacity      = 1.0f;
+	cerealVol->materials[1].shininess    = 100;
+	cerealVol->materials[1].reflectType  = 1;
+
+	cerealVol->materials[2].emissive     = false;
+	cerealVol->materials[2].specular     = 0.0f;
+	cerealVol->materials[2].opacity      = 0.5f;
+	cerealVol->materials[2].refractIndex = 1.52f;
+
+	cerealVol->materials[3].emissive     = true;
+	cerealVol->materials[3].specular     = 0.0f;
+	cerealVol->materials[3].opacity      = 1.0f;
+
+	//load volume from MagicaVoxel model:
+	//---------------------------------
+	treeVol   = DN_create_volume((DNuvec3){5, 5, 5}, 16);
+
 	DNvoxelModel model;
 	DN_load_vox_file("models/tree.vox", 0, &model);
 	DN_calculate_model_normals(2, &model);
@@ -331,6 +429,8 @@ int main()
 
 	//main loop:
 	//---------------------------------
+	activeVol = demoVol;
+
 	float lastFrame = glfwGetTime();
 	int numFrames = 0;
 	float cumTime = 0.0;
@@ -531,6 +631,8 @@ void process_input(GLFWwindow *window)
 		activeVol = treeVol;
 	if(glfwGetKey(window, GLFW_KEY_F3) == GLFW_PRESS)
 		activeVol = sphereVol;
+	if(glfwGetKey(window, GLFW_KEY_F4) == GLFW_PRESS)
+		activeVol = cerealVol;
 
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		activeVol->camPos = DN_vec3_add(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
