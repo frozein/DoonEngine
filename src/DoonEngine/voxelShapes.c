@@ -143,51 +143,53 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 		iMax = (DNivec3){iMax.x + 1, iMax.y + 1, iMax.z + 1};
 	}
 
-	for(int z = iMin.z; z <= iMax.z; z++)
+	//make sure we dont go over bounds:
+	iMin = (DNivec3){iMin.x < 0 ? 0 : iMin.x, iMin.y < 0 ? 0 : iMin.y, iMin.z < 0 ? 0 : iMin.z};
+	iMax = (DNivec3){iMax.x >= (vol->mapSize.x * DN_CHUNK_SIZE.x) ? (vol->mapSize.x * DN_CHUNK_SIZE.x - 1) : iMax.x, 
+	                 iMax.y >= (vol->mapSize.y * DN_CHUNK_SIZE.y) ? (vol->mapSize.y * DN_CHUNK_SIZE.y - 1) : iMax.y,
+	                 iMax.z >= (vol->mapSize.z * DN_CHUNK_SIZE.z) ? (vol->mapSize.z * DN_CHUNK_SIZE.z - 1) : iMax.z,};
+
+	//separate positions:
+	DNivec3 mapMin, mapMax, chunkMin, chunkMax;
+	DN_separate_position(iMin, &mapMin, &chunkMin);
+	DN_separate_position(iMax, &mapMax, &chunkMax);
+
+	//loop over every chunk:
+	for(int mZ = mapMin.z; mZ <= mapMax.z; mZ++)
+	for(int mY = mapMin.y; mY <= mapMax.y; mY++)
+	for(int mX = mapMin.x; mX <= mapMax.x; mX++)
 	{
-		if(z / DN_CHUNK_SIZE.z >= vol->mapSize.z || z < 0)
-			continue;
+		DNivec3 mapPos = {mX, mY, mZ};
+		DNchunkHandle mapTile = vol->map[DN_FLATTEN_INDEX(mapPos, vol->mapSize)];
 
-		for(int y = iMin.y; y <= iMax.y; y++)
+		//loop over every voxel in chunk:
+		for(int cZ = 0; cZ < DN_CHUNK_SIZE.z; cZ++)
+		for(int cY = 0; cY < DN_CHUNK_SIZE.y; cY++)
+		for(int cX = 0; cX < DN_CHUNK_SIZE.x; cX++)
 		{
-			if(y / DN_CHUNK_SIZE.y >= vol->mapSize.y || y < 0)
-				continue;
+			DNivec3 chunkPos = {cX, cY, cZ};
 
-			for(int x = iMin.x; x <= iMax.x; x++)
+			//calculate the sdf distance:
+			DNvec4 pos = {mX * DN_CHUNK_SIZE.x + cX, mY * DN_CHUNK_SIZE.y + cY, mZ * DN_CHUNK_SIZE.z + cZ, 1.0f};
+			DNvec4 transformedPos = DN_mat4_mult_vec4(invTransform, pos);
+			float dist = sdf((DNvec3){transformedPos.x, transformedPos.y, transformedPos.z});
+
+			if(dist < 0.0)
 			{
-				if(x / DN_CHUNK_SIZE.x >= vol->mapSize.x || x < 0)
-					continue;
-
-				DNvec4 pos = {x, y, z, 1.0f};
-				pos = DN_mat4_mult_vec4(invTransform, pos);
-				float dist = sdf((DNvec3){pos.x, pos.y, pos.z});
-
-				if(dist < 1.0)
+				if(mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == DN_MATERIAL_EMPTY))
 				{
-					DNivec3 mapPos;
-					DNivec3 chunkPos;
-					DN_separate_position((DNivec3){x, y, z}, &mapPos, &chunkPos);
-
-					DNchunkHandle mapTile = vol->map[DN_FLATTEN_INDEX(mapPos, vol->mapSize)];
-
-					if (dist < 0.0)
-					{
-						if (mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == DN_MATERIAL_EMPTY))
-						{
-							if (voxel.material != DN_MATERIAL_EMPTY)
-								voxel.normal = _DN_calc_normal((DNvec4) { x, y, z, 1.0f }, invTransform, dist, sdf);
-							DN_set_voxel(vol, mapPos, chunkPos, voxel);
-						}
-					}
-					else if (voxel.material == DN_MATERIAL_EMPTY)
-					{
-						if (mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
-						{
-							DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
-							oldVox.normal = DN_vec3_scale(_DN_calc_normal((DNvec4) { x, y, z, 1.0f }, invTransform, dist, sdf), -1.0f);
-							DN_set_voxel(vol, mapPos, chunkPos, oldVox);
-						}
-					}
+					if(voxel.material != DN_MATERIAL_EMPTY)
+						voxel.normal = _DN_calc_normal(pos, invTransform, dist, sdf);
+					DN_set_voxel(vol, mapPos, chunkPos, voxel);
+				}
+			}
+			else if(dist <= 1.0f && voxel.material == DN_MATERIAL_EMPTY)
+			{
+				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
+				{
+					DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
+					oldVox.normal = DN_vec3_scale(_DN_calc_normal(pos, invTransform, dist, sdf), -1.0f);
+					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
 				}
 			}
 		}
@@ -230,8 +232,8 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, fl
 	length = len;
 	radius = r;
 
-	DNvec3 min = {fmin(-len.x, -r), fmin(-len.y, -r), fmin(-len.z, -r)};
-	DNvec3 max = {fmax( len.x,  r), fmax( len.x,  r), fmax( len.x,  r)};
+	DNvec3 min = {-len.x - r, -len.y - r, -len.z - r};
+	DNvec3 max = { len.x + r,  len.x + r,  len.x + r};
 
 	_DN_shape(vol, voxel, min, max, transform, _DN_sdf_rounded_box);
 }
