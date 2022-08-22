@@ -2,7 +2,8 @@
 #define DN_VOXEL_H
 
 #include "globals.h"
-#include "math/common.h"
+#include "QuickMath/quickmath.h"
+#include <GLAD/glad.h>
 #include <stdbool.h>
 #include <stdint.h>
 

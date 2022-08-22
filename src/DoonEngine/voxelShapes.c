@@ -1,7 +1,4 @@
 #include "voxelShapes.h"
-#include "math/vector.h"
-#include "math/matrix.h"
-#include "math/quaternion.h"
 #include "utility/shader.h"
 #include <stdio.h>
 #include <stdint.h>
@@ -30,9 +27,9 @@ static float _DN_sdf_sphere(DNvec3 p)
 
 static float _DN_sdf_box(DNvec3 p)
 {
-	DNvec3 q = DN_vec3_subtract((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
+	DNvec3 q = DN_vec3_sub((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
 
-	float q1 = DN_vec3_length(DN_vec3_clamp(q, 0.0, INFINITY));
+	float q1 = DN_vec3_length(DN_vec3_max(q, (DNvec3){0.0f, 0.0f, 0.0f}));
 	float q2 = fmin(fmax(fmax(q.x, q.y), q.z), 0.0);
 
 	return q1 + q2;
@@ -51,13 +48,13 @@ static float _DN_sdf_torus(DNvec3 p)
 
 static float _DN_sdf_ellipsoid(DNvec3 p)
 {
-	return (DN_vec3_length(DN_vec3_divide(p, radii)) - 1.0f) * fmin(fmin(radii.x, radii.y), radii.z);
+	return (DN_vec3_length(DN_vec3_div(p, radii)) - 1.0f) * fmin(fmin(radii.x, radii.y), radii.z);
 }
 
 static float _DN_sdf_cylinder(DNvec3 p)
 {
 	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, fabs(p.y) - height};
-	return fmin(fmax(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_clamp(d, 0.0, INFINITY));
+	return fmin(fmax(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_max(d, (DNvec2){0.0f, 0.0f}));
 }
 
 static float _DN_sdf_cone(DNvec3 p)
@@ -183,7 +180,7 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 					DN_set_voxel(vol, mapPos, chunkPos, voxel);
 				}
 			}
-			else if(dist <= 1.0f && voxel.material == DN_MATERIAL_EMPTY)
+			else if(dist < 1.0f && voxel.material == DN_MATERIAL_EMPTY)
 			{
 				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
 				{
@@ -202,7 +199,7 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, DNvec3 c, float r)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
+	transform = DN_mat4_translate(c);
 
 	radius = r;
 
@@ -215,8 +212,8 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, DNvec3 c, float r)
 void DN_shape_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 orient)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	length = len;
 
@@ -226,8 +223,8 @@ void DN_shape_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 ori
 void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	length = len;
 	radius = r;
@@ -241,8 +238,8 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, fl
 void DN_shape_torus(DNvolume* vol, DNvoxel voxel, DNvec3 c, float ra, float rb, DNvec3 orient)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	radius = ra;
 	radiusB = rb;
@@ -256,8 +253,8 @@ void DN_shape_torus(DNvolume* vol, DNvoxel voxel, DNvec3 c, float ra, float rb, 
 void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 r, DNvec3 orient)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	radii = r;
 
@@ -270,8 +267,8 @@ void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 r, DNvec3
 void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, DNvec3 c, float r, float h, DNvec3 orient)
 {
 	DNmat4 transform;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, c);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	radius = r;
 	height = h / 2;
@@ -286,8 +283,8 @@ void DN_shape_cone(DNvolume* vol, DNvoxel voxel, DNvec3 b, float r, float h, DNv
 {
 	DNmat4 transform;
 	b.y += h;
-	transform = DN_mat4_translate(DN_MAT4_IDENTITY, b);
-	transform = DN_mat4_rotate_euler(transform, orient);
+	transform = DN_mat4_translate(b);
+	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
 
 	float hyp = sqrtf(r * r + h * h);
 	angles = (DNvec2){h / hyp, r / hyp};

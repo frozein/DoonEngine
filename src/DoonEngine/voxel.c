@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <memory.h>
 #include <string.h>
-#include "math/all.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GLOBAL STATE:
@@ -776,8 +775,13 @@ static DNchunkGPU _DN_chunk_to_gpu(DNvolume* vol, DNchunk chunk, int* numVoxels,
 		//linearize albedo:
 		uint32_t readAlbedo = chunk.voxels[x][y][z].albedo;
 		DNcolor albedo = {(readAlbedo >> 24) & 0xFF, (readAlbedo >> 16) & 0xFF, (readAlbedo >> 8) & 0xFF};
-		DNvec3 linearized = DN_vec3_pow(DN_vec3_scale((DNvec3){albedo.r, albedo.g, albedo.b}, 0.00392156862f), DN_GAMMA);
+
+		DNvec3 linearized = DN_vec3_scale((DNvec3){albedo.r, albedo.g, albedo.b}, 0.00392156862f);
+		linearized.x = powf(linearized.x, DN_GAMMA);
+		linearized.y = powf(linearized.y, DN_GAMMA);
+		linearized.z = powf(linearized.z, DN_GAMMA);
 		linearized = DN_vec3_scale(linearized, 255.0f);
+
 		albedo = (DNcolor){linearized.x, linearized.y, linearized.z};
 		readAlbedo = (albedo.r << 24) | (albedo.g << 16) | (albedo.b << 8);
 
@@ -1147,26 +1151,26 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 
 void DN_set_view_projection_matrices(DNvolume* vol, float aspectRatio, float nearPlane, float farPlane, DNmat4* view, DNmat4* projection)
 {
-	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, vol->camOrient));
+	DNmat3 rotate = DN_mat4_top_left(DN_mat4_rotate_euler(vol->camOrient));
 	DNvec3 camFront;
 	DNvec3 camPlaneU;
 	DNvec3 camPlaneV;
 
 	if(aspectRatio < 1.0f)
 	{
-		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, aspectRatio / tanf(vol->camFOV * 0.5f * DEG_TO_RAD) });
+		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, aspectRatio / tanf(DN_deg_to_rad(vol->camFOV * 0.5f)) });
 		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f, 0.0f, 0.0f});
 		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f * aspectRatio, 0.0f});
 	}
 	else
 	{
-		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f / tanf(vol->camFOV * 0.5f * DEG_TO_RAD) });
+		camFront  = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f / tanf(DN_deg_to_rad(vol->camFOV * 0.5f)) });
 		camPlaneU = DN_mat3_mult_vec3(rotate, (DNvec3){-1.0f / aspectRatio, 0.0f, 0.0f});
 		camPlaneV = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 1.0f, 0.0f});
 	}
 	
 	*view = DN_mat4_lookat(vol->camPos, DN_vec3_add(vol->camPos, camFront), (DNvec3){0.0f, 1.0f, 0.0f});
-	*projection = DN_mat4_perspective_proj_from_fov(vol->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
+	*projection = DN_mat4_perspective(vol->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
 }
 
 void DN_draw(DNvolume* vol, unsigned int outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture)
@@ -1680,7 +1684,7 @@ void DN_separate_position(DNivec3 pos, DNivec3* mapPos, DNivec3* chunkPos)
 
 DNvec3 DN_cam_dir(DNvec3 orient)
 {
-	DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, orient));
+	DNmat3 rotate = DN_mat4_top_left(DN_mat4_rotate_euler(orient));
 	return DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 }
 
@@ -1688,7 +1692,8 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 {
 	DNcompressedVoxel res;
 
-	voxel.normal = DN_vec3_clamp(voxel.normal, -1.0f, 1.0f);
+	voxel.normal = DN_vec3_min(voxel.normal, (DNvec3){ 1.0f,  1.0f,  1.0f});
+	voxel.normal = DN_vec3_max(voxel.normal, (DNvec3){-1.0f, -1.0f, -1.0f});
 	DNuvec3 normal = {(uint8_t)((voxel.normal.x * 0.5 + 0.5) * 255), (uint8_t)((voxel.normal.y * 0.5 + 0.5) * 255), (uint8_t)((voxel.normal.z * 0.5 + 0.5) * 255)};
 
 	res.normal = (voxel.material << 24) | (normal.x       << 16) | (normal.y       << 8) | (normal.z);

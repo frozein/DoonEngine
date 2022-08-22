@@ -3,7 +3,7 @@
 
 #include "globals.h"
 #include "voxel.h"
-#include "math/common.h"
+#include "QuickMath/quickmath.h"
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPES:

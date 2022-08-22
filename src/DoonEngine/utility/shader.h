@@ -2,7 +2,8 @@
 #define DN_SHADER_H
 
 #include "../globals.h"
-#include "../math/common.h"
+#include "QuickMath/quickmath.h"
+#include <GLAD/glad.h>
 #include <stdbool.h>
 
 typedef GLuint GLshader;  //a handle to a GL shader
@@ -65,8 +66,6 @@ void DN_program_uniform_vec3(GLprogram id, const char* name, DNvec3* val);
 //Sets a vector4 uniform
 void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4* val);
 
-//Sets a 2x2 matrix uniform
-void DN_program_uniform_mat2(GLprogram id, const char* name, DNmat2* val);
 //Sets a 3x3 matrix uniform
 void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3* val);
 //Sets a 4x4 matrix uniform

@@ -15,9 +15,6 @@
 				"/Fe:",
 				"${workspaceFolder}\\..\\bin\\voxelengine_x64.exe",
 
-				"/Tc${workspaceFolder}\\DoonEngine\\math\\vector.c", //doonengine source files
-				"/Tc${workspaceFolder}\\DoonEngine\\math\\matrix.c",
-				"/Tc${workspaceFolder}\\DoonEngine\\math\\quaternion.c",
 				"/Tc${workspaceFolder}\\DoonEngine\\utility\\shader.c",
 				"/Tc${workspaceFolder}\\DoonEngine\\voxel.c",
 				"/Tc${workspaceFolder}\\DoonEngine\\voxelShapes.c",

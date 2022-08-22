@@ -1,6 +1,6 @@
 #define GLFW_DLL
 
-#include "DoonEngine/math/all.h"
+#include "QuickMath/quickmath.h"
 #include "DoonEngine/utility/shader.h"
 #include "DoonEngine/voxel.h"
 #include "DoonEngine/voxelShapes.h"
@@ -385,6 +385,7 @@ int main()
 	DNcolor rainbowColors[6] = {(DNcolor){242, 19, 19}, (DNcolor){242, 94, 19}, (DNcolor){242, 205, 19}, (DNcolor){34, 222, 13}, (DNcolor){39, 29, 224}, (DNcolor){113, 4, 201}};
 	place_cereal_bowl(cerealVol, vox, (DNvec3){50.0f, 50.0f, 50.0f}, 40.0f, 0, 6, rainbowColors, 0);
 
+	vox.albedo = (DNcolor){180, 180, 180};
 	vox.material = 1;
 	DNcolor chocolateColors[3] = {(DNcolor){64, 32, 13}, (DNcolor){87, 65, 51}, (DNcolor){66, 44, 23}};
 	place_cereal_bowl(cerealVol, vox, (DNvec3){110.0f, 80.0f, 115.0f}, 40.0f, 2, 3, chocolateColors, 3);
@@ -399,9 +400,9 @@ int main()
 	cerealVol->materials[0].opacity      = 1.0f;
 
 	cerealVol->materials[1].emissive     = false;
-	cerealVol->materials[1].specular     = 1.0f;
+	cerealVol->materials[1].specular     = 0.8f;
 	cerealVol->materials[1].opacity      = 1.0f;
-	cerealVol->materials[1].shininess    = 100;
+	cerealVol->materials[1].shininess    = 3;
 	cerealVol->materials[1].reflectType  = 1;
 
 	cerealVol->materials[2].emissive     = false;
@@ -458,7 +459,7 @@ int main()
 
 		//update cam transform:
 		//---------------------------------
-		DNmat3 rotate = DN_mat4_to_mat3(DN_mat4_rotate_euler(DN_MAT4_IDENTITY, (DNvec3){activeVol->camOrient.x, activeVol->camOrient.y, 0.0f}));
+		DNmat3 rotate = DN_mat4_top_left(DN_mat4_rotate_euler((DNvec3){activeVol->camOrient.x, activeVol->camOrient.y, 0.0f}));
 		camFront = DN_mat3_mult_vec3(rotate, (DNvec3){ 0.0f, 0.0f, 1.0f });
 
 		DNmat4 view;
@@ -473,7 +474,7 @@ int main()
 
 		DN_program_activate(cubeProgram);
 
-		DNmat4 model = DN_mat4_translate(DN_MAT4_IDENTITY, (DNvec3){5 + 3 * cosf(glfwGetTime()), 1.5 + cosf(glfwGetTime() * 5), 5 + 3 * sinf(glfwGetTime())});
+		DNmat4 model = DN_mat4_translate((DNvec3){5 + 3 * cosf(glfwGetTime()), 1.5 + cosf(glfwGetTime() * 5), 5 + 3 * sinf(glfwGetTime())});
 		DN_program_uniform_mat4(cubeProgram, "modelMat", &model);
 		DN_program_uniform_mat4(cubeProgram, "viewMat", &view);
 		DN_program_uniform_mat4(cubeProgram, "projectionMat", &projection);
@@ -637,9 +638,9 @@ void process_input(GLFWwindow *window)
 	if(glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
 		activeVol->camPos = DN_vec3_add(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-		activeVol->camPos = DN_vec3_subtract(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
+		activeVol->camPos = DN_vec3_sub(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize((DNvec3){camFront.x, 0.0f, camFront.z}), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-		activeVol->camPos = DN_vec3_subtract(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
+		activeVol->camPos = DN_vec3_sub(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
 		activeVol->camPos = DN_vec3_add(activeVol->camPos, DN_vec3_scale(DN_vec3_normalize(DN_vec3_cross(camFront, camUp)), camSpeed));
 	if(glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)

@@ -5,7 +5,41 @@
 #include <malloc.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
-//MEMORY FUNCTIONS USED BY LIBRARY:
+//USEFUL STRUCTS:
+
+typedef struct DNivec2
+{
+	int x, y;
+} DNivec2;
+
+typedef struct DNivec3
+{
+	int x, y, z;
+} DNivec3;
+
+typedef struct DNivec4
+{
+	int x, y, z, w;
+} DNivec4;
+
+
+typedef struct DNuvec2
+{
+	unsigned int x, y;
+} DNuvec2;
+
+typedef struct DNuvec3
+{
+	unsigned int x, y, z;
+} DNuvec3;
+
+typedef struct DNuvec4
+{
+	unsigned int x, y, z, w;
+} DNuvec4;
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//DEBUG LOGGING:
 
 //represents different message types
 typedef enum DNmessageType
@@ -26,6 +60,9 @@ typedef enum DNmessageSeverity
 
 //the message callback function, the last parameter is the actual message in string format
 void (*m_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*); //TODO: figure out a better way to use this than a global variable
+
+//--------------------------------------------------------------------------------------------------------------------------------//
+//MEMORY FUNCTIONS USED BY LIBRARY:
 
 //for allocating heap memory:
 #ifndef DN_MALLOC
