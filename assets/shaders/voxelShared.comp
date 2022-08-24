@@ -419,6 +419,8 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 //steps a ray through the map, returns true if a voxel was hit
 bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
 {
+	bool requested = false;	//we only want to requst 1 chunk per ray to avoid requeting occluded chunks
+
 	colorAdd = vec3(0.0); //added to the final color to account for transparency
 	colorMult = 1.0;      //multiplied with the final color to account for transparency
 
@@ -465,11 +467,11 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 				lastSideDist = vec3(0.0);
 			}
 		}
-		else if((mapTile.flags & 3) != 0)
+		else if(!requested && (mapTile.flags & 3) != 0)
 		{
 			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 			map[index].flags = 3;
-			return false;
+			requested = true;
 		}
 
 		//iterate the dda algorithm:
