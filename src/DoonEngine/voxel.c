@@ -135,7 +135,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 		return NULL;
 	}
 
-	vol->voxelCap = DN_CHUNK_LENGTH * numChunks;
+	vol->voxelCap = DN_CHUNK_LENGTH * numChunks / 2;
 	if(!_DN_gen_shader_storage_buffer(&vol->glVoxelBufferID, sizeof(DNvoxelGPU) * (vol->voxelCap + DN_CHUNK_LENGTH)))
 	{
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate voxel buffer");
@@ -191,7 +191,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	for(int i = 0; i < numChunks; i++)
 		vol->gpuChunkLayout[i].x = -1;
 
-	vol->numVoxelNodes = numChunks;
+	vol->numVoxelNodes = vol->voxelCap / DN_CHUNK_LENGTH;
 	vol->gpuVoxelLayout = DN_MALLOC(sizeof(DNvoxelNode) * (vol->voxelCap / 16));
 	if(!vol->gpuVoxelLayout)
 	{
@@ -200,7 +200,7 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 	}
 
 	//set up nodes (make them all max size and unloaded):
-	for(int i = 0; i < numChunks; i++)
+	for(int i = 0; i < vol->numVoxelNodes; i++)
 	{
 		vol->gpuVoxelLayout[i].chunkPos.x = -1;
 		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;

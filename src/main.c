@@ -365,15 +365,15 @@ int main()
 
 	//load volumes from disk:
 	//---------------------------------
-	demoVol   = DN_load_volume("volumes/demo.voxvol"  ,  32);
-	sphereVol = DN_load_volume("volumes/sphere.voxvol",  512);
+	demoVol   = DN_load_volume("volumes/demo.voxvol"  ,  128);
+	sphereVol = DN_load_volume("volumes/sphere.voxvol",  2048);
 
 	demoVol->glCubemapTex = cubemapTex;
 	demoVol->useCubemap = true;
 
 	//create volume with shapes:
 	//---------------------------------
-	cerealVol = DN_create_volume((DNuvec3){20, 20, 20}, 128);
+	cerealVol = DN_create_volume((DNuvec3){20, 20, 20}, 512);
 	DNvoxel vox;
 	cerealVol->sunDir = (DNvec3){-0.5f, 1.0f, -0.5f};
 	cerealVol->glCubemapTex = cubemapTex;
@@ -416,7 +416,7 @@ int main()
 
 	//load volume from MagicaVoxel model:
 	//---------------------------------
-	treeVol   = DN_create_volume((DNuvec3){5, 5, 5}, 16);
+	treeVol   = DN_create_volume((DNuvec3){5, 5, 5}, 64);
 
 	DNvoxelModel model;
 	DN_load_vox_file("models/tree.vox", 0, &model);
