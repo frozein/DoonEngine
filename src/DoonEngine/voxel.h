@@ -1,6 +1,11 @@
 #ifndef DN_VOXEL_H
 #define DN_VOXEL_H
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "globals.h"
 #include "QuickMath/quickmath.h"
 #include <GLAD/glad.h>
@@ -372,5 +377,9 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel);
  * @returns the decompressed voxel
  */
 DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

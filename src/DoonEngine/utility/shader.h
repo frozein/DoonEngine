@@ -1,6 +1,11 @@
 #ifndef DN_SHADER_H
 #define DN_SHADER_H
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "../globals.h"
 #include "QuickMath/quickmath.h"
 #include <GLAD/glad.h>
@@ -70,5 +75,9 @@ void DN_program_uniform_vec4(GLprogram id, const char* name, DNvec4* val);
 void DN_program_uniform_mat3(GLprogram id, const char* name, DNmat3* val);
 //Sets a 4x4 matrix uniform
 void DN_program_uniform_mat4(GLprogram id, const char* name, DNmat4* val);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

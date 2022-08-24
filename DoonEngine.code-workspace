@@ -26,7 +26,10 @@
 			"cmath": "c",
 			"globals.h": "c",
 			"voxel.h": "c",
-			"texture.h": "c"
+			"texture.h": "c",
+			"quickmath.h": "c",
+			"voxelShapes.h": "c",
+			"shader.h": "c"
 		}
 	}
 }

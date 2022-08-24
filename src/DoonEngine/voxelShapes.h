@@ -1,6 +1,11 @@
 #ifndef DN_VOXEL_SHAPES_H
 #define DN_VOXEL_SHAPES_H
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 #include "globals.h"
 #include "voxel.h"
 #include "QuickMath/quickmath.h"
@@ -105,5 +110,9 @@ void DN_calculate_model_normals(unsigned int radius, DNvoxelModel* model);
  * @param pos the position to place the model at, measured in DNvoxels. This is the minimum coordinate that the model will touch
  */
 void DN_place_model_into_volume(DNvolume* vol, DNvoxelModel model, DNivec3 pos);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

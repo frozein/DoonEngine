@@ -109,7 +109,7 @@ static void _DN_transform_bounding_box(DNvec3* min, DNvec3* max, DNmat4 transfor
 //calculates the normal of a point on an sdf
 static DNvec3 _DN_calc_normal(DNvec4 p, DNmat4 invTransform, float dist, float (*sdf)(DNvec3))
 {
-	const float h = 0.0001;
+	const float h = 0.01;
 
 	DNvec4 xP = DN_mat4_mult_vec4(invTransform, DN_vec4_add(p, (DNvec4){h, 0, 0, 0}));
 	DNvec4 yP = DN_mat4_mult_vec4(invTransform, DN_vec4_add(p, (DNvec4){0, h, 0, 0}));
