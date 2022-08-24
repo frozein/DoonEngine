@@ -6,7 +6,7 @@
 			"label": "C/C++: cl.exe build active file",
 			"command": "cl.exe",
 			"args": [
-				"/I${workspaceFolder}\\..\\dependencies\\include", //options
+				"/I${workspaceFolder}\\..\\dependencies\\include",
 				"/Fo${workspaceFolder}\\..\\bin\\",
 				"/Fd${workspaceFolder}\\..\\bin\\",
 				"/Zi",
@@ -19,7 +19,7 @@
 				"/Tc${workspaceFolder}\\DoonEngine\\voxel.c",
 				"/Tc${workspaceFolder}\\DoonEngine\\voxelShapes.c",
 
-				"${workspaceFolder}\\*.c", //source files
+				"${workspaceFolder}\\*.c",
 
 				"${workspaceFolder}\\..\\dependencies\\lib\\glfw3.lib",
 				"${workspaceFolder}\\..\\dependencies\\lib\\glfw3_mt.lib",

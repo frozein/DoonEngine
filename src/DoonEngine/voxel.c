@@ -134,7 +134,6 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate chunk buffer");
 		return NULL;
 	}
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
 
 	vol->voxelCap = DN_CHUNK_LENGTH * numChunks;
 	if(!_DN_gen_shader_storage_buffer(&vol->glVoxelBufferID, sizeof(DNvoxelGPU) * (vol->voxelCap + DN_CHUNK_LENGTH)))
@@ -142,7 +141,6 @@ DNvolume* DN_create_volume(DNuvec3 mapSize, unsigned int minChunks)
 		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_FATAL, "failed to generate voxel buffer");
 		return NULL;
 	}
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
 
 	//allocate CPU memory:
 	//---------------------------------
@@ -695,7 +693,7 @@ unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos)
 	size_t newCap = fmin(vol->chunkCap * 2, vol->mapSize.x * vol->mapSize.y * vol->mapSize.z);
 
 	char message[256];
-	sprintf(message, "automatically resizing chunk memory to accomodate %zi chunks (%zi bytes)\n", newCap, newCap * sizeof(DNchunk));
+	sprintf(message, "automatically resizing chunk memory to accomodate %zi chunks (%zi bytes)", newCap, newCap * sizeof(DNchunk));
 	m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_NOTE, message);
 
 	i = vol->chunkCap;
@@ -809,12 +807,9 @@ static void _DN_unload_chunk(DNvolume* vol, unsigned int mapIndex, unsigned int 
 		}
 }
 
-//streams in a chunk (without the voxel data)
-static void _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, DNchunkGPU chunk)
+//streams in a chunk (without the voxel data), returns true if the buffer needs to be resized, false otherwise
+static bool _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, DNchunkGPU chunk)
 {
-	//bind buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
-
 	//variables that belong to the oldest chunk:
 	int maxTime = 0;
 	int maxTimeIndex = -1;
@@ -842,21 +837,8 @@ static void _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGP
 		}
 	}
 
-	if(maxTime <= 1) //if the oldest chunk is currently in use, double the buffer size
-	{
-		size_t newCap = fmin(vol->chunkCap, vol->chunkCapGPU * 2);
-
-		char message[256];
-		sprintf(message, "automatically resizing chunk buffer to accomodate %zi GPU chunks (%zi bytes)", newCap, newCap * sizeof(DNchunkGPU));
-		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
-
-		//set max time variables:
-		maxTimeMapIndex = -1;
-		maxTimeIndex = vol->chunkCapGPU;
-
-		if(!DN_set_max_chunks_gpu(vol, newCap))
-			return;
-	}
+	if(maxTime <= 1) //if the oldest chunk is currently in use, need to double the buffer size
+		return true;
 
 	if(maxTimeMapIndex >= 0) //if the old chunk was previously loaded, unload it
 	{
@@ -869,15 +851,15 @@ static void _DN_stream_chunk(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGP
 	vol->gpuChunkLayout[maxTimeIndex] = pos;
 
 	//load in new data:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, maxTimeIndex * sizeof(DNchunkGPU), sizeof(DNchunkGPU), &chunk);
+
+	return false;
 }
 
-//streams in voxel data
-static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, unsigned int numVoxels, DNvoxelGPU* voxels)
+//streams in voxel data, returns true if buffer needs to be resized, false otherwise
+static bool _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapGPU, unsigned int mapIndex, unsigned int numVoxels, DNvoxelGPU* voxels)
 {
-	//bind buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
-
 	//calculate needed node size:
 	unsigned int nodeSize = 16;
 	while(nodeSize < numVoxels)
@@ -917,19 +899,7 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 
 	//if there isn't enough space, double the size of the voxel buffer:
 	if((maxTimeIndex < 0 || maxTime <= 1) && emptySpace < nodeSize)
-	{
-		size_t newCap = fmin(vol->voxelCap * 2, vol->chunkCap * DN_CHUNK_LENGTH);
-
-		char message[256];
-		sprintf(message, "automatically resizing voxel buffer to accomodate %zi GPU voxels (%zi bytes)", newCap, newCap * sizeof(DNvoxelGPU));
-		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
-
-		maxTimeNodeSize = DN_CHUNK_LENGTH;
-		maxTimeIndex = vol->numVoxelNodes;
-
-		if(!DN_set_max_voxels_gpu(vol, newCap))
-			maxTimeIndex = -1;
-	}
+		return true;
 
 	//if no suitable node was found, make sure to unload corresponding chunk:
 	if(maxTimeIndex < 0 || maxTime <= 1)
@@ -937,7 +907,7 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 		vol->gpuChunkLayout[mapGPU[mapIndex].chunkIndex >> 4].x = -1;
 		mapGPU[mapIndex].chunkIndex = 1;
 
-		return;
+		return false;
 	}
 
 	//unload old one if overwritten:
@@ -980,11 +950,16 @@ static void _DN_stream_voxels(DNvolume* vol, DNivec3 pos, DNchunkHandleGPU* mapG
 	//send data:
 	vol->gpuVoxelLayout[maxTimeIndex].chunkPos = pos;
 	mapGPU[mapIndex].voxelIndex = vol->gpuVoxelLayout[maxTimeIndex].startPos;
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
 	glBufferSubData(GL_SHADER_STORAGE_BUFFER, vol->gpuVoxelLayout[maxTimeIndex].startPos * sizeof(DNvoxelGPU), numVoxels * sizeof(DNvoxelGPU), voxels);
+
+	return false;
 }
 
 void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 {
+	bool resizeChunks = false, resizeVoxels = false;
+
 	//increase the frameNum (to determine which chunks should be updated when splitting lighting):
 	vol->frameNum++;
 	if(vol->frameNum >= lightingSplit)
@@ -1075,9 +1050,10 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 				DNchunkGPU gpuChunk = _DN_chunk_to_gpu(vol, vol->chunks[cpuMap[mapIndex].chunkIndex], &numVoxels, gpuVoxels);
 				vol->chunks[cpuMap[mapIndex].chunkIndex].numVoxelsGpu = numVoxels;
 
-				_DN_stream_chunk(vol, pos, gpuMap, mapIndex, gpuChunk);
-				if((gpuMap[mapIndex].chunkIndex & 3) == 2) //only stream voxels if the chunk streaming succeeded
-					_DN_stream_voxels(vol, pos, gpuMap, mapIndex, numVoxels, gpuVoxels);
+				if(_DN_stream_chunk(vol, pos, gpuMap, mapIndex, gpuChunk))
+					resizeChunks = true;
+				else if(_DN_stream_voxels(vol, pos, gpuMap, mapIndex, numVoxels, gpuVoxels))
+					resizeVoxels = true;
 			}
 		}
 	}
@@ -1141,6 +1117,30 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 	//unmap:
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
 	glUnmapBuffer(GL_SHADER_STORAGE_BUFFER);
+
+	//resize chunk buffer if necessary:
+	if(resizeChunks)
+	{
+		size_t newCap = fmin(vol->chunkCap, vol->chunkCapGPU * 2);
+
+		char message[256];
+		sprintf(message, "automatically resizing chunk buffer to accomodate %zi GPU chunks (%zi bytes)", newCap, newCap * sizeof(DNchunkGPU));
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
+
+		DN_set_max_chunks_gpu(vol, newCap);
+	}
+
+	//resize voxel buffer if necessary:
+	if(resizeVoxels)
+	{
+		size_t newCap = fmin(vol->voxelCap * 2, vol->chunkCap * DN_CHUNK_LENGTH);
+
+		char message[256];
+		sprintf(message, "automatically resizing voxel buffer to accomodate %zi GPU voxels (%zi bytes)", newCap, newCap * sizeof(DNvoxelGPU));
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
+
+		DN_set_max_voxels_gpu(vol, newCap);
+	}
 
 	//memory barrier to avoid any strange mem issues:
 	glMemoryBarrier(GL_BUFFER_UPDATE_BARRIER_BIT);
@@ -1382,101 +1382,89 @@ bool DN_set_max_chunks(DNvolume* vol, unsigned int num)
 
 bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num)
 {
-	//bind buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
-
-	//create a temporary buffer to store the old chunk data (opengl doesnt have a "realloc" function)
-	void* oldChunkData = DN_MALLOC(sizeof(DNchunkGPU) * vol->chunkCapGPU);
-	if(!oldChunkData)
-	{
-		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to allocate temporary chunk memory");
-		return false;
-	}
-
-	//get old data:
-	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNchunkGPU) * vol->chunkCapGPU, oldChunkData);
-
-	//resize buffer:
-	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{
-		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate chunk buffer");
-		DN_FREE(oldChunkData);
-		return false;
-	}
-
-	//send back old data:
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNchunkGPU) * vol->chunkCapGPU, oldChunkData);
-
 	//resize chunk layout memory:
 	DNivec3* newChunkLayout = DN_REALLOC(vol->gpuChunkLayout, sizeof(DNivec3) * num);
 	if(!newChunkLayout)
 	{
 		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for GPU chunk layout");
-		DN_FREE(oldChunkData);
 		return false;
 	}
 	vol->gpuChunkLayout = newChunkLayout;
 
-	//clear new chunk layout memory:
-	for(int i = vol->chunkCapGPU; i < num; i++)
+	//resize buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate chunk buffer");
+		return false;
+	}
+
+	//set chunk cap:
+	vol->chunkCapGPU = num;
+
+	//clear chunk layout memory:
+	for(size_t i = 0; i < vol->chunkCapGPU; i++)
 		vol->gpuChunkLayout[i].x = -1;
 
-	vol->chunkCapGPU = num;
-	DN_FREE(oldChunkData);
+	//clear voxel layout memory:
+	vol->numVoxelNodes = vol->voxelCap / DN_CHUNK_LENGTH;
+	for(size_t i = 0; i < vol->numVoxelNodes; i++)
+	{
+		vol->gpuVoxelLayout[i].chunkPos.x = -1;
+		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[i].startPos = i * DN_CHUNK_LENGTH;
+	}
+
+	//clear gpu map:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
+	vol->numLightingRequests = 0;
+
 	return true;
 }
 
 bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 {
-	//bind buffer:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
-
-	//create a temporary buffer to store the old voxel data (opengl doesnt have a "realloc" function)
-	void* oldVoxelData = DN_MALLOC(sizeof(DNvoxelGPU) * vol->voxelCap);
-	if(!oldVoxelData)
-	{
-		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate temporary chunk memory");
-		return false;
-	}
-
-	//get old data:
-	glGetBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * vol->voxelCap, oldVoxelData);
-
-	//resize buffer:
-	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + DN_CHUNK_LENGTH) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
-	if(glGetError() == GL_OUT_OF_MEMORY)
-	{
-		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
-		DN_FREE(oldVoxelData);
-		return false;
-	}
-
-	//send back old data:
-	glBufferSubData(GL_SHADER_STORAGE_BUFFER, 0, sizeof(DNvoxelGPU) * vol->voxelCap, oldVoxelData);
-
 	//resize chunk layout memory:
 	DNvoxelNode* newGpuVoxelLayout = DN_REALLOC(vol->gpuVoxelLayout, sizeof(DNvoxelNode) * (num / 16));
 	if(!newGpuVoxelLayout)
 	{
 		m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate memory for GPU voxel layput");
-		DN_FREE(oldVoxelData);
 		return false;
 	}
 	vol->gpuVoxelLayout = newGpuVoxelLayout;
 
-	//clear new chunk layout memory:
-	size_t newNumNodes = vol->numVoxelNodes + (num - vol->voxelCap) / DN_CHUNK_LENGTH;
-	for(size_t i = vol->numVoxelNodes; i < newNumNodes; i++)
+	//resize buffer:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
+	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + DN_CHUNK_LENGTH) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
+	if(glGetError() == GL_OUT_OF_MEMORY)
+	{
+		m_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
+		return false;
+	}
+
+	//set voxel cap nad num nodes:
+	vol->numVoxelNodes = num / DN_CHUNK_LENGTH;
+	vol->voxelCap = num;
+
+	//clear chunk layout memory:
+	for(int i = 0; i < vol->chunkCapGPU; i++)
+		vol->gpuChunkLayout[i].x = -1;
+
+	//clear voxel layout memory:
+	for(size_t i = 0; i < vol->numVoxelNodes; i++)
 	{
 		vol->gpuVoxelLayout[i].chunkPos.x = -1;
 		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;
-		vol->gpuVoxelLayout[i].startPos = vol->voxelCap + (i - vol->numVoxelNodes) * DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[i].startPos = i * DN_CHUNK_LENGTH;
 	}
 
-	vol->numVoxelNodes = newNumNodes;
-	vol->voxelCap = num;
-	DN_FREE(oldVoxelData);
+	//clear gpu map:
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
+	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
+	vol->numLightingRequests = 0;
+
 	return true;
 }
 
