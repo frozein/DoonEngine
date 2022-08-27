@@ -59,7 +59,7 @@ typedef enum DNmessageSeverity
 } DNmessageSeverity;
 
 //the message callback function, the last parameter is the actual message in string format
-void (*m_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*); //TODO: figure out a better way to use this than a global variable
+extern void (*m_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*); //TODO: figure out a better way to use this than a global variable
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY FUNCTIONS USED BY LIBRARY:

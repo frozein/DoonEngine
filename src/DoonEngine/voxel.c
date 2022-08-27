@@ -12,6 +12,8 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GLOBAL STATE:
 
+void (*m_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*);
+
 GLuint lightingRequestBuffer = 0;
 GLuint materialBuffer        = 0;
 GLprogram lightingProgram = 0;
