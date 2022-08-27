@@ -14,8 +14,8 @@ extern "C"
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 
-//the size of each chunk (in voxels):
-#define DN_CHUNK_SIZE ((DNuvec3){8, 8, 8})
+//the size of each side of a chunk (in voxels):
+#define DN_CHUNK_SIZE 8
 //the total number of voxels in a chunk
 #define DN_CHUNK_LENGTH 512
 

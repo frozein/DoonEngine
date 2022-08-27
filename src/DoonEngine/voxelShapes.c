@@ -142,9 +142,9 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 
 	//make sure we dont go over bounds:
 	iMin = (DNivec3){iMin.x < 0 ? 0 : iMin.x, iMin.y < 0 ? 0 : iMin.y, iMin.z < 0 ? 0 : iMin.z};
-	iMax = (DNivec3){iMax.x >= (vol->mapSize.x * DN_CHUNK_SIZE.x) ? (vol->mapSize.x * DN_CHUNK_SIZE.x - 1) : iMax.x, 
-	                 iMax.y >= (vol->mapSize.y * DN_CHUNK_SIZE.y) ? (vol->mapSize.y * DN_CHUNK_SIZE.y - 1) : iMax.y,
-	                 iMax.z >= (vol->mapSize.z * DN_CHUNK_SIZE.z) ? (vol->mapSize.z * DN_CHUNK_SIZE.z - 1) : iMax.z,};
+	iMax = (DNivec3){iMax.x >= (vol->mapSize.x * DN_CHUNK_SIZE) ? (vol->mapSize.x * DN_CHUNK_SIZE - 1) : iMax.x, 
+	                 iMax.y >= (vol->mapSize.y * DN_CHUNK_SIZE) ? (vol->mapSize.y * DN_CHUNK_SIZE - 1) : iMax.y,
+	                 iMax.z >= (vol->mapSize.z * DN_CHUNK_SIZE) ? (vol->mapSize.z * DN_CHUNK_SIZE - 1) : iMax.z,};
 
 	//separate positions:
 	DNivec3 mapMin, mapMax, chunkMin, chunkMax;
@@ -160,14 +160,14 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, DNvec3 min, DNvec3 max, DNma
 		DNchunkHandle mapTile = vol->map[DN_FLATTEN_INDEX(mapPos, vol->mapSize)];
 
 		//loop over every voxel in chunk:
-		for(int cZ = 0; cZ < DN_CHUNK_SIZE.z; cZ++)
-		for(int cY = 0; cY < DN_CHUNK_SIZE.y; cY++)
-		for(int cX = 0; cX < DN_CHUNK_SIZE.x; cX++)
+		for(int cZ = 0; cZ < DN_CHUNK_SIZE; cZ++)
+		for(int cY = 0; cY < DN_CHUNK_SIZE; cY++)
+		for(int cX = 0; cX < DN_CHUNK_SIZE; cX++)
 		{
 			DNivec3 chunkPos = {cX, cY, cZ};
 
 			//calculate the sdf distance:
-			DNvec4 pos = {mX * DN_CHUNK_SIZE.x + cX, mY * DN_CHUNK_SIZE.y + cY, mZ * DN_CHUNK_SIZE.z + cZ, 1.0f};
+			DNvec4 pos = {mX * DN_CHUNK_SIZE + cX, mY * DN_CHUNK_SIZE + cY, mZ * DN_CHUNK_SIZE + cZ, 1.0f};
 			DNvec4 transformedPos = DN_mat4_mult_vec4(invTransform, pos);
 			float dist = sdf((DNvec3){transformedPos.x, transformedPos.y, transformedPos.z});
 
@@ -497,11 +497,11 @@ void DN_place_model_into_volume(DNvolume* vol, DNvoxelModel model, DNivec3 pos)
 		if(DN_decompress_voxel(model.voxels[iModel]).material != DN_MATERIAL_EMPTY)
 		{
 			DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
-			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE.x, worldPos.y / DN_CHUNK_SIZE.y, worldPos.z / DN_CHUNK_SIZE.z};
+			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE, worldPos.y / DN_CHUNK_SIZE, worldPos.z / DN_CHUNK_SIZE};
 
 			if(DN_in_map_bounds(vol, chunkPos))
 			{
-				DNivec3 localPos = {worldPos.x % DN_CHUNK_SIZE.x, worldPos.y % DN_CHUNK_SIZE.y, worldPos.z % DN_CHUNK_SIZE.z};
+				DNivec3 localPos = {worldPos.x % DN_CHUNK_SIZE, worldPos.y % DN_CHUNK_SIZE, worldPos.z % DN_CHUNK_SIZE};
 				DN_set_compressed_voxel(vol, chunkPos, localPos, model.voxels[iModel]);
 			}
 		}

@@ -294,9 +294,9 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 	DNbvec3 normalPalette[DN_CHUNK_LENGTH / 2]; //TODO: maybe implement a hashmap so that this is faster
 	DNbvec3 albedoPalette[DN_CHUNK_LENGTH / 2];
 
-	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
-	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
-	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+	for(int z = 0; z < DN_CHUNK_SIZE; z++)
+	for(int y = 0; y < DN_CHUNK_SIZE; y++)
+	for(int x = 0; x < DN_CHUNK_SIZE; x++)
 	{
 		if(GET_MATERIAL_ID(chunk.voxels[x][y][z].normal) == DN_MATERIAL_EMPTY)
 			continue;
@@ -375,7 +375,7 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 	//loop over each voxel and look to compress it:
 	for(int i = 0; i < DN_CHUNK_LENGTH; i++)
 	{
-		DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+		DNivec3 pos = {i % DN_CHUNK_SIZE, (i / DN_CHUNK_SIZE) % DN_CHUNK_SIZE, i / (DN_CHUNK_SIZE * DN_CHUNK_SIZE)};
 		uint8_t material = GET_MATERIAL_ID(chunk.voxels[pos.x][pos.y][pos.z].normal);
 		_write_buffer(&mem, &material, sizeof(uint8_t));
 
@@ -387,7 +387,7 @@ uint16_t _DN_compress_chunk(DNchunk chunk, DNvolume* vol, char* mem)
 		int j;
 		for(j = i; j < DN_CHUNK_LENGTH; j++)
 		{
-			DNivec3 pos2 = {j % DN_CHUNK_SIZE.x, (j / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, j / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+			DNivec3 pos2 = {j % DN_CHUNK_SIZE, (j / DN_CHUNK_SIZE) % DN_CHUNK_SIZE, j / (DN_CHUNK_SIZE * DN_CHUNK_SIZE)};
 
 			//if the voxels share a material, write the next one:
 			if(num < UINT8_MAX && GET_MATERIAL_ID(chunk.voxels[pos2.x][pos2.y][pos2.z].normal) == material)
@@ -480,7 +480,7 @@ void _DN_decompress_chunk(char* mem, DNvolume* vol, DNchunk* chunk)
 
 		for(int i = numVoxelsRead; i < numVoxelsRead + num; i++)
 		{
-			DNivec3 pos = {i % DN_CHUNK_SIZE.x, (i / DN_CHUNK_SIZE.x) % DN_CHUNK_SIZE.y, i / (DN_CHUNK_SIZE.x * DN_CHUNK_SIZE.y)};
+			DNivec3 pos = {i % DN_CHUNK_SIZE, (i / DN_CHUNK_SIZE) % DN_CHUNK_SIZE, i / (DN_CHUNK_SIZE * DN_CHUNK_SIZE)};
 
 			if(material == DN_MATERIAL_EMPTY)
 				chunk->voxels[pos.x][pos.y][pos.z].normal = UINT32_MAX;
@@ -741,13 +741,13 @@ static DNchunkGPU _DN_chunk_to_gpu(DNvolume* vol, DNchunk chunk, int* numVoxels,
 		res.bitMask[i] = 0;
 
 	int n = 0;
-	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
-	for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
-	for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+	for(int z = 0; z < DN_CHUNK_SIZE; z++)
+	for(int y = 0; y < DN_CHUNK_SIZE; y++)
+	for(int x = 0; x < DN_CHUNK_SIZE; x++)
 	{
 		//get index:
 		DNivec3 pos = (DNivec3){x, y, z};
-		unsigned int index = DN_FLATTEN_INDEX(pos, DN_CHUNK_SIZE);
+		unsigned int index = pos.x + DN_CHUNK_SIZE * (pos.y + DN_CHUNK_SIZE * pos.z);
 
 		//set partial count:
 		if((index & 31) == 0 && index != 0 && ((index >> 5) & 3) == 0)
@@ -1492,7 +1492,7 @@ bool DN_in_map_bounds(DNvolume* vol, DNivec3 pos)
 
 bool DN_in_chunk_bounds(DNivec3 pos)
 {
-	return pos.x < DN_CHUNK_SIZE.x && pos.y < DN_CHUNK_SIZE.y && pos.z < DN_CHUNK_SIZE.z && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
+	return pos.x < DN_CHUNK_SIZE && pos.y < DN_CHUNK_SIZE && pos.z < DN_CHUNK_SIZE && pos.x >= 0 && pos.y >= 0 && pos.z >= 0;
 }
 
 DNvoxel DN_get_voxel(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos)
@@ -1585,7 +1585,7 @@ bool DN_step_map(DNvolume* vol, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSt
 	*hitNormal = (DNivec3){-1000, -1000, -1000};
 
 	//scale to use voxel-level coordinates
-	rayPos = DN_vec3_scale(rayPos, DN_CHUNK_SIZE.x);
+	rayPos = DN_vec3_scale(rayPos, DN_CHUNK_SIZE);
 
 	//utility:
 	DNvec3 invRayDir = {1 / rayDir.x, 1 / rayDir.y, 1 / rayDir.z};
@@ -1666,8 +1666,8 @@ bool DN_step_map(DNvolume* vol, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSt
 
 void DN_separate_position(DNivec3 pos, DNivec3* mapPos, DNivec3* chunkPos)
 {
-	*mapPos   = (DNivec3){pos.x / DN_CHUNK_SIZE.x, pos.y / DN_CHUNK_SIZE.y, pos.z / DN_CHUNK_SIZE.z};
-	*chunkPos = (DNivec3){pos.x % DN_CHUNK_SIZE.x, pos.y % DN_CHUNK_SIZE.y, pos.z % DN_CHUNK_SIZE.z};
+	*mapPos   = (DNivec3){pos.x / DN_CHUNK_SIZE, pos.y / DN_CHUNK_SIZE, pos.z / DN_CHUNK_SIZE};
+	*chunkPos = (DNivec3){pos.x % DN_CHUNK_SIZE, pos.y % DN_CHUNK_SIZE, pos.z % DN_CHUNK_SIZE};
 }
 
 DNvec3 DN_cam_dir(DNvec3 orient)
@@ -1729,8 +1729,8 @@ static void _DN_clear_chunk(DNvolume* vol, unsigned int index)
 	vol->chunks[index].updated = false;
 	vol->chunks[index].numVoxels = 0;
 
-	for(int z = 0; z < DN_CHUNK_SIZE.z; z++)
-		for(int y = 0; y < DN_CHUNK_SIZE.y; y++)
-			for(int x = 0; x < DN_CHUNK_SIZE.x; x++)
+	for(int z = 0; z < DN_CHUNK_SIZE; z++)
+		for(int y = 0; y < DN_CHUNK_SIZE; y++)
+			for(int x = 0; x < DN_CHUNK_SIZE; x++)
 				vol->chunks[index].voxels[x][y][z].normal = UINT32_MAX;
 }
