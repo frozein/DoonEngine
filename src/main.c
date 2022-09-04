@@ -67,10 +67,10 @@ float deltaTime = 0.0f;
 
 void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius, int shape, unsigned int numColors, DNcolor* colors, unsigned int material)
 {
-	DN_shape_sphere(vol, bowlVox, pos, radius);
+	DN_shape_sphere(vol, bowlVox, NULL, pos, radius);
 	bowlVox.material = DN_MATERIAL_EMPTY;
-	DN_shape_sphere(vol, bowlVox, pos, radius - 5.0f);
-	DN_shape_box(vol, bowlVox, (DNvec3){pos.x, pos.y + radius * 0.5f, pos.z}, (DNvec3){radius, radius * 0.5f, radius}, (DNvec3){0.0f, 0.0f, 0.0f});
+	DN_shape_sphere(vol, bowlVox, NULL, pos, radius - 5.0f);
+	DN_shape_box(vol, bowlVox, NULL, (DNvec3){pos.x, pos.y + radius * 0.5f, pos.z}, (DNvec3){radius, radius * 0.5f, radius}, (DNvec3){0.0f, 0.0f, 0.0f});
 
 	int numCereal = 0;
 	switch(shape)
@@ -107,13 +107,13 @@ void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius,
 		switch(shape)
 		{
 		case 0:
-			DN_shape_torus(vol, cerealVox, finalPos, 5.0f, 3.0f, orient);
+			DN_shape_torus(vol, cerealVox, NULL, finalPos, 5.0f, 3.0f, orient);
 			break;
 		case 1:
-			DN_shape_sphere(vol, cerealVox, finalPos, 5.0f);
+			DN_shape_sphere(vol, cerealVox, NULL, finalPos, 5.0f);
 			break;
 		case 2:
-			DN_shape_box(vol, cerealVox, finalPos, (DNvec3){4.0f, 4.0f, 4.0f}, orient);
+			DN_shape_box(vol, cerealVox, NULL, finalPos, (DNvec3){4.0f, 4.0f, 4.0f}, orient);
 			break;
 		}
 	}

@@ -16,65 +16,83 @@ extern "C"
 //NOTE: the shapes are generated using distance fields and thus may not appear exactly as specified when scaled down to the low-resolution voxel map
 //for example, a cylinder with a height of 5 might only be 4 voxels tall due to rounding
 
+/* a function used to calculate the placed voxel's color, material, and albedo for the shape functions
+ * @param pos the position of the voxel (in DNvoxel's)
+ * @param normal the calculated normal of the voxel
+ * @param voxel the voxel that was initially passed into the shape function
+ * @param shapeMin the minimum point that the shape touches
+ * @param shapeMax the maximum point that the shape touches
+ * @param invTransform the inverse transform matrix of the shape, use this to go into the shape's "local space"
+ * @return the voxel to be placed
+ */
+typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DNvec3 shapeMin, DNvec3 shapeMax, DNmat4 invTransform);
+
 /* Places a sphere into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the sphere's center
  * @param r the sphere's radius
  */
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, DNvec3 c, float r);
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r);
 /* Places a box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, DNvec3 orient);
+void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, DNvec3 orient);
 /* Places a rounded box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param r the box's radius
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 len, float r, DNvec3 orient);
+void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, float r, DNvec3 orient);
 /* Places a torus into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the torus's center
  * @param ra the center radius of the torus
  * @param rb the radius of the "ring" of the torus
  * @param orient the torus's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_torus(DNvolume* vol, DNvoxel voxel, DNvec3 c, float ra, float rb, DNvec3 orient);
+void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float ra, float rb, DNvec3 orient);
 /* Places an ellipsoid into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the center of the ellipsoid
  * @param r the lengths of the semi-axes of the ellipsoid
  * @param orient the ellipsoid's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, DNvec3 c, DNvec3 r, DNvec3 orient);
+void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 r, DNvec3 orient);
 /* Places a cylinder into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param c the center of the cylinder
  * @param r the radius of the cylinder
  * @param h the height of the cylinder
  * @param orient the cylinder's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, DNvec3 c, float r, float h, DNvec3 orient);
+void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r, float h, DNvec3 orient);
 /* Places a cone into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param b the position of the cone's base
  * @param r the radius of the cone
  * @param h the height of the cone
  * @param orient the cone's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cone(DNvolume* vol, DNvoxel voxel, DNvec3 b, float r, float h, DNvec3 orient);
+void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 b, float r, float h, DNvec3 orient);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:
