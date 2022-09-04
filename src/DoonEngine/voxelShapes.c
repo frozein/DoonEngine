@@ -286,22 +286,22 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNve
 	}
 }
 
-void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, DNvec3 orient)
+void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	length = len;
 
 	_DN_shape(vol, voxel, func, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
 }
 
-void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, float r, DNvec3 orient)
+void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, float r, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	length = len;
 	radius = r;
@@ -312,11 +312,11 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func,
 	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_rounded_box);
 }
 
-void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float ra, float rb, DNvec3 orient)
+void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float ra, float rb, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	radius = ra;
 	radiusB = rb;
@@ -327,11 +327,11 @@ void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec
 	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_torus);
 }
 
-void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 r, DNvec3 orient)
+void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 r, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	radii = r;
 
@@ -341,11 +341,11 @@ void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, D
 	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_ellipsoid);
 }
 
-void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r, float h, DNvec3 orient)
+void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r, float h, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	radius = r;
 	height = h / 2;
@@ -356,12 +356,12 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DN
 	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_cylinder);
 }
 
-void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 b, float r, float h, DNvec3 orient)
+void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 b, float r, float h, DNquaternion orient)
 {
 	DNmat4 transform;
 	b.y += h;
 	transform = DN_mat4_translate(b);
-	transform = DN_mat4_mult(transform, DN_mat4_rotate_euler(orient));
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
 	float hyp = sqrtf(r * r + h * h);
 	angles = (DNvec2){h / hyp, r / hyp};

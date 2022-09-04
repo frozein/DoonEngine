@@ -70,7 +70,7 @@ void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius,
 	DN_shape_sphere(vol, bowlVox, NULL, pos, radius);
 	bowlVox.material = DN_MATERIAL_EMPTY;
 	DN_shape_sphere(vol, bowlVox, NULL, pos, radius - 5.0f);
-	DN_shape_box(vol, bowlVox, NULL, (DNvec3){pos.x, pos.y + radius * 0.5f, pos.z}, (DNvec3){radius, radius * 0.5f, radius}, (DNvec3){0.0f, 0.0f, 0.0f});
+	DN_shape_box(vol, bowlVox, NULL, (DNvec3){pos.x, pos.y + radius * 0.5f, pos.z}, (DNvec3){radius, radius * 0.5f, radius}, DN_quaternion_identity());
 
 	int numCereal = 0;
 	switch(shape)
@@ -102,7 +102,8 @@ void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius,
 		cerealVox.material = material;
 		cerealVox.albedo = colors[rand() % numColors];
 		DNvec3 finalPos = {pos.x + point.x, pos.y + point.y, pos.z + point.z};
-		DNvec3 orient = {rand() % 360, rand() % 360, rand() % 360};
+		DNvec3 orientEuler = {rand() % 360, rand() % 360, rand() % 360};
+		QMquaternion orient = DN_quaternion_from_euler(orientEuler);
 
 		switch(shape)
 		{

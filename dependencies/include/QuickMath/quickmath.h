@@ -56,6 +56,7 @@
  * QMmat4       QM_mat4_look                  (QMvec3 pos, QMvec3 dir   , QMvec3 up);
  * QMmat4       QM_mat4_lookat                (QMvec3 pos, QMvec3 target, QMvec3 up);
  * 
+ * QMquaternion QM_quaternion_identity        ();
  * QMquaternion QM_quaternion_add             (QMquaternion q1, QMquaternion q2);
  * QMquaternion QM_quaternion_sub             (QMquaternion q1, QMquaternion q2);
  * QMquaternion QM_quaternion_mult            (QMquaternion q1, QMquaternion q2);
@@ -1083,6 +1084,18 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_lookat)(QMvec3 pos, QMvec3 target, QMvec3 up)
 
 //----------------------------------------------------------------------//
 //QUATERNION FUNCTIONS:
+
+QM_INLINE QMquaternion QM_PREFIX(quaternion_identity)()
+{
+	QMquaternion result;
+
+	result.x = 0.0f;
+	result.y = 0.0f;
+	result.z = 0.0f;
+	result.w = 1.0f;
+
+	return result;
+}
 
 QM_INLINE QMquaternion QM_PREFIX(quaternion_add)(QMquaternion q1, QMquaternion q2)
 {
