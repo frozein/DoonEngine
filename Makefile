@@ -16,11 +16,11 @@ INC_FLAGS := $(addprefix -I,$(INC_DIRS))
 LD_FLAGS := -lm -lglfw -lGL
 
 $(BUILD_DIR)/$(TARGET_EXEC): $(OBJS)
-	$(CC) $(LD_FLAGS) $(OBJS) -o $@
+	$(CC) $(LD_FLAGS) $(OBJS) -o $@ -march=native
 
 $(BUILD_DIR)/%.c.o: %.c
 	$(MKDIR_P) $(dir $@)
-	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(INC_FLAGS) -c $< -o $@ -march=native
 
 .PHONY: clean
 
