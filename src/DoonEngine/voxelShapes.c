@@ -144,9 +144,9 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNv
 	mapMin.x = QM_MAX(mapMin.x, 0);
 	mapMin.y = QM_MAX(mapMin.y, 0);
 	mapMin.z = QM_MAX(mapMin.z, 0);
-	mapMax.x = QM_MIN(mapMax.x, vol->mapSize.x);
-	mapMax.y = QM_MIN(mapMax.y, vol->mapSize.y);
-	mapMax.z = QM_MIN(mapMax.z, vol->mapSize.z);
+	mapMax.x = QM_MIN(mapMax.x, vol->mapSize.x - 1);
+	mapMax.y = QM_MIN(mapMax.y, vol->mapSize.y - 1);
+	mapMax.z = QM_MIN(mapMax.z, vol->mapSize.z - 1);
 
 	//loop over every chunk:
 	for(int mZ = mapMin.z; mZ <= mapMax.z; mZ++)
