@@ -278,9 +278,13 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNve
 					DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
 					float maxNormal = fmax(fmax(fabs(fromCenter.x), fabs(fromCenter.y)), fabs(fromCenter.z));
 					fromCenter = DN_vec3_scale(fromCenter, -1.0f / maxNormal);
-					oldVox.normal = fromCenter;
-					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
-				}
+
+					if(func != NULL)
+						oldVox = func(pos, fromCenter, oldVox, min, max, DN_mat4_identity());
+					else
+						oldVox.normal = fromCenter;
+
+					DN_set_voxel(vol, mapPos, chunkPos, oldVox);				}
 			}
 		}
 	}
