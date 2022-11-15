@@ -8,11 +8,14 @@
  * 
  * ------------------------------------------------------------------------
  * 
- * to disable the need to link with the C runtime library, change the macros beginning
- * on line 93 and the #include on line 91 to the appropirate functions/files
- * 
  * to change or disable the function prefix (the default is "QM_"), change the macro on
- * line 87 to contain the desired prefix, or "#define QM_PREFIX" for no prefix
+ * line 98 to contain the desired prefix, or "#define QM_PREFIX" for no prefix
+ * 
+ * if you wish not to use SSE3 intrinsics (if they are not supported for example),
+ * change the macro on line 88 to "#define QM_USE_SSE 0"
+ * 
+ * to disable the need to link with the C runtime library, change the macros beginning
+ * on line 104 and the #include on line 102 to the appropirate functions/files
  * 
  * ------------------------------------------------------------------------
  * 
@@ -80,8 +83,14 @@ extern "C"
 {
 #endif
 
-#include <xmmintrin.h>
-#include <pmmintrin.h>
+//if you wish NOT to use SSE3 SIMD intrinsics, simply change the
+//#define to 0
+#define QM_USE_SSE 1
+#if QM_USE_SSE
+	#include <xmmintrin.h>
+	#include <pmmintrin.h>
+#endif
+
 #define QM_INLINE static inline
 
 //if you wish to set your own function prefix or remove it entirely,
@@ -126,7 +135,12 @@ typedef union
 	float v[4];
 	struct{ float x, y, z, w; };
 	struct{ float r, g, b, a; };
+
+	#if QM_USE_SSE
+
 	__m128 packed;
+
+	#endif
 } QMvec4;
 
 //-----------------------------//
@@ -140,7 +154,12 @@ typedef union
 typedef union
 {
 	float m[4][4];
+
+	#if QM_USE_SSE
+
 	__m128 packed[4]; //array of columns
+
+	#endif
 } QMmat4;
 
 //-----------------------------//
@@ -149,7 +168,12 @@ typedef union
 {
 	float q[4];
 	struct{ float x, y, z, w; };
+
+	#if QM_USE_SSE
+
 	__m128 packed;
+
+	#endif
 } QMquaternion;
 
 //typedefs:
@@ -177,6 +201,8 @@ QM_INLINE float QM_PREFIX(deg_to_rad)(float deg)
 	return deg * 0.01745329251f;
 }
 
+#if QM_USE_SSE
+
 QM_INLINE __m128 QM_PREFIX(mat4_mult_column_sse)(__m128 c1, QMmat4 m2)
 {
 	__m128 result;
@@ -188,6 +214,8 @@ QM_INLINE __m128 QM_PREFIX(mat4_mult_column_sse)(__m128 c1, QMmat4 m2)
 
 	return result;
 }
+
+#endif
 
 //----------------------------------------------------------------------//
 //VECTOR FUNCTIONS:
@@ -219,7 +247,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_add)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_add_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = v1.x + v2.x;
+	result.y = v1.y + v2.y;
+	result.z = v1.z + v2.z;
+	result.w = v1.w + v2.w;
+
+	#endif
 
 	return result;
 }
@@ -251,7 +290,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_sub)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_sub_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = v1.x - v2.x;
+	result.y = v1.y - v2.y;
+	result.z = v1.z - v2.z;
+	result.w = v1.w - v2.w;
+
+	#endif
 
 	return result;
 }
@@ -283,7 +333,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_mult)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_mul_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = v1.x * v2.x;
+	result.y = v1.y * v2.y;
+	result.z = v1.z * v2.z;
+	result.w = v1.w * v2.w;
+
+	#endif
 
 	return result;
 }
@@ -315,7 +376,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_div)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_div_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = v1.x / v2.x;
+	result.y = v1.y / v2.y;
+	result.z = v1.z / v2.z;
+	result.w = v1.w / v2.w;
+
+	#endif
 
 	return result;
 }
@@ -347,8 +419,19 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_scale)(QMvec4 v, float s)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	__m128 scale = _mm_set1_ps(s);
 	result.packed = _mm_mul_ps(v.packed, scale);
+
+	#else
+
+	result.x = v.x * s;
+	result.y = v.y * s;
+	result.z = v.z * s;
+	result.w = v.w * s;
+
+	#endif
 
 	return result;
 }
@@ -377,10 +460,18 @@ QM_INLINE float QM_PREFIX(vec4_dot)(QMvec4 v1, QMvec4 v2)
 {
 	float result;
 
+	#if QM_USE_SSE
+
 	__m128 r = _mm_mul_ps(v1.packed, v2.packed);
 	r = _mm_hadd_ps(r, r);
 	r = _mm_hadd_ps(r, r);
 	_mm_store_ss(&result, r);
+
+	#else
+
+	result = v1.x * v2.x + v1.y * v2.y + v1.z * v2.z + v1.w * v2.w;
+
+	#endif
 
 	return result;
 }
@@ -464,13 +555,24 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_normalize)(QMvec4 v)
 {
 	QMvec4 result = {0};
 
-	float invLen = QM_PREFIX(vec4_length)(v);
-	if(invLen != 0.0f)
+	float len = QM_PREFIX(vec4_length)(v);
+	if(len != 0.0f)
 	{
-		invLen = 1.0f / invLen;
+		#if QM_USE_SSE
 
-		__m128 scale = _mm_set1_ps(invLen);
-		result.packed = _mm_mul_ps(v.packed, scale);
+		__m128 scale = _mm_set1_ps(len);
+		result.packed = _mm_div_ps(v.packed, scale);
+
+		#else
+
+		float invLen = 1.0f / len;
+
+		result.x = v.x * invLen;
+		result.y = v.y * invLen;
+		result.z = v.z * invLen;
+		result.w = v.w * invLen;
+
+		#endif
 	}
 
 	return result;
@@ -565,7 +667,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_min)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_min_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = QM_MIN(v1.x, v2.x);
+	result.y = QM_MIN(v1.y, v2.y);
+	result.z = QM_MIN(v1.z, v2.z);
+	result.w = QM_MIN(v1.w, v2.w);
+
+	#endif
 
 	return result;
 }
@@ -597,7 +710,18 @@ QM_INLINE QMvec4 QM_PREFIX(vec4_max)(QMvec4 v1, QMvec4 v2)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_max_ps(v1.packed, v2.packed);
+
+	#else
+
+	result.x = QM_MAX(v1.x, v2.x);
+	result.y = QM_MAX(v1.y, v2.y);
+	result.z = QM_MAX(v1.z, v2.z);
+	result.w = QM_MAX(v1.w, v2.w);
+
+	#endif
 
 	return result;
 }
@@ -653,10 +777,33 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_add)(QMmat4 m1, QMmat4 m2)
 {
 	QMmat4 result;
 
+	#if QM_USE_SSE
+
 	result.packed[0] = _mm_add_ps(m1.packed[0], m2.packed[0]);
 	result.packed[1] = _mm_add_ps(m1.packed[1], m2.packed[1]);
 	result.packed[2] = _mm_add_ps(m1.packed[2], m2.packed[2]);
 	result.packed[3] = _mm_add_ps(m1.packed[3], m2.packed[3]);
+
+	#else
+
+	result.m[0][0] = m1.m[0][0] + m2.m[0][0];
+	result.m[0][1] = m1.m[0][1] + m2.m[0][1];
+	result.m[0][2] = m1.m[0][2] + m2.m[0][2];
+	result.m[0][3] = m1.m[0][3] + m2.m[0][3];
+	result.m[1][0] = m1.m[1][0] + m2.m[1][0];
+	result.m[1][1] = m1.m[1][1] + m2.m[1][1];
+	result.m[1][2] = m1.m[1][2] + m2.m[1][2];
+	result.m[1][3] = m1.m[1][3] + m2.m[1][3];
+	result.m[2][0] = m1.m[2][0] + m2.m[2][0];
+	result.m[2][1] = m1.m[2][1] + m2.m[2][1];
+	result.m[2][2] = m1.m[2][2] + m2.m[2][2];
+	result.m[2][3] = m1.m[2][3] + m2.m[2][3];
+	result.m[3][0] = m1.m[3][0] + m2.m[3][0];
+	result.m[3][1] = m1.m[3][1] + m2.m[3][1];
+	result.m[3][2] = m1.m[3][2] + m2.m[3][2];
+	result.m[3][3] = m1.m[3][3] + m2.m[3][3];
+
+	#endif
 
 	return result;
 }
@@ -684,10 +831,33 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_sub)(QMmat4 m1, QMmat4 m2)
 {
 	QMmat4 result;
 
+	#if QM_USE_SSE
+
 	result.packed[0] = _mm_sub_ps(m1.packed[0], m2.packed[0]);
 	result.packed[1] = _mm_sub_ps(m1.packed[1], m2.packed[1]);
 	result.packed[2] = _mm_sub_ps(m1.packed[2], m2.packed[2]);
 	result.packed[3] = _mm_sub_ps(m1.packed[3], m2.packed[3]);
+
+	#else
+
+	result.m[0][0] = m1.m[0][0] - m2.m[0][0];
+	result.m[0][1] = m1.m[0][1] - m2.m[0][1];
+	result.m[0][2] = m1.m[0][2] - m2.m[0][2];
+	result.m[0][3] = m1.m[0][3] - m2.m[0][3];
+	result.m[1][0] = m1.m[1][0] - m2.m[1][0];
+	result.m[1][1] = m1.m[1][1] - m2.m[1][1];
+	result.m[1][2] = m1.m[1][2] - m2.m[1][2];
+	result.m[1][3] = m1.m[1][3] - m2.m[1][3];
+	result.m[2][0] = m1.m[2][0] - m2.m[2][0];
+	result.m[2][1] = m1.m[2][1] - m2.m[2][1];
+	result.m[2][2] = m1.m[2][2] - m2.m[2][2];
+	result.m[2][3] = m1.m[2][3] - m2.m[2][3];
+	result.m[3][0] = m1.m[3][0] - m2.m[3][0];
+	result.m[3][1] = m1.m[3][1] - m2.m[3][1];
+	result.m[3][2] = m1.m[3][2] - m2.m[3][2];
+	result.m[3][3] = m1.m[3][3] - m2.m[3][3];
+
+	#endif
 
 	return result;
 }
@@ -715,10 +885,33 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_mult)(QMmat4 m1, QMmat4 m2)
 {
 	QMmat4 result;
 
+	#if QM_USE_SSE
+
 	result.packed[0] = QM_PREFIX(mat4_mult_column_sse)(m2.packed[0], m1);
 	result.packed[1] = QM_PREFIX(mat4_mult_column_sse)(m2.packed[1], m1);
 	result.packed[2] = QM_PREFIX(mat4_mult_column_sse)(m2.packed[2], m1);
 	result.packed[3] = QM_PREFIX(mat4_mult_column_sse)(m2.packed[3], m1);
+
+	#else
+
+	result.m[0][0] = m1.m[0][0] * m2.m[0][0] + m1.m[1][0] * m2.m[0][1] + m1.m[2][0] * m2.m[0][2] + m1.m[3][0] * m2.m[0][3];
+	result.m[0][1] = m1.m[0][1] * m2.m[0][0] + m1.m[1][1] * m2.m[0][1] + m1.m[2][1] * m2.m[0][2] + m1.m[3][1] * m2.m[0][3];
+	result.m[0][2] = m1.m[0][2] * m2.m[0][0] + m1.m[1][2] * m2.m[0][1] + m1.m[2][2] * m2.m[0][2] + m1.m[3][2] * m2.m[0][3];
+	result.m[0][3] = m1.m[0][3] * m2.m[0][0] + m1.m[1][3] * m2.m[0][1] + m1.m[2][3] * m2.m[0][2] + m1.m[3][3] * m2.m[0][3];
+	result.m[1][0] = m1.m[0][0] * m2.m[1][0] + m1.m[1][0] * m2.m[1][1] + m1.m[2][0] * m2.m[1][2] + m1.m[3][0] * m2.m[1][3];
+	result.m[1][1] = m1.m[0][1] * m2.m[1][0] + m1.m[1][1] * m2.m[1][1] + m1.m[2][1] * m2.m[1][2] + m1.m[3][1] * m2.m[1][3];
+	result.m[1][2] = m1.m[0][2] * m2.m[1][0] + m1.m[1][2] * m2.m[1][1] + m1.m[2][2] * m2.m[1][2] + m1.m[3][2] * m2.m[1][3];
+	result.m[1][3] = m1.m[0][3] * m2.m[1][0] + m1.m[1][3] * m2.m[1][1] + m1.m[2][3] * m2.m[1][2] + m1.m[3][3] * m2.m[1][3];
+	result.m[2][0] = m1.m[0][0] * m2.m[2][0] + m1.m[1][0] * m2.m[2][1] + m1.m[2][0] * m2.m[2][2] + m1.m[3][0] * m2.m[2][3];
+	result.m[2][1] = m1.m[0][1] * m2.m[2][0] + m1.m[1][1] * m2.m[2][1] + m1.m[2][1] * m2.m[2][2] + m1.m[3][1] * m2.m[2][3];
+	result.m[2][2] = m1.m[0][2] * m2.m[2][0] + m1.m[1][2] * m2.m[2][1] + m1.m[2][2] * m2.m[2][2] + m1.m[3][2] * m2.m[2][3];
+	result.m[2][3] = m1.m[0][3] * m2.m[2][0] + m1.m[1][3] * m2.m[2][1] + m1.m[2][3] * m2.m[2][2] + m1.m[3][3] * m2.m[2][3];
+	result.m[3][0] = m1.m[0][0] * m2.m[3][0] + m1.m[1][0] * m2.m[3][1] + m1.m[2][0] * m2.m[3][2] + m1.m[3][0] * m2.m[3][3];
+	result.m[3][1] = m1.m[0][1] * m2.m[3][0] + m1.m[1][1] * m2.m[3][1] + m1.m[2][1] * m2.m[3][2] + m1.m[3][1] * m2.m[3][3];
+	result.m[3][2] = m1.m[0][2] * m2.m[3][0] + m1.m[1][2] * m2.m[3][1] + m1.m[2][2] * m2.m[3][2] + m1.m[3][2] * m2.m[3][3];
+	result.m[3][3] = m1.m[0][3] * m2.m[3][0] + m1.m[1][3] * m2.m[3][1] + m1.m[2][3] * m2.m[3][2] + m1.m[3][3] * m2.m[3][3];
+
+	#endif
 
 	return result;
 }
@@ -738,7 +931,18 @@ QM_INLINE QMvec4 QM_PREFIX(mat4_mult_vec4)(QMmat4 m, QMvec4 v)
 {
 	QMvec4 result;
 
+	#if QM_USE_SSE
+
 	result.packed = QM_PREFIX(mat4_mult_column_sse)(v.packed, m);
+
+	#else
+
+	result.x = m.m[0][0] * v.x + m.m[1][0] * v.y + m.m[2][0] * v.z + m.m[3][0] * v.w;
+	result.y = m.m[0][1] * v.x + m.m[1][1] * v.y + m.m[2][1] * v.z + m.m[3][1] * v.w;
+	result.z = m.m[0][2] * v.x + m.m[1][2] * v.y + m.m[2][2] * v.z + m.m[3][2] * v.w;
+	result.w = m.m[0][3] * v.x + m.m[1][3] * v.y + m.m[2][3] * v.z + m.m[3][3] * v.w;
+
+	#endif
 
 	return result;
 }
@@ -766,7 +970,30 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_transpose)(QMmat4 m)
 {
 	QMmat4 result = m;
 
+	#if QM_USE_SSE
+
 	_MM_TRANSPOSE4_PS(result.packed[0], result.packed[1], result.packed[2], result.packed[3]);
+
+	#else
+
+	result.m[0][0] = m.m[0][0];
+	result.m[0][1] = m.m[1][0];
+	result.m[0][2] = m.m[2][0];
+	result.m[0][3] = m.m[3][0];
+	result.m[1][0] = m.m[0][1];
+	result.m[1][1] = m.m[1][1];
+	result.m[1][2] = m.m[2][1];
+	result.m[1][3] = m.m[3][1];
+	result.m[2][0] = m.m[0][2];
+	result.m[2][1] = m.m[1][2];
+	result.m[2][2] = m.m[2][2];
+	result.m[2][3] = m.m[3][2];
+	result.m[3][0] = m.m[0][3];
+	result.m[3][1] = m.m[1][3];
+	result.m[3][2] = m.m[2][3];
+	result.m[3][3] = m.m[3][3];
+
+	#endif
 
 	return result;
 }
@@ -864,11 +1091,34 @@ QM_INLINE QMmat4 QM_PREFIX(mat4_inv)(QMmat4 mat)
   	det = 1.0f / (a * result.m[0][0] + b * result.m[1][0]
                 + c * result.m[2][0] + d * result.m[3][0]);
 
+	#if QM_USE_SSE
+
 	__m128 scale = _mm_set1_ps(det);
 	result.packed[0] = _mm_mul_ps(result.packed[0], scale);
 	result.packed[1] = _mm_mul_ps(result.packed[1], scale);
 	result.packed[2] = _mm_mul_ps(result.packed[2], scale);
 	result.packed[3] = _mm_mul_ps(result.packed[3], scale);
+
+	#else
+
+	result.m[0][0] = result.m[0][0] * det;
+	result.m[0][1] = result.m[0][1] * det;
+	result.m[0][2] = result.m[0][2] * det;
+	result.m[0][3] = result.m[0][3] * det;
+	result.m[1][0] = result.m[1][0] * det;
+	result.m[1][1] = result.m[1][1] * det;
+	result.m[1][2] = result.m[1][2] * det;
+	result.m[1][3] = result.m[1][3] * det;
+	result.m[2][0] = result.m[2][0] * det;
+	result.m[2][1] = result.m[2][1] * det;
+	result.m[2][2] = result.m[2][2] * det;
+	result.m[2][3] = result.m[2][3] * det;
+	result.m[3][0] = result.m[3][0] * det;
+	result.m[3][1] = result.m[3][1] * det;
+	result.m[3][2] = result.m[3][2] * det;
+	result.m[3][3] = result.m[3][3] * det;
+
+	#endif
 
   	return result;
 }
@@ -1101,7 +1351,18 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_add)(QMquaternion q1, QMquaternion q
 {
 	QMquaternion result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_add_ps(q1.packed, q2.packed);
+
+	#else
+
+	result.x = q1.x + q2.x;
+	result.y = q1.y + q2.y;
+	result.z = q1.z + q2.z;
+	result.w = q1.w + q2.w;
+
+	#endif
 
 	return result;
 }
@@ -1110,7 +1371,18 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_sub)(QMquaternion q1, QMquaternion q
 {
 	QMquaternion result;
 
+	#if QM_USE_SSE
+
 	result.packed = _mm_sub_ps(q1.packed, q2.packed);
+
+	#else
+
+	result.x = q1.x - q2.x;
+	result.y = q1.y - q2.y;
+	result.z = q1.z - q2.z;
+	result.w = q1.w - q2.w;
+
+	#endif
 
 	return result;
 }
@@ -1118,6 +1390,8 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_sub)(QMquaternion q1, QMquaternion q
 QM_INLINE QMquaternion QM_PREFIX(quaternion_mult)(QMquaternion q1, QMquaternion q2)
 {
 	QMquaternion result;
+
+	#if QM_USE_SSE
 
 	__m128 temp1;
 	__m128 temp2;
@@ -1138,6 +1412,15 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_mult)(QMquaternion q1, QMquaternion 
 	temp2 = _mm_shuffle_ps(q2.packed, q2.packed, _MM_SHUFFLE(2, 3, 0, 1));
 	result.packed = _mm_add_ps(result.packed, _mm_mul_ps(temp1, temp2));
 
+	#else
+
+	result.x = q1.w * q2.x + q1.x * q2.w + q1.y * q2.z - q1.z * q2.y;
+    result.y = q1.w * q2.y - q1.x * q2.z + q1.y * q2.w + q1.z * q2.x;
+    result.z = q1.w * q2.z + q1.x * q2.y - q1.y * q2.x + q1.z * q2.w;
+    result.w = q1.w * q2.w - q1.x * q2.x - q1.y * q2.y - q1.z * q2.z;
+
+	#endif
+
 	return result;
 }
 
@@ -1145,8 +1428,19 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_scale)(QMquaternion q, float s)
 {
 	QMquaternion result;
 
+	#if QM_USE_SSE
+
 	__m128 scale = _mm_set1_ps(s);
 	result.packed = _mm_mul_ps(q.packed, scale);
+
+	#else
+
+	result.x = q.x * s;
+	result.y = q.y * s;
+	result.z = q.z * s;
+	result.w = q.w * s;
+
+	#endif
 
 	return result;
 }
@@ -1155,10 +1449,18 @@ QM_INLINE float QM_PREFIX(quaternion_dot)(QMquaternion q1, QMquaternion q2)
 {
 	float result;
 
+	#if QM_USE_SSE
+
 	__m128 r = _mm_mul_ps(q1.packed, q2.packed);
 	r = _mm_hadd_ps(r, r);
 	r = _mm_hadd_ps(r, r);
 	_mm_store_ss(&result, r);
+
+	#else
+
+	result = q1.x * q2.x + q1.y * q2.y + q1.z * q2.z + q1.w * q2.w;
+
+	#endif
 
 	return result;
 }
@@ -1176,13 +1478,24 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_normalize)(QMquaternion q)
 {
 	QMquaternion result = {0};
 
-	float invLen = QM_PREFIX(quaternion_length)(q);
-	if(invLen != 0.0f)
+	float len = QM_PREFIX(quaternion_length)(q);
+	if(len != 0.0f)
 	{
-		invLen = 1.0f / invLen;
+		#if QM_USE_SSE
 
-		__m128 scale = _mm_set1_ps(invLen);
-		result.packed = _mm_mul_ps(q.packed, scale);
+		__m128 scale = _mm_set1_ps(len);
+		result.packed = _mm_div_ps(q.packed, scale);
+
+		#else
+
+		float invLen = 1.0f / len;
+
+		result.x = q.x * invLen;
+		result.y = q.y * invLen;
+		result.z = q.z * invLen;
+		result.w = q.w * invLen;
+
+		#endif
 	}
 
 	return result;
@@ -1209,8 +1522,21 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_inv)(QMquaternion q)
 	result.z = -q.z;
 	result.w = q.w;
 
+	#if QM_USE_SSE
+
 	__m128 scale = _mm_set1_ps(QM_PREFIX(quaternion_dot)(q, q));
 	_mm_div_ps(result.packed, scale);
+
+	#else
+
+	float invLen2 = 1.0f / QM_PREFIX(quaternion_dot)(q, q);
+
+	result.x *= invLen2;
+	result.y *= invLen2;
+	result.z *= invLen2;
+	result.w *= invLen2;
+
+	#endif
 
 	return result;
 }
@@ -1267,6 +1593,8 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_from_euler)(QMvec3 angles)
 	float sinz = QM_SINF(radians.z);
 	float cosz = QM_COSF(radians.z);
 
+	#if QM_USE_SSE
+
 	__m128 packedx = _mm_setr_ps(sinx, cosx, cosx, cosx);
 	__m128 packedy = _mm_setr_ps(cosy, siny, cosy, cosy);
 	__m128 packedz = _mm_setr_ps(cosz, cosz, sinz, cosz);
@@ -1278,6 +1606,15 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_from_euler)(QMvec3 angles)
 	packedz = _mm_shuffle_ps(packedz, packedz, _MM_SHUFFLE(2, 0, 2, 2));
 
 	result.packed = _mm_addsub_ps(result.packed, _mm_mul_ps(_mm_mul_ps(packedx, packedy), packedz));
+
+	#else
+
+	result.x = sinx * cosy * cosz - cosx * siny * sinz;
+	result.y = cosx * siny * cosz + sinx * cosy * sinz;
+	result.z = cosx * cosy * sinz - sinx * siny * cosz;
+	result.w = cosx * cosy * cosz + sinx * siny * sinz;
+
+	#endif
 
 	return result;
 }
