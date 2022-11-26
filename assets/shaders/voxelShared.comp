@@ -407,8 +407,8 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 		if(maxDepth > 0.0)
 		{
 			vec3 voxelPos = mapPos + pos * INV_CHUNK_SIZE;
-			vec2 intersection = intersect_AABB(invRayDir, orgRayPos, voxelPos, voxelPos + INV_CHUNK_SIZE);
-			if(intersection.x >= maxDepth)
+			vec3 from = orgRayPos - voxelPos;
+			if(dot(from, from) > maxDepth * maxDepth)
 				return 2;
 		}
 	}
@@ -436,8 +436,8 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 		//check if past the maximum depth:
 		if(maxDepth > 0.0)
 		{
-			vec2 intersection = intersect_AABB(invRayDir, orgRayPos, pos, pos + 1.0);
-			if(intersection.x > maxDepth)
+			vec3 from = orgRayPos - pos;
+			if(dot(from, from) > maxDepth * maxDepth)
 				return false;
 		}
 
