@@ -31,68 +31,75 @@ typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DN
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the sphere's center
  * @param r the sphere's radius
  */
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r);
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r);
 /* Places a box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, DNquaternion orient);
+void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, DNquaternion orient);
 /* Places a rounded box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the box's center
  * @param len the distance from the center to the edge of the box, in each direction
  * @param r the box's radius
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, float r, DNquaternion orient);
+void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, float r, DNquaternion orient);
 /* Places a torus into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the torus's center
  * @param ra the center radius of the torus
  * @param rb the radius of the "ring" of the torus
  * @param orient the torus's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float ra, float rb, DNquaternion orient);
+void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float ra, float rb, DNquaternion orient);
 /* Places an ellipsoid into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the center of the ellipsoid
  * @param r the lengths of the semi-axes of the ellipsoid
  * @param orient the ellipsoid's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 r, DNquaternion orient);
+void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 r, DNquaternion orient);
 /* Places a cylinder into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the center of the cylinder
  * @param r the radius of the cylinder
  * @param h the height of the cylinder
  * @param orient the cylinder's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r, float h, DNquaternion orient);
+void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r, float h, DNquaternion orient);
 /* Places a cone into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param b the position of the cone's base
  * @param r the radius of the cone
  * @param h the height of the cone
  * @param orient the cone's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 b, float r, float h, DNquaternion orient);
+void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:

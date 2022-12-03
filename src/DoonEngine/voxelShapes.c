@@ -119,7 +119,7 @@ static DNvec3 _DN_calc_normal(DNvec4 p, DNmat4 invTransform, float dist, float (
 }
 
 //places a shape in a volume, using the given SDF
-static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
+static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 min, DNvec3 max, DNmat4 transform, float (*sdf)(DNvec3))
 {
 	DNmat4 invTransform = DN_mat4_inv(transform);
 
@@ -185,7 +185,7 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNv
 					DN_set_voxel(vol, mapPos, chunkPos, finalVox);
 				}
 			}
-			else if(dist < 1.0f && voxel.material == DN_MATERIAL_EMPTY)
+			else if(dist < 1.0f && voxel.material == DN_MATERIAL_EMPTY && flipNormals)
 			{
 				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
 				{
@@ -202,7 +202,7 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNv
 //SHAPES
 
 //note: this function is implemented differently so as to be more efficient
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r)
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r)
 {
 	//find min and max points:
 	DNvec3 min = {c.x - r, c.y - r, c.z - r};
@@ -227,9 +227,9 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNve
 	mapMin.x = QM_MAX(mapMin.x, 0);
 	mapMin.y = QM_MAX(mapMin.y, 0);
 	mapMin.z = QM_MAX(mapMin.z, 0);
-	mapMax.x = QM_MIN(mapMax.x, vol->mapSize.x);
-	mapMax.y = QM_MIN(mapMax.y, vol->mapSize.y);
-	mapMax.z = QM_MIN(mapMax.z, vol->mapSize.z);
+	mapMax.x = QM_MIN(mapMax.x, vol->mapSize.x - 1);
+	mapMax.y = QM_MIN(mapMax.y, vol->mapSize.y - 1);
+	mapMax.z = QM_MIN(mapMax.z, vol->mapSize.z - 1);
 
 	const float r2 = r * r;
 	const float r12 = (r + 1.0f) * (r + 1.0f);
@@ -271,7 +271,7 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNve
 					DN_set_voxel(vol, mapPos, chunkPos, finalVox);
 				}
 			}
-			else if(voxel.material == DN_MATERIAL_EMPTY && dist2 < r12)
+			else if(voxel.material == DN_MATERIAL_EMPTY && flipNormals && dist2 < r12)
 			{
 				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
 				{
@@ -284,13 +284,14 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNve
 					else
 						oldVox.normal = fromCenter;
 
-					DN_set_voxel(vol, mapPos, chunkPos, oldVox);				}
+					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
+				}
 			}
 		}
 	}
 }
 
-void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, DNquaternion orient)
+void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
@@ -298,10 +299,10 @@ void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 
 
 	length = len;
 
-	_DN_shape(vol, voxel, func, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
+	_DN_shape(vol, voxel, func, flipNormals, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
 }
 
-void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 len, float r, DNquaternion orient)
+void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, float r, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
@@ -313,10 +314,10 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func,
 	DNvec3 min = {-len.x - r, -len.y - r, -len.z - r};
 	DNvec3 max = { len.x + r,  len.x + r,  len.x + r};
 
-	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_rounded_box);
+	_DN_shape(vol, voxel, func, flipNormals, min, max, transform, _DN_sdf_rounded_box);
 }
 
-void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float ra, float rb, DNquaternion orient)
+void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float ra, float rb, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
@@ -328,10 +329,10 @@ void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec
 	DNvec3 min = (DNvec3){-(ra + rb), -rb, -(ra + rb)};
 	DNvec3 max = (DNvec3){ (ra + rb),  rb,  (ra + rb)};
 
-	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_torus);
+	_DN_shape(vol, voxel, func, flipNormals, min, max, transform, _DN_sdf_torus);
 }
 
-void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, DNvec3 r, DNquaternion orient)
+void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 r, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
@@ -342,10 +343,10 @@ void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, D
 	DNvec3 min = {-r.x, -r.y, -r.z};
 	DNvec3 max = { r.x,  r.y,  r.z};
 
-	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_ellipsoid);
+	_DN_shape(vol, voxel, func, flipNormals, min, max, transform, _DN_sdf_ellipsoid);
 }
 
-void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 c, float r, float h, DNquaternion orient)
+void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r, float h, DNquaternion orient)
 {
 	DNmat4 transform;
 	transform = DN_mat4_translate(c);
@@ -357,10 +358,10 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DN
 	DNvec3 min = {-r, -h / 2, -r};
 	DNvec3 max = { r,  h / 2,  r};
 
-	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_cylinder);
+	_DN_shape(vol, voxel, func, flipNormals, min, max, transform, _DN_sdf_cylinder);
 }
 
-void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3 b, float r, float h, DNquaternion orient)
+void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient)
 {
 	DNmat4 transform;
 	b.y += h;
@@ -374,7 +375,7 @@ void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, DNvec3
 	DNvec3 min = {-r, -h, -r};
 	DNvec3 max = { r,  0,  r};
 
-	_DN_shape(vol, voxel, func, min, max, transform, _DN_sdf_cone);
+	_DN_shape(vol, voxel, func, flipNormals, min, max, transform, _DN_sdf_cone);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
