@@ -190,7 +190,13 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, boo
 				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
 				{
 					DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
-					oldVox.normal = DN_vec3_scale(_DN_calc_normal(pos, invTransform, dist, sdf), -1.0f);
+					DNvec3 flippedNormal = DN_vec3_scale(_DN_calc_normal(pos, invTransform, dist, sdf), -1.0f);
+
+					if(func != NULL)
+						oldVox = func((DNvec3){pos.x, pos.y, pos.z}, flippedNormal, oldVox, min, max, DN_mat4_identity());
+					else
+						oldVox.normal = flippedNormal;
+
 					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
 				}
 			}
