@@ -1396,7 +1396,7 @@ QM_INLINE QMquaternion QM_PREFIX(quaternion_mult)(QMquaternion q1, QMquaternion 
 	__m128 temp1;
 	__m128 temp2;
 
-	temp1 = _mm_shuffle_ps(q1.packed, q2.packed, _MM_SHUFFLE(3, 3, 3, 3));
+	temp1 = _mm_shuffle_ps(q1.packed, q1.packed, _MM_SHUFFLE(3, 3, 3, 3));
 	temp2 = q2.packed;
 	result.packed = _mm_mul_ps(temp1, temp2);
 
