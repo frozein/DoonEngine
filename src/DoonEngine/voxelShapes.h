@@ -25,7 +25,7 @@ extern "C"
  * @param invTransform the inverse transform matrix of the shape, use this to go into the shape's "local space"
  * @return the voxel to be placed
  */
-typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DNvec3 shapeMin, DNvec3 shapeMax, DNmat4 invTransform);
+typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DNvec3 shapeMin, DNvec3 shapeMax, DNmat4 invTransform, void* userData);
 
 /* Places a sphere into a map
  * @param vol the volume to edit
@@ -35,7 +35,7 @@ typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DN
  * @param c the sphere's center
  * @param r the sphere's radius
  */
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r);
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, VoxelTransformFunc func, void* userData);
 /* Places a box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -45,7 +45,7 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool
  * @param len the distance from the center to the edge of the box, in each direction
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, DNquaternion orient);
+void DN_shape_box(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, DNvec3 len, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places a rounded box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -56,7 +56,7 @@ void DN_shape_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool fl
  * @param r the box's radius
  * @param orient the box's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 len, float r, DNquaternion orient);
+void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, DNvec3 len, float r, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places a torus into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -67,7 +67,7 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func,
  * @param rb the radius of the "ring" of the torus
  * @param orient the torus's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float ra, float rb, DNquaternion orient);
+void DN_shape_torus(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float ra, float rb, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places an ellipsoid into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -77,7 +77,7 @@ void DN_shape_torus(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool 
  * @param r the lengths of the semi-axes of the ellipsoid
  * @param orient the ellipsoid's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, DNvec3 r, DNquaternion orient);
+void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, DNvec3 r, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places a cylinder into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -88,7 +88,7 @@ void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, b
  * @param h the height of the cylinder
  * @param orient the cylinder's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 c, float r, float h, DNquaternion orient);
+void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, float h, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places a cone into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
@@ -99,7 +99,7 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bo
  * @param h the height of the cone
  * @param orient the cone's orientation, expressed as {pitch, yaw, roll}
  */
-void DN_shape_cone(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient);
+void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient, VoxelTransformFunc func, void* userData);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:
