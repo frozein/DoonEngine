@@ -369,10 +369,15 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c,
 
 void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient, VoxelTransformFunc func, void* userData)
 {
+	DNvec3 upDir = {0.0f, 1.0f, 0.0f};
+	DNmat4 rotMat = DN_quaternion_to_mat4(orient);
+	DNvec4 temp = DN_mat4_mult_vec4(rotMat, (DNvec4){upDir.x, upDir.y, upDir.z, 1.0f});
+	upDir = (DNvec3){temp.x, temp.y, temp.z};
+
 	DNmat4 transform;
-	b.y += h;
+	b = DN_vec3_add(b, DN_vec3_scale(upDir, h));
 	transform = DN_mat4_translate(b);
-	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
+	transform = DN_mat4_mult(transform, rotMat);
 
 	float hyp = sqrtf(r * r + h * h);
 	angles = (DNvec2){h / hyp, r / hyp};
