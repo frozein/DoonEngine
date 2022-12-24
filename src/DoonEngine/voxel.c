@@ -1172,7 +1172,7 @@ void DN_set_view_projection_matrices(DNvolume* vol, float aspectRatio, float nea
 	}
 	
 	*view = DN_mat4_lookat(vol->camPos, DN_vec3_add(vol->camPos, camFront), (DNvec3){0.0f, 1.0f, 0.0f});
-	*projection = DN_mat4_perspective(vol->camFOV, 1.0f / aspectRatio, 0.1f, 100.0f);
+	*projection = DN_mat4_perspective(vol->camFOV, 1.0f / aspectRatio, nearPlane, farPlane);
 }
 
 void DN_draw(DNvolume* vol, unsigned int outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture)
