@@ -334,6 +334,15 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 
 	while(in_chunk_bounds(pos))
 	{
+		//check if past the maximum depth:
+		if(maxDepth > 0.0)
+		{
+			vec3 voxelPos = mapPos + pos * INV_CHUNK_SIZE;
+			vec3 from = orgRayPos - voxelPos;
+			if(dot(from, from) > maxDepth * maxDepth)
+				return 2;
+		}
+
 		//check if a solid voxel has been hit:
 		if (does_voxel_exist(chunk, pos) && !ignoreFirst)
 		{
@@ -402,15 +411,6 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 		lastSideDist = sideDist;
 		iterate_DDA(deltaDist, rayStep, sideDist, pos, hitNormal);
 		ignoreFirst = false;
-
-		//check if past the maximum depth:
-		if(maxDepth > 0.0)
-		{
-			vec3 voxelPos = mapPos + pos * INV_CHUNK_SIZE;
-			vec3 from = orgRayPos - voxelPos;
-			if(dot(from, from) > maxDepth * maxDepth)
-				return 2;
-		}
 	}
 
 	return 0;
@@ -437,7 +437,7 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 		if(maxDepth > 0.0)
 		{
 			vec3 from = orgRayPos - pos;
-			if(dot(from, from) > maxDepth * maxDepth)
+			if(dot(from, from) > (maxDepth + 1.0) * (maxDepth + 1.0)) //use maxDepth + 1 since we are on edge of chunk
 				return false;
 		}
 
