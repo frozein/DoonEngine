@@ -472,6 +472,8 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 			uint index = pos.x + mapSize.x * (pos.y + mapSize.y * pos.z);
 			map[index].flags = 3;
 			requested = true;
+
+			return false;
 		}
 
 		//iterate the dda algorithm:

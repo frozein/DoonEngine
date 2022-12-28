@@ -1023,7 +1023,6 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 			{
 				gpuMap[mapIndex].chunkIndex = 1;
 				gpuFlag = 1;
-				vol->chunks[cpuMap[mapIndex].chunkIndex].updated = false;
 			}
 			else if(cpuMap[mapIndex].flag == 0 && gpuFlag != 0) //if chunk was removed from the cpu map, remove it from the gpu map
 			{
@@ -1041,7 +1040,6 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 
 				gpuMap[mapIndex].chunkIndex = 3;
 				gpuFlag = 3;
-				vol->chunks[cpuMap[mapIndex].chunkIndex].updated = false;
 			}
 
 			//if flag = 3 (requested), try to load a new chunk:
@@ -1057,6 +1055,10 @@ void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit)
 				else if(_DN_stream_voxels(vol, pos, gpuMap, mapIndex, numVoxels, gpuVoxels))
 					resizeVoxels = true;
 			}
+
+			//set updated flag to false:
+			if(cpuMap[mapIndex].flag != 0)
+				vol->chunks[cpuMap[mapIndex].chunkIndex].updated = false;
 		}
 	}
 
