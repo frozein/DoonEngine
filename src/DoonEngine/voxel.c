@@ -1684,7 +1684,7 @@ DNcompressedVoxel DN_compress_voxel(DNvoxel voxel)
 
 	voxel.normal = DN_vec3_min(voxel.normal, (DNvec3){ 1.0f,  1.0f,  1.0f});
 	voxel.normal = DN_vec3_max(voxel.normal, (DNvec3){-1.0f, -1.0f, -1.0f});
-	DNuvec3 normal = {(uint8_t)((voxel.normal.x * 0.5f + 0.5f) * 255.0f), (uint8_t)((voxel.normal.y * 0.5f + 0.5f) * 255.0f), (uint8_t)((voxel.normal.z * 0.5f + 0.5f) * 255.0f)};
+	DNuvec3 normal = {((int)(voxel.normal.x * 255.0f) + 255) / 2, ((int)(voxel.normal.y * 255.0f) + 255) / 2, ((int)(voxel.normal.z * 255.0f) + 255) / 2};
 
 	res.normal = (voxel.material << 24) | (normal.x       << 16) | (normal.y       << 8) | (normal.z);
 	res.albedo = (voxel.albedo.r << 24) | (voxel.albedo.g << 16) | (voxel.albedo.b << 8);
@@ -1697,9 +1697,10 @@ DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel)
 	DNvoxel res;
 
 	const float inv255 = 1.0f / 255.0f;
-	DNvec3 normal = DN_vec3_scale((DNvec3){(voxel.normal >> 16) & 0xFF, (voxel.normal >> 8) & 0xFF, voxel.normal & 0xFF}, inv255);
+	DNivec3 normalRead = (DNivec3){(voxel.normal >> 16) & 0xFF, (voxel.normal >> 8) & 0xFF, voxel.normal & 0xFF};
+	normalRead = (DNivec3){normalRead.x * 2 - 255, normalRead.y * 2 - 255, normalRead.z * 2 - 255};
 
-	res.normal = (DNvec3){(normal.x - 0.5f) * 2.0f, (normal.y - 0.5f) * 2.0f, (normal.z - 0.5f) * 2.0f};
+	res.normal = DN_vec3_scale((DNvec3){normalRead.x, normalRead.y, normalRead.z}, inv255);
 	res.material = voxel.normal >> 24;
 	res.albedo = (DNcolor){(voxel.albedo >> 24) & 0xFF, (voxel.albedo >> 16) & 0xFF, (voxel.albedo >> 8) & 0xFF};
 
