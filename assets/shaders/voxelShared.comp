@@ -317,10 +317,9 @@ bool enableRefraction = false;
 
 uint lastVoxID = 255;       //the last hit voxel's albedo and material, used to determine if a new transparent "block" was hit
 float lastVoxRefract = 1.0; //the last hit voxel's refraction index, used to determine how much we need to refract
-vec3 orgRayPos;             //used to determine ray's distance, set to the ray's original origin position (before advancing to bounding box)
 
-//steps a ray through a chunk. RETURNS: 0 = no hit, 1 = hit voxel, 2 = past max depth
-int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult, out bool refracted) //steps a ray through a chunk, returns true if something was hit
+//steps a ray through a chunk, returns true if a voxel was hit
+bool step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult, out bool refracted) //steps a ray through a chunk, returns true if something was hit
 {
 	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
 	refracted = false;
@@ -334,15 +333,6 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 
 	while(in_chunk_bounds(pos))
 	{
-		//check if past the maximum depth:
-		if(maxDepth > 0.0)
-		{
-			vec3 voxelPos = mapPos + pos * INV_CHUNK_SIZE;
-			vec3 from = orgRayPos - voxelPos;
-			if(dot(from, from) > maxDepth * maxDepth)
-				return 2;
-		}
-
 		//check if a solid voxel has been hit:
 		if (does_voxel_exist(chunk, pos) && !ignoreFirst)
 		{
@@ -357,7 +347,7 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
 				if(lastVoxID != thisVoxID)
 				{
-					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength; //TODO: REFRACTION AND BEER'S LAW
+					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength;
 					colorMult *= 1.0 - material.opacity;
 
 					float rayDist = min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
@@ -382,7 +372,7 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 			{
 				//return the position
 				rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
-				return 1;
+				return true;
 			}
 		}
 		else if(lastVoxID != 255)
@@ -413,11 +403,11 @@ int step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDir
 		ignoreFirst = false;
 	}
 
-	return 0;
+	return false;
 }
 
 //steps a ray through the map, returns true if a voxel was hit
-bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDepth, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
+bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
 {
 	bool requested = false;	//we only want to requst 1 chunk per ray to avoid requeting occluded chunks
 
@@ -433,14 +423,6 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 
 	while(in_map_bounds(pos))
 	{
-		//check if past the maximum depth:
-		if(maxDepth > 0.0)
-		{
-			vec3 from = orgRayPos - pos;
-			if(dot(from, from) > (maxDepth + 1.0) * (maxDepth + 1.0)) //use maxDepth + 1 since we are on edge of chunk
-				return false;
-		}
-
 		//check if a solid chunk has been hit:
 		ChunkHandle mapTile = get_map_tile(pos);
 		if ((mapTile.flags & 3) == 2)
@@ -451,14 +433,11 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, float maxDep
 
 			//step through the chunk:
 			bool refracted;
-			int stepResult = step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, maxDepth, ignoreFirst, hitNormal, voxel, colorAdd, colorMult, refracted);
-			if(stepResult == 1)
+			if(step_chunk(mapTile.flags >> 4, pos, rayDir, invRayDir, chunkRayPos, ignoreFirst, hitNormal, voxel, colorAdd, colorMult, refracted))
 			{
 				rayPos = pos + chunkRayPos * INV_CHUNK_SIZE;
 				return true;
 			}
-			else if(stepResult == 2)
-				return false;
 
 			if(refracted)
 			{
