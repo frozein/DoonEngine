@@ -48,31 +48,21 @@ vec3 voxel_color(Voxel vox, vec3 colorAdd, float colorMult, vec3 hitNormal)
 		return solidColor * colorMult + colorAdd;
 	}
 	case 1: //albedo
-	{
 		return vox.albedo;
-	}
 	case 2: //diffuse light
-	{
 		return material.emissive ? vox.albedo : vox.diffuseLight;
-	}
 	case 3: //specular light
-	{
 		return material.emissive ? vox.albedo : vox.specLight;
-	}
 	case 4: //per-voxel normal
-	{
 		return abs(vox.normal);
-	}
 	case 5: //face normal
-	{
 		return abs(hitNormal);
-	}
 	}
 }
 
 void main()
 {
-	enableRefraction = false;
+	enableRefraction = true;
 
 	Voxel finalVoxel;       //the final voxel that is hit
 	Material finalMaterial; //the material of the final voxel hit
@@ -133,6 +123,7 @@ void main()
 			//get distance to hit voxel
 			finalDepth = distance(rayPos, orgRayPos);
 
+			//calculate final color:
 			if(maxDepth > 0.0 && finalDepth > maxDepth)
 			{
 				finalColor = background_color(maxDepth, texCoords, rayDir) * finalColorMult + finalColorAdd;

@@ -106,45 +106,41 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 
 			//check if hit voxel is adjacent (meant that this voxel is occluded):
 			vec3 dist = abs(floor(rayPos * CHUNK_SIZE) - floor(lastPos * CHUNK_SIZE));
-			if(dot(dist, dist) > 1)
+			if(dot(dist, dist) <= 1)
+				return;
+
+			hitMaterial = materials[hitVoxel.material];
+			hitVoxel.diffuseLight *= 1.0 - hitMaterial.specular;
+
+			if(hitMaterial.emissive)
 			{
-				hitMaterial = materials[hitVoxel.material];
-				hitVoxel.diffuseLight *= 1.0 - hitMaterial.specular;
-
-				if(hitMaterial.emissive)
-				{
-					color += (hitVoxel.albedo * colorMult + colorAdd) * multiplier * albedo;
-					break;
-				}
-				else
-				{
-					vec3 hitColor = hitVoxel.diffuseLight * hitVoxel.albedo;
-					color += (hitColor * colorMult + colorAdd) * multiplier;
-
-					//reflect ray again if the hit voxel is specular:
-					if(hitMaterial.specular > 0.0)
-					{
-						multiplier *= hitVoxel.albedo * colorMult * hitMaterial.specular;
-						reflectType = hitMaterial.reflectType;
-						lastPos = rayPos;
-						rayDir = reflect(rayDir, hitVoxel.normal);
-					}
-					else
-						break;
-				}
+				color += (hitVoxel.albedo * colorMult + colorAdd) * multiplier * albedo;
+				return;
 			}
 			else
-				break;
+			{
+				vec3 hitColor = hitVoxel.diffuseLight * hitVoxel.albedo;
+				color += (hitColor * colorMult + colorAdd) * multiplier;
+
+				//reflect ray again if the hit voxel is specular:
+				if(hitMaterial.specular == 0.0)
+					return;
+
+				multiplier *= hitVoxel.albedo * colorMult * hitMaterial.specular;
+				reflectType = hitMaterial.reflectType;
+				lastPos = rayPos;
+				rayDir = reflect(rayDir, hitVoxel.normal);
+			}
 		}
 		else if(dot(rayDir, sunDir) > 0.99) //add specular highlight
 		{
 			color += (sunStrength * colorMult + colorAdd);
-			break;
+			return;
 		}
 		else //reflect the sky color
 		{
 			color += ((reflectType == 1 ? sky_color(rayDir) : sunStrength) * colorMult + colorAdd) * multiplier;
-			break;
+			return;
 		}
 	}
 }

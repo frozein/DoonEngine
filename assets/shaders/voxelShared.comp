@@ -342,41 +342,40 @@ bool step_chunk(uint chunk, ivec3 mapPos, inout vec3 rayDir, inout vec3 invRayDi
 
 			Material material = materials[voxel.material];
 			uint thisVoxID = (compressed.albedo & 0xFFFFFF00) | (compressed.normal >> 24);
-			if(material.opacity < 1.0)
-			{
-				//if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
-				if(lastVoxID != thisVoxID)
-				{
-					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength;
-					colorMult *= 1.0 - material.opacity;
 
-					float rayDist = min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
-					if(enableRefraction && rayDist > 0.0)
-					{
-						refracted = true;
-						rayPos += rayDir * (rayDist + EPSILON);
-						
-						vec3 normal = dot(voxel.normal, rayDir) < 0.0 ? normalize(voxel.normal) : hitNormal;
-						rayDir = refract(rayDir, normal, lastVoxRefract / material.refractIndex);
-						invRayDir = 1 / rayDir;
-
-						init_DDA(rayDir, invRayDir, rayPos, pos, deltaDist, rayStep, sideDist);
-						lastSideDist = vec3(0.0);
-					}
-
-					lastVoxID = thisVoxID;
-					lastVoxRefract = material.refractIndex;
-				}
-			}
-			else
+			if(material.opacity == 1.0)
 			{
 				//return the position
 				rayPos += rayDir * (min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z) + EPSILON);
 				return true;
 			}
+			else if(lastVoxID != thisVoxID) //if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
+			{
+				colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength;
+				colorMult *= 1.0 - material.opacity;
+
+				//refract if enabled:
+				float rayDist = min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
+				if(enableRefraction && rayDist > 0.0)
+				{
+					refracted = true;
+					rayPos += rayDir * (rayDist + EPSILON);
+						
+					vec3 normal = dot(voxel.normal, rayDir) < 0.0 ? normalize(voxel.normal) : hitNormal;
+					rayDir = refract(rayDir, normal, lastVoxRefract / material.refractIndex);
+					invRayDir = 1 / rayDir;
+
+					init_DDA(rayDir, invRayDir, rayPos, pos, deltaDist, rayStep, sideDist);
+					lastSideDist = vec3(0.0);
+				}
+
+				lastVoxID = thisVoxID;
+				lastVoxRefract = material.refractIndex;
+			}
 		}
 		else if(lastVoxID != 255)
 		{
+			//refract if enabled:
 			if(enableRefraction)
 			{
 				refracted = true;
