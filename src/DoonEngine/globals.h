@@ -3,39 +3,40 @@
 
 #include <stdio.h>
 #include <malloc.h>
+#include <stdint.h>
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //USEFUL STRUCTS:
 
 typedef struct DNivec2
 {
-	int x, y;
+	int32_t x, y;
 } DNivec2;
 
 typedef struct DNivec3
 {
-	int x, y, z;
+	int32_t x, y, z;
 } DNivec3;
 
 typedef struct DNivec4
 {
-	int x, y, z, w;
+	int32_t x, y, z, w;
 } DNivec4;
 
 
 typedef struct DNuvec2
 {
-	unsigned int x, y;
+	uint32_t x, y;
 } DNuvec2;
 
 typedef struct DNuvec3
 {
-	unsigned int x, y, z;
+	uint32_t x, y, z;
 } DNuvec3;
 
 typedef struct DNuvec4
 {
-	unsigned int x, y, z, w;
+	uint32_t x, y, z, w;
 } DNuvec4;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -59,7 +60,7 @@ typedef enum DNmessageSeverity
 } DNmessageSeverity;
 
 //the message callback function, the last parameter is the actual message in string format
-extern void (*m_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*); //TODO: figure out a better way to use this than a global variable
+extern void (*g_DN_message_callback)(DNmessageType, DNmessageSeverity, const char*); //TODO: figure out a better way to use this than a global variable
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY FUNCTIONS USED BY LIBRARY:

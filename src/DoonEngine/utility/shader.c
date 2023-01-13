@@ -46,7 +46,7 @@ int DN_shader_load(GLenum type, const char* path, const char* includePath)
 
 		char messageFinal[1024 + 256];
 		sprintf(messageFinal, "failed to compile shader at \"%s\" with the following info log:\n%s", path, message);
-		m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, messageFinal);
+		g_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, messageFinal);
 
 		glDeleteShader(shader);
 		return -1;
@@ -200,7 +200,7 @@ static char* _DN_add_include_file(char* baseSource, const char* includePath)
 	char* versionStart = strstr(baseSource, "#version");
 	if(versionStart == NULL)
 	{
-		m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "shader source file did not contain a #version, unable to include another shader");
+		g_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "shader source file did not contain a #version, unable to include another shader");
 
 		DN_FREE(baseSource);
 		DN_FREE(includeSource);
@@ -213,7 +213,7 @@ static char* _DN_add_include_file(char* baseSource, const char* includePath)
 		i++;
 		if(i >= baseLen)
 		{
-			m_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "end of shader source file was reached before end of #version was found");
+			g_DN_message_callback(DN_MESSAGE_SHADER, DN_MESSAGE_ERROR, "end of shader source file was reached before end of #version was found");
 			DN_FREE(baseSource);
 			DN_FREE(includeSource);
 			return NULL;
@@ -253,7 +253,7 @@ static bool _DN_load_into_buffer(const char* path, char** buffer)
 		}
 		else
 		{
-			m_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to allocate memory for shader source code");
+			g_DN_message_callback(DN_MESSAGE_CPU_MEMORY, DN_MESSAGE_ERROR, "failed to allocate memory for shader source code");
 			result = false;
 		}
 
@@ -264,7 +264,7 @@ static bool _DN_load_into_buffer(const char* path, char** buffer)
 	{
 		char message[256];
 		sprintf(message, "failed to open file \"%s\" for reading", path);
-		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
+		g_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return false;
 	}
 }

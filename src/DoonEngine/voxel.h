@@ -123,23 +123,23 @@ typedef struct DNvolume
 	DNvec3 camPos;                   //READ-WRITE | The camera's position relative to this map, in DNchunks
 	DNvec3 camOrient;                //READ-WRITE | The camera's orientation, in degrees. Expressed as {pitch, yaw, roll}
 	float camFOV;                    //READ-WRITE | The camera's field of view, measured in degrees
-	unsigned int camViewMode;        //READ-WRITE | The camera's view mode, 0 = full lighting; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = per-voxel normals; 5 = per-face normals
+	uint32_t camViewMode;            //READ-WRITE | The camera's view mode, 0 = full lighting; 1 = albedo only; 2 = diffuse light only; 3 = specular light only; 4 = per-voxel normals; 5 = per-face normals
 
 	//lighting parameters:
 	DNvec3 sunDir;                   //READ-WRITE | The direction pointing towards the sun
 	DNvec3 sunStrength;              //READ-WRITE | The strength of sunlight, also determines the color
 	DNvec3 ambientLightStrength;     //READ-WRITE | The minimum lighting for every voxel
-	unsigned int diffuseBounceLimit; //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
-	unsigned int specBounceLimit;    //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
+	uint32_t diffuseBounceLimit;     //READ-WRITE | The maximum number of bounces for diffuse rays, can greatly affect performance
+	uint32_t specBounceLimit;        //READ-WRITE | The maximum number of bounces for specular rays, can greatly affect performance
 	float shadowSoftness;            //READ-WRITE | How soft shadows from direct light appear
 
 	//sky parameters:
 	bool useCubemap;                 //READ-WRITE | Whether or not the volume should sample a cubemap for the sky color, otherwise a gradient will be used
-	unsigned int glCubemapTex;       //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
+	GLuint glCubemapTex;             //READ-WRITE | The openGL texture handle to the cubemap to be sampled from, this MUST be set to a valid handle if useCubemap is true
 	DNvec3 skyGradientBot;           //READ-WRITE | If the volume does NOT sample a cubemap, the color at the bottom of the gradient for the sky color
 	DNvec3 skyGradientTop;           //READ-WRITE | If the volume does NOT sample a cubemap, the color at the top of the gradient for the sky color
 
-	unsigned int frameNum;           //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
+	uint32_t frameNum;               //READ ONLY  | Used to split the lighting calculations over multiple frames, determines the current frame. In the range [0, lightingSplit - 1]
 	float lastTime;                  //READ ONLY  | Used to ensure that each group of chunks receives the same time value, even when they are calculated at different times
 } DNvolume;
 
@@ -206,7 +206,7 @@ void DN_set_view_projection_matrices(DNvolume* vol, float aspectRatio, float nea
  * @param rasterColorTexture the handle to the color buffer for rasterized objects, or -1 if not composing with rasterized objects
  * @param rasterDepthTexture the handle to the depth buffer for rasterized objects, or -1 if not composing with rasterized objects
  */
-void DN_draw(DNvolume* vol, unsigned int outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture);
+void DN_draw(DNvolume* vol, GLuint outputTexture, DNmat4 view, DNmat4 projection, int rasterColorTexture, int rasterDepthTexture);
 
 /* Updates the lighting on every chunk currently in a map's lightingRequests
  * @param vol the volume to update
@@ -214,7 +214,7 @@ void DN_draw(DNvolume* vol, unsigned int outputTexture, DNmat4 view, DNmat4 proj
  * @param maxDiffuseSamples the maximum number of diffuse samples that a chunk can store at once. The lower the value, the faster lighting can change but the more flickering that can occur. 1000 is a good base value
  * @param time the current running time of the application, used for random seeding
  */
-void DN_update_lighting(DNvolume* vol, unsigned int numDiffuseSamples, unsigned int maxDiffuseSamples, float time);
+void DN_update_lighting(DNvolume* vol, int numDiffuseSamples, int maxDiffuseSamples, float time);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MEMORY:
@@ -222,9 +222,9 @@ void DN_update_lighting(DNvolume* vol, unsigned int numDiffuseSamples, unsigned 
 /* Allocates space for and creates a new chunk CPU-side. It should never be necessary to call as it is called automatically. NOTE: does NOT do any bounds checking
  * @param vol the volume to add a new chunk to
  * @param pos the position within the map to add the chunk at
- * @returns the index to the newly created chunk
+ * @returns the index to the newly created chunk, or -1 if it failed
  */
-unsigned int DN_add_chunk(DNvolume* vol, DNivec3 pos);
+int DN_add_chunk(DNvolume* vol, DNivec3 pos);
 /* Removes and frees space for a chunk. It should never be necessary to call as it is called automatically. NOTE: does NOT do any bounds checking
  * @param vol the volume to remove the chunk from
  * @param pos the position to remove the chunk from
@@ -236,7 +236,7 @@ void DN_remove_chunk(DNvolume* vol, DNivec3 pos);
  * @param op the operation to perform on the volume. DN_READ will only query the gpu for visible chunks. DN_WRITE will upload voxel data to the GPU if updated or requested. DN_READ_WRITE will do both
  * @param lightingSplit the number of frames to split the lighting calculation over. For example, if this is set to 5 only 1/5 of the chunks will have their lighting updated each frame, increasing performace
  */
-void DN_sync_gpu(DNvolume* vol, DNmemOp op, unsigned int lightingSplit);
+void DN_sync_gpu(DNvolume* vol, DNmemOp op, int lightingSplit);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP SETTINGS:
@@ -253,7 +253,7 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size);
  * @param num the new maximum number of chunks
  * @returns true on success, false on failure
  */
-bool DN_set_max_chunks(DNvolume* vol, unsigned int num);
+bool DN_set_max_chunks(DNvolume* vol, size_t num);
 /* Sets a map's maximum number of chunks in VRAM. It should never be necessary to call as it is called automatically
  * @param vol the volume to change
  * @param num the new maximum number of chunks
@@ -272,7 +272,7 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num);
  * @param num the new maximum number of lighting requests
  * @returns true on success, false on failure
  */
-bool DN_set_max_lighting_requests(DNvolume* vol, unsigned int num);
+bool DN_set_max_lighting_requests(DNvolume* vol, size_t num);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //MAP UTILITY:
@@ -349,7 +349,7 @@ bool DN_does_voxel_exist(DNvolume* vol, DNivec3 mapPos, DNivec3 chunkPos);
  * @param hitNormal if a voxel is hit, populated with the normal along which the voxel was hit
  * @returns true if a voxel was hit, false otherwise
  */
-bool DN_step_map(DNvolume* vol, DNvec3 rayDir, DNvec3 rayPos, unsigned int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
+bool DN_step_map(DNvolume* vol, DNvec3 rayDir, DNvec3 rayPos, int maxSteps, DNivec3* hitPos, DNvoxel* hitVoxel, DNivec3* hitNormal);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //GENERAL UTILITY:

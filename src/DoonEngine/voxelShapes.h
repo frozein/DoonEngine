@@ -134,7 +134,7 @@ void DN_free_model(DNvoxelModel model);
  * @param radius the radius, in DNvoxels, to use for the calculation. The larger this value, the smoother the normals but the longer the calculation time
  * @param model the model to calculate the normals for
  */
-void DN_calculate_model_normals(unsigned int radius, DNvoxelModel* model);
+void DN_calculate_model_normals(int radius, DNvoxelModel* model);
 
 /* Places a model into a map
  * @param vol the volume to place the model into

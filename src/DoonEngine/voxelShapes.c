@@ -8,12 +8,12 @@
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPE PARAMETERS:
 
-static float radius;
-static float radiusB;
-static float height;
-static DNvec2 angles;
-static DNvec3 radii;
-static DNvec3 length;
+static float g_radius;
+static float g_radiusB;
+static float g_height;
+static DNvec2 g_angles;
+static DNvec3 g_radii;
+static DNvec3 g_length;
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //SHAPE SDFs:
@@ -22,7 +22,7 @@ static DNvec3 length;
 
 static float _DN_sdf_box(DNvec3 p)
 {
-	DNvec3 q = DN_vec3_sub((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, length);
+	DNvec3 q = DN_vec3_sub((DNvec3){fabs(p.x), fabs(p.y), fabs(p.z)}, g_length);
 
 	float q1 = DN_vec3_length(DN_vec3_max(q, (DNvec3){0.0f, 0.0f, 0.0f}));
 	float q2 = fmin(fmax(fmax(q.x, q.y), q.z), 0.0);
@@ -32,30 +32,30 @@ static float _DN_sdf_box(DNvec3 p)
 
 static float _DN_sdf_rounded_box(DNvec3 p)
 {
-	return _DN_sdf_box(p) - radius;
+	return _DN_sdf_box(p) - g_radius;
 }
 
 static float _DN_sdf_torus(DNvec3 p)
 {
-	DNvec2 q = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, p.y};
-	return (DN_vec2_length(q) - radiusB);
+	DNvec2 q = {DN_vec2_length((DNvec2){p.x, p.z}) - g_radius, p.y};
+	return (DN_vec2_length(q) - g_radiusB);
 }
 
 static float _DN_sdf_ellipsoid(DNvec3 p)
 {
-	return (DN_vec3_length(DN_vec3_div(p, radii)) - 1.0f) * fmin(fmin(radii.x, radii.y), radii.z);
+	return (DN_vec3_length(DN_vec3_div(p, g_radii)) - 1.0f) * fmin(fmin(g_radii.x, g_radii.y), g_radii.z);
 }
 
 static float _DN_sdf_cylinder(DNvec3 p)
 {
-	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - radius, fabs(p.y) - height};
+	DNvec2 d = {DN_vec2_length((DNvec2){p.x, p.z}) - g_radius, fabs(p.y) - g_height};
 	return fmin(fmax(d.x, d.y), 0.0) + DN_vec2_length(DN_vec2_max(d, (DNvec2){0.0f, 0.0f}));
 }
 
 static float _DN_sdf_cone(DNvec3 p)
 {
 	float q = DN_vec2_length((DNvec2){p.x, p.z});
-	return fmax(DN_vec2_dot((DNvec2){angles.x, angles.y}, (DNvec2){q, p.y}), -height - p.y);
+	return fmax(DN_vec2_dot((DNvec2){g_angles.x, g_angles.y}, (DNvec2){q, p.y}), -g_height - p.y);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//
@@ -170,35 +170,35 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, voi
 
 			if(dist < 0.0)
 			{
-				if(mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == DN_MATERIAL_EMPTY))
+				if(mapTile.flag != 0 && (DN_does_voxel_exist(vol, mapPos, chunkPos) && voxel.material != DN_MATERIAL_EMPTY))
+					continue;
+
+				DNvoxel finalVox = voxel;
+				if(voxel.material != DN_MATERIAL_EMPTY)
 				{
-					DNvoxel finalVox = voxel;
-					if(voxel.material != DN_MATERIAL_EMPTY)
-					{
-						DNvec3 normal = _DN_calc_normal(pos, invTransform, dist, sdf);
-						
-						if(func != NULL)
-							finalVox = func((DNvec3){pos.x, pos.y, pos.z}, normal, voxel, min, max, invTransform, userData);
-						else
-							finalVox.normal = normal;
-					}
-					DN_set_voxel(vol, mapPos, chunkPos, finalVox);
+					DNvec3 normal = _DN_calc_normal(pos, invTransform, dist, sdf);
+					
+					if(func != NULL)
+						finalVox = func((DNvec3){pos.x, pos.y, pos.z}, normal, voxel, min, max, invTransform, userData);
+					else
+						finalVox.normal = normal;
 				}
+				DN_set_voxel(vol, mapPos, chunkPos, finalVox);
 			}
 			else if(dist < 1.0f && voxel.material == DN_MATERIAL_EMPTY && flipNormals)
 			{
-				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
-				{
-					DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
-					DNvec3 flippedNormal = DN_vec3_scale(_DN_calc_normal(pos, invTransform, dist, sdf), -1.0f);
+				if(mapTile.flag == 0 || !DN_does_voxel_exist(vol, mapPos, chunkPos))
+					continue;
+				
+				DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
+				DNvec3 flippedNormal = DN_vec3_scale(_DN_calc_normal(pos, invTransform, dist, sdf), -1.0f);
 
-					if(func != NULL)
-						oldVox = func((DNvec3){pos.x, pos.y, pos.z}, flippedNormal, oldVox, min, max, DN_mat4_identity(), userData);
-					else
-						oldVox.normal = flippedNormal;
+				if(func != NULL)
+					oldVox = func((DNvec3){pos.x, pos.y, pos.z}, flippedNormal, oldVox, min, max, DN_mat4_identity(), userData);
+				else
+					oldVox.normal = flippedNormal;
 
-					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
-				}
+				DN_set_voxel(vol, mapPos, chunkPos, oldVox);
 			}
 		}
 	}
@@ -260,38 +260,38 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, f
 			float dist2 = DN_vec3_dot(fromCenter, fromCenter); 
 			if(dist2 < r2)
 			{
-				if(mapTile.flag == 0 || (!DN_does_voxel_exist(vol, mapPos, chunkPos) || voxel.material == DN_MATERIAL_EMPTY))
+				if(mapTile.flag != 0 && (DN_does_voxel_exist(vol, mapPos, chunkPos) && voxel.material != DN_MATERIAL_EMPTY))
+					continue;
+
+				DNvoxel finalVox = voxel;
+				if(voxel.material != DN_MATERIAL_EMPTY)
 				{
-					DNvoxel finalVox = voxel;
-					if(voxel.material != DN_MATERIAL_EMPTY)
-					{
-						float maxNormal = fmax(fmax(fabs(fromCenter.x), fabs(fromCenter.y)), fabs(fromCenter.z));
-						fromCenter = DN_vec3_scale(fromCenter, 1.0f / maxNormal);
+					float maxNormal = fmax(fmax(fabs(fromCenter.x), fabs(fromCenter.y)), fabs(fromCenter.z));
+					fromCenter = DN_vec3_scale(fromCenter, 1.0f / maxNormal);
 
-						if(func != NULL)
-							finalVox = func(pos, fromCenter, voxel, min, max, DN_mat4_identity(), userData);
-						else
-							finalVox.normal = fromCenter;
-					}
-
-					DN_set_voxel(vol, mapPos, chunkPos, finalVox);
+					if(func != NULL)
+						finalVox = func(pos, fromCenter, voxel, min, max, DN_mat4_identity(), userData);
+					else
+						finalVox.normal = fromCenter;
 				}
+
+				DN_set_voxel(vol, mapPos, chunkPos, finalVox);
 			}
 			else if(voxel.material == DN_MATERIAL_EMPTY && flipNormals && dist2 < r12)
 			{
-				if(mapTile.flag != 0 && DN_does_voxel_exist(vol, mapPos, chunkPos))
-				{
-					DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
-					float maxNormal = fmax(fmax(fabs(fromCenter.x), fabs(fromCenter.y)), fabs(fromCenter.z));
-					fromCenter = DN_vec3_scale(fromCenter, -1.0f / maxNormal);
+				if(mapTile.flag == 0 || !DN_does_voxel_exist(vol, mapPos, chunkPos))
+					continue;
 
-					if(func != NULL)
-						oldVox = func(pos, fromCenter, oldVox, min, max, DN_mat4_identity(), userData);
-					else
-						oldVox.normal = fromCenter;
+				DNvoxel oldVox = DN_get_voxel(vol, mapPos, chunkPos);
+				float maxNormal = fmax(fmax(fabs(fromCenter.x), fabs(fromCenter.y)), fabs(fromCenter.z));
+				fromCenter = DN_vec3_scale(fromCenter, -1.0f / maxNormal);
 
-					DN_set_voxel(vol, mapPos, chunkPos, oldVox);
-				}
+				if(func != NULL)
+					oldVox = func(pos, fromCenter, oldVox, min, max, DN_mat4_identity(), userData);
+				else
+					oldVox.normal = fromCenter;
+
+				DN_set_voxel(vol, mapPos, chunkPos, oldVox);
 			}
 		}
 	}
@@ -303,7 +303,7 @@ void DN_shape_box(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, DNve
 	transform = DN_mat4_translate(c);
 	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
-	length = len;
+	g_length = len;
 
 	_DN_shape(vol, voxel, func, userData, flipNormals, DN_vec3_scale(len, -1.0f), len, transform, _DN_sdf_box);
 }
@@ -314,8 +314,8 @@ void DN_shape_rounded_box(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3
 	transform = DN_mat4_translate(c);
 	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
-	length = len;
-	radius = r;
+	g_length = len;
+	g_radius = r;
 
 	DNvec3 min = {-len.x - r, -len.y - r, -len.z - r};
 	DNvec3 max = { len.x + r,  len.x + r,  len.x + r};
@@ -329,8 +329,8 @@ void DN_shape_torus(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, fl
 	transform = DN_mat4_translate(c);
 	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
-	radius = ra;
-	radiusB = rb;
+	g_radius = ra;
+	g_radiusB = rb;
 
 	DNvec3 min = (DNvec3){-(ra + rb), -rb, -(ra + rb)};
 	DNvec3 max = (DNvec3){ (ra + rb),  rb,  (ra + rb)};
@@ -344,7 +344,7 @@ void DN_shape_ellipsoid(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c
 	transform = DN_mat4_translate(c);
 	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
-	radii = r;
+	g_radii = r;
 
 	DNvec3 min = {-r.x, -r.y, -r.z};
 	DNvec3 max = { r.x,  r.y,  r.z};
@@ -358,8 +358,8 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c,
 	transform = DN_mat4_translate(c);
 	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
 
-	radius = r;
-	height = h / 2;
+	g_radius = r;
+	g_height = h / 2;
 
 	DNvec3 min = {-r, -h / 2, -r};
 	DNvec3 max = { r,  h / 2,  r};
@@ -380,8 +380,8 @@ void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, flo
 	transform = DN_mat4_mult(transform, rotMat);
 
 	float hyp = sqrtf(r * r + h * h);
-	angles = (DNvec2){h / hyp, r / hyp};
-	height = h;
+	g_angles = (DNvec2){h / hyp, r / hyp};
+	g_height = h;
 
 	DNvec3 min = {-r, -h, -r};
 	DNvec3 max = { r,  0,  r};
@@ -394,7 +394,7 @@ void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, flo
 
 typedef struct VoxFileVoxel
 {
-	unsigned char x, y, z, w;
+	uint8_t x, y, z, w;
 } VoxFileVoxel;
 
 typedef struct VoxFileChunk
@@ -424,11 +424,11 @@ bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 	{
 		char message[256];
 		sprintf(message, "failed to open file \"%s\" for reading", path);
-		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
+		g_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return false;
 	}
 
-	unsigned int numVoxels;
+	uint32_t numVoxels;
 	VoxFileVoxel* tempVoxels = NULL;
 	VoxFileVoxel palette[256];
 	model->voxels = NULL;
@@ -440,7 +440,7 @@ bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 	{
 		char message[256];
 		sprintf(message, "file \"%s\" is not a valod .vox file", path);
-		m_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
+		g_DN_message_callback(DN_MESSAGE_FILE_IO, DN_MESSAGE_ERROR, message);
 		return false;
 	}
 
@@ -473,7 +473,7 @@ bool DN_load_vox_file(const char* path, int material, DNvoxelModel* model)
 			if(tempVoxels != NULL)
 				DN_FREE(tempVoxels);
 
-			fread(&numVoxels, sizeof(int), 1, fp);
+			fread(&numVoxels, sizeof(uint32_t), 1, fp);
 
 			tempVoxels = DN_MALLOC(numVoxels * sizeof(VoxFileVoxel));
 			fread(tempVoxels, sizeof(VoxFileVoxel), numVoxels, fp);
@@ -518,7 +518,7 @@ void DN_free_model(DNvoxelModel model)
 	DN_FREE(model.voxels);
 }
 
-void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
+void DN_calculate_model_normals(int r, DNvoxelModel* model)
 {
 	for(int zC = 0; zC < model->size.z; zC++)
 	for(int yC = 0; yC < model->size.y; yC++)
@@ -534,9 +534,9 @@ void DN_calculate_model_normals(unsigned int r, DNvoxelModel* model)
 			continue;
 
 		//loop over its neighbors:
-		for(int zP = zC - (int)r; zP <= zC + (int)r; zP++)
-		for(int yP = yC - (int)r; yP <= yC + (int)r; yP++)
-		for(int xP = xC - (int)r; xP <= xC + (int)r; xP++)
+		for(int zP = zC - r; zP <= zC + r; zP++)
+		for(int yP = yC - r; yP <= yC + r; yP++)
+		for(int xP = xC - r; xP <= xC + r; xP++)
 		{
 			if(xP < 0 || yP < 0 || zP < 0)
 				continue;
@@ -587,16 +587,16 @@ void DN_place_model_into_volume(DNvolume* vol, DNvoxelModel model, DNivec3 pos)
 	{
 		DNivec3 curPos = {x, y, z};
 		int iModel = DN_FLATTEN_INDEX(curPos, model.size);
-		if(DN_decompress_voxel(model.voxels[iModel]).material != DN_MATERIAL_EMPTY)
-		{
-			DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
-			DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE, worldPos.y / DN_CHUNK_SIZE, worldPos.z / DN_CHUNK_SIZE};
+		if(DN_decompress_voxel(model.voxels[iModel]).material == DN_MATERIAL_EMPTY)
+			continue;
 
-			if(DN_in_map_bounds(vol, chunkPos))
-			{
-				DNivec3 localPos = {worldPos.x % DN_CHUNK_SIZE, worldPos.y % DN_CHUNK_SIZE, worldPos.z % DN_CHUNK_SIZE};
-				DN_set_compressed_voxel(vol, chunkPos, localPos, model.voxels[iModel]);
-			}
+		DNivec3 worldPos = {pos.x + x, pos.y + y, pos.z + z};
+		DNivec3 chunkPos = {worldPos.x / DN_CHUNK_SIZE, worldPos.y / DN_CHUNK_SIZE, worldPos.z / DN_CHUNK_SIZE};
+
+		if(DN_in_map_bounds(vol, chunkPos))
+		{
+			DNivec3 localPos = {worldPos.x % DN_CHUNK_SIZE, worldPos.y % DN_CHUNK_SIZE, worldPos.z % DN_CHUNK_SIZE};
+			DN_set_compressed_voxel(vol, chunkPos, localPos, model.voxels[iModel]);
 		}
 	}
 }

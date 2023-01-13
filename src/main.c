@@ -156,7 +156,7 @@ int main()
 	glViewport(0, 0, SCREEN_W, SCREEN_H);
 	glEnable(GL_DEBUG_OUTPUT);
 	glDebugMessageCallback(message_callback, 0);
-	m_DN_message_callback = DN_message_callback;
+	g_DN_message_callback = DN_message_callback;
 
 	//set callback funcs:
 	//---------------------------------
