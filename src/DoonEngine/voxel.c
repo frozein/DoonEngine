@@ -44,6 +44,13 @@ typedef struct DNchunkHandleGPU
 //--------------------------------------------------------------------------------------------------------------------------------//
 //HELPER FUNCTIONS:
 
+//gl error checking:
+
+//clears all gl errors
+static void _DN_clear_gl_errors();
+//checks if any gl errors occured
+static bool _DN_gl_error();
+
 //intialization:
 
 //generates a shader storage buffer and places the handle into dest
@@ -923,8 +930,9 @@ void DN_update_lighting(DNvolume* vol, int numDiffuseSamples, int maxDiffuseSamp
 		sprintf(message, "automatically resizing lighting request buffer to accomodate %zi requests (%zi bytes)", newCap, newCap * sizeof(GLuint));
 		g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_NOTE, message);
 
+		_DN_clear_gl_errors();
 		glBufferData(GL_SHADER_STORAGE_BUFFER, newCap * sizeof(GLuint), NULL, GL_DYNAMIC_DRAW);
-		if(glGetError() == GL_OUT_OF_MEMORY)
+		if(_DN_gl_error())
 		{
 			g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to resize lighting request buffer");
 			return;
@@ -1004,9 +1012,10 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size)
 			_DN_clear_chunk(vol, i);
 
 	//allocate new gpu buffer:
+	_DN_clear_gl_errors();
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, sizeof(DNchunkHandleGPU) * size.x * size.y * size.z, vol->map, GL_DYNAMIC_DRAW);
-	if(glGetError() == GL_OUT_OF_MEMORY)
+	if(_DN_gl_error())
 	{
 		g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate map buffer");
 		return false;
@@ -1046,9 +1055,10 @@ bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num)
 	vol->gpuChunkLayout = newChunkLayout;
 
 	//resize buffer:
+	_DN_clear_gl_errors();
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glChunkBufferID);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, num * sizeof(DNchunkGPU), NULL, GL_DYNAMIC_DRAW);
-	if(glGetError() == GL_OUT_OF_MEMORY)
+	if(_DN_gl_error())
 	{
 		g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate chunk buffer");
 		return false;
@@ -1090,9 +1100,10 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	vol->gpuVoxelLayout = newGpuVoxelLayout;
 
 	//resize buffer:
+	_DN_clear_gl_errors();
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + DN_CHUNK_LENGTH) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
-	if(glGetError() == GL_OUT_OF_MEMORY)
+	if(_DN_gl_error())
 	{
 		g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
 		return false;
@@ -1359,15 +1370,28 @@ DNvoxel DN_decompress_voxel(DNcompressedVoxel voxel)
 //--------------------------------------------------------------------------------------------------------------------------------//
 //HELPER FUNCTIONS:
 
+//gl error checking:
+
+static void _DN_clear_gl_errors()
+{
+	while(glGetError() != GL_NO_ERROR);
+}
+
+static bool _DN_gl_error()
+{
+	return glGetError() != GL_NO_ERROR;
+}
+
 //initialization:
 
 static bool _DN_gen_shader_storage_buffer(GLuint* dest, size_t size)
 {
+	_DN_clear_gl_errors();
 	unsigned int buffer;
 	glGenBuffers(1, &buffer);
 	glBindBuffer(GL_SHADER_STORAGE_BUFFER, buffer); //bind
 	glBufferData(GL_SHADER_STORAGE_BUFFER, size, NULL, GL_DYNAMIC_DRAW); //allocate
-	if(glGetError() == GL_OUT_OF_MEMORY)
+	if(_DN_gl_error())
 	{	
 		glDeleteBuffers(1, &buffer);
 		return false;
