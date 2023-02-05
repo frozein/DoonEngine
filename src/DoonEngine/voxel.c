@@ -1039,32 +1039,44 @@ bool DN_set_max_voxels_gpu(DNvolume* vol, size_t num)
 	}
 	vol->gpuVoxelLayout = newGpuVoxelLayout;
 
-	//resize buffer:
+	//create new buffer:
 	_DN_clear_gl_errors();
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glVoxelBufferID);
+	GLuint newVoxelBuffer;
+	glGenBuffers(1, &newVoxelBuffer);
+	glBindBuffer(GL_SHADER_STORAGE_BUFFER, newVoxelBuffer);
 	glBufferData(GL_SHADER_STORAGE_BUFFER, (num + DN_CHUNK_LENGTH) * sizeof(DNvoxelGPU), NULL, GL_DYNAMIC_DRAW);
 	if(_DN_gl_error())
 	{
 		g_DN_message_callback(DN_MESSAGE_GPU_MEMORY, DN_MESSAGE_ERROR, "failed to reallocate voxel buffer");
 		return false;
 	}
+	
+	//copy into new buffer:
+	glBindBuffer(GL_COPY_READ_BUFFER, vol->glVoxelBufferID);
+	glBindBuffer(GL_COPY_WRITE_BUFFER, newVoxelBuffer);
+	glCopyBufferSubData(GL_COPY_READ_BUFFER, GL_COPY_WRITE_BUFFER, 0, 0, vol->voxelCap * sizeof(DNvoxelGPU));
 
-	//set voxel cap nad num nodes:
-	vol->numVoxelNodes = num / DN_CHUNK_LENGTH;
-	vol->voxelCap = num;
+	//free old buffer:
+	glDeleteBuffers(1, &vol->glVoxelBufferID);
+	vol->glVoxelBufferID = newVoxelBuffer;
 
 	//clear voxel layout memory:
-	for(size_t i = 0; i < vol->numVoxelNodes; i++)
+	size_t sizeDiff = num - vol->voxelCap;
+	int numNewNodes = sizeDiff / DN_CHUNK_LENGTH;
+	
+	int startIndex = vol->numVoxelNodes;
+	size_t startSize = vol->voxelCap;
+
+	for(size_t i = 0; i < numNewNodes; i++)
 	{
-		vol->gpuVoxelLayout[i].chunkPos.x = -1;
-		vol->gpuVoxelLayout[i].size = DN_CHUNK_LENGTH;
-		vol->gpuVoxelLayout[i].startPos = i * DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[startIndex + i].chunkPos.x = -1;
+		vol->gpuVoxelLayout[startIndex + i].size = DN_CHUNK_LENGTH;
+		vol->gpuVoxelLayout[startIndex + i].startPos = startSize + i * DN_CHUNK_LENGTH;
 	}
 
-	//clear gpu map:
-	glBindBuffer(GL_SHADER_STORAGE_BUFFER, vol->glMapBufferID);
-	glClearBufferData(GL_SHADER_STORAGE_BUFFER, GL_R8, GL_RED, GL_UNSIGNED_BYTE, NULL);
-	vol->numLightingRequests = 0;
+	//set voxel cap nad num nodes:
+	vol->numVoxelNodes += numNewNodes;
+	vol->voxelCap = num;
 
 	return true;
 }
