@@ -99,8 +99,8 @@ void specular_ray(ivec3 mapPos, vec3 normal, vec3 rayPos, vec3 rayDir, vec3 albe
 		{
 			//get position:
 			ivec3 hitMapPos = ivec3(rayPos);
-			uint thisMapIndex = mapPos.x    + mapSize.x * (mapPos.y    + mapSize.y * mapPos.z   );
-			uint hitMapIndex  = hitMapPos.x + mapSize.x * (hitMapPos.y + mapSize.y * hitMapPos.z);
+			uint thisMapIndex = get_map_index(mapPos);
+			uint hitMapIndex  = get_map_index(hitMapPos);
 			if((map[thisMapIndex].flags & 4) > 0)
 				map[hitMapIndex].flags |= 4;
 
@@ -209,20 +209,19 @@ void main()
 	enableRefraction = false; //refraction is too messy to look good at the per-voxel scale
 
 	//find positions:
-	uint chunkIndex = chunkIndices[gl_WorkGroupID.x] >> 4;
-	ivec3 mapPos = ivec3(chunks[chunkIndex].pos.xyz);
+	uint mapIndex = chunkIndices[gl_WorkGroupID.x] >> 4;
+	ivec3 mapPos = ivec3(chunks[mapIndex].pos.xyz);
 	uint voxNum = gl_LocalInvocationID.x + (chunkIndices[gl_WorkGroupID.x] & 15) * gl_WorkGroupSize.x;
-	ivec3 chunkPos = get_voxel_position(chunkIndex, voxNum);
+	ivec3 chunkPos = get_voxel_position(mapIndex, voxNum);
 
 	if(!in_chunk_bounds(chunkPos))
 		return;
 
-	uint mapIndex = mapPos.x + mapSize.x * (mapPos.y + mapSize.y * mapPos.z);
 	uint voxelIndex = map[mapIndex].voxelIndex + voxNum;
 	CompressedVoxel compressed = voxels[voxelIndex];
 	Voxel thisVoxel = decompress_voxel(compressed);
 	Material thisMaterial = materials[thisVoxel.material];
-	float indirectSamples = float(min(chunks[chunkIndex].numIndirectSamples, maxDiffuseSamples)); //have a maximum number of samples to allow the lighting to change quicker
+	float indirectSamples = float(min(chunks[mapIndex].numIndirectSamples, maxDiffuseSamples)); //have a maximum number of samples to allow the lighting to change quicker
 
 	//sample only along normals directly if newly updated:
 	if(indirectSamples == 0)
@@ -283,7 +282,7 @@ void main()
 
 	//increase number of samples:
 	if(voxNum == 0)
-		chunks[chunkIndex].numIndirectSamples++;
+		chunks[mapIndex].numIndirectSamples++;
 
 	return;
 }

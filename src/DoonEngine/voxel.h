@@ -104,7 +104,6 @@ typedef struct DNvolume
 	//data parameters:
 	DNuvec3 mapSize;                 //READ ONLY | The size, in DNchunks, of the map
 	size_t chunkCap;                 //READ ONLY | The current number of DNchunks that are stored CPU-side by this map. The length of chunks
-	size_t chunkCapGPU;              //READ ONLY | The current number of DNchunks that are stored GPU-side bu this map.
 	size_t nextChunk;                //READ ONLY | The next known empty chunk index. Used to speed up adding new chunks
 	size_t voxelCap;                 //READ ONLY | The current number of DNvoxels that are stored GPU-side by this map
 	size_t numVoxelNodes;            //READ ONLY | The current number of nodes that the GPU voxel data is broken up into
@@ -116,7 +115,6 @@ typedef struct DNvolume
 	DNchunk* chunks;                 //READ-WRITE | The array of chunks that the volume has
 	DNmaterial* materials;           //READ-WRITE | The array of materials that the volume has
 	GLuint* lightingRequests;        //READ-WRITE | An array of chunk indices (represented as a uvec4 due to a need for aligment on the gpu, only the x component is used), signifies which chunks will have their lighting updated when DN_update_lighting() is called
-	DNivec3* gpuChunkLayout;         //READ ONLY  | An array representing the chunk layout on the GPU. Represents the position in the map that each chunk is.
 	DNvoxelNode* gpuVoxelLayout;     //READ ONLY  | An array representing the voxel layout on the GPU
 
 	//camera parameters:
@@ -254,12 +252,6 @@ bool DN_set_map_size(DNvolume* vol, DNuvec3 size);
  * @returns true on success, false on failure
  */
 bool DN_set_max_chunks(DNvolume* vol, size_t num);
-/* Sets a map's maximum number of chunks in VRAM. It should never be necessary to call as it is called automatically
- * @param vol the volume to change
- * @param num the new maximum number of chunks
- * @returns true on success, false on failure
- */
-bool DN_set_max_chunks_gpu(DNvolume* vol, size_t num);
 /* Set's a map's maximum bumber of voxels in VRAM. It should never be necessary to call as it is called automatically
  * @param vol the volume to change
  * @param num the new maximum number of chunks
