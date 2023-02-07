@@ -77,7 +77,7 @@ void main()
 	vec2 texCoords = vec2(coords) / vec2(textureSize(colorSample, 0));
 
 	vec3 rayPos = (invViewMat * vec4(0.0, 0.0, 0.0, 1.0)).xyz;
-	vec3 orgRayPos = rayPos;
+	orgRayPos = rayPos;
 	vec3 rayDir = normalize((invCenteredViewMat * invProjectionMat * vec4(screenPos, 0.0, 1.0)).xyz) + EPSILON;
 	vec3 orgRayDir = rayDir;
 	vec3 invRayDir = 1.0 / rayDir;
@@ -113,7 +113,7 @@ void main()
 			rayPos += rayDir * (intersection.x + EPSILON);
 		vec3 finalNormal = normal_AABB(rayPos, vec3(0.0), mapSize);
 
-		if(step_map(rayDir, invRayDir, rayPos, false, finalNormal, finalVoxel, finalColorAdd, finalColorMult))
+		if(step_map(rayDir, invRayDir, rayPos, false, maxDepth, finalNormal, finalVoxel, finalColorAdd, finalColorMult))
 		{
 			//set chunk to visible:
 			uvec3 mapPos = uvec3(floor(rayPos));

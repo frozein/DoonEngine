@@ -319,12 +319,13 @@ void iterate_DDA(vec3 deltaDist, ivec3 rayStep, inout vec3 sideDist, inout ivec3
 //--------------------------------------------------------------------------------------------------------------------------------//
 
 bool enableRefraction = false;
+vec3 orgRayPos;
 
 uint lastVoxID = 255;       //the last hit voxel's albedo and material, used to determine if a new transparent "block" was hit
 float lastVoxRefract = 1.0; //the last hit voxel's refraction index, used to determine how much we need to refract
 
 //steps a ray through a chunk, returns true if a voxel was hit
-bool step_chunk(uint mapIndex, inout vec3 rayDir, inout vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult, out bool refracted) //steps a ray through a chunk, returns true if something was hit
+bool step_chunk(ivec3 mapPos, uint mapIndex, inout vec3 rayDir, inout vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, float maxDepth, inout vec3 hitNormal, out Voxel voxel, inout vec3 colorAdd, inout float colorMult, out bool refracted) //steps a ray through a chunk, returns true if something was hit
 {
 	refracted = false;
 
@@ -355,8 +356,15 @@ bool step_chunk(uint mapIndex, inout vec3 rayDir, inout vec3 invRayDir, inout ve
 			}
 			else if(lastVoxID != thisVoxID) //if the voxel is transparent, add its transparency multiplier (only if it is a "new" voxel)
 			{
-				colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength;
-				colorMult *= 1.0 - material.opacity;
+				//only add to color multiplier if we have not yet hit a rasterized object:
+				vec3 curPos = rayPos + rayDir * min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
+				curPos = mapPos + curPos * INV_CHUNK_SIZE;
+				vec3 toCurPos = curPos - orgRayPos;
+				if(maxDepth < 0.0 || dot(toCurPos, toCurPos) < maxDepth * maxDepth)
+				{
+					colorAdd += colorMult * material.opacity * voxel.albedo * sunStrength;
+					colorMult *= 1.0 - material.opacity;
+				}
 
 				//refract if enabled:
 				float rayDist = min(min(lastSideDist.x, lastSideDist.y), lastSideDist.z);
@@ -410,7 +418,7 @@ bool step_chunk(uint mapIndex, inout vec3 rayDir, inout vec3 invRayDir, inout ve
 }
 
 //steps a ray through the map, returns true if a voxel was hit
-bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
+bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreFirst, float maxDepth, inout vec3 hitNormal, out Voxel voxel, out vec3 colorAdd, out float colorMult)
 {
 	bool requested = false;	//we only want to requst 1 chunk per ray to avoid requeting occluded chunks
 
@@ -438,7 +446,7 @@ bool step_map(inout vec3 rayDir, vec3 invRayDir, inout vec3 rayPos, bool ignoreF
 
 			//step through the chunk:
 			bool refracted;
-			if(step_chunk(mapIndex, rayDir, invRayDir, chunkRayPos, ignoreFirst, hitNormal, voxel, colorAdd, colorMult, refracted))
+			if(step_chunk(pos, mapIndex, rayDir, invRayDir, chunkRayPos, ignoreFirst, maxDepth, hitNormal, voxel, colorAdd, colorMult, refracted))
 			{
 				rayPos = pos + chunkRayPos * INV_CHUNK_SIZE;
 				return true;
