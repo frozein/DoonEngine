@@ -58,6 +58,34 @@ static float _DN_sdf_cone(DNvec3 p)
 	return fmax(DN_vec2_dot((DNvec2){g_angles.x, g_angles.y}, (DNvec2){q, p.y}), -g_height - p.y);
 }
 
+static float _DN_sdf_pyramid(DNvec3 p)
+{
+	float m2 = g_height * g_height * 0.25f;
+
+	p.x = fabsf(p.x) / g_length.x;
+	p.z = fabsf(p.z) / g_length.z;
+	if(p.z > p.x)
+	{
+		float temp = p.x;
+		p.x = p.z;
+		p.z = temp;
+	}
+	p.x -= 0.5f;
+	p.z -= 0.5f;
+
+	DNvec3 q = {p.z, g_height * p.y - 0.5f * p.x, g_height * p.x + 0.5f * p.y};
+
+	float s = fmaxf(-q.x, 0.0f);
+	float t = fmaxf(fminf((q.y - 0.5f * p.z) / (m2 + 0.25f), 0.0f), 1.0f);
+
+	float a = m2 * (q.x + s) * (q.x + s) + q.y * q.y;
+	float b = m2 * (q.x + 0.5f * t) * (q.x + 0.5f * t) + (q.y - m2 * t) * (q.y - m2 * t);
+
+	float d2 = fminf(q.y, -q.x * m2 - q.y * 0.5f) > 0.0f ? 0.0f : fminf(a, b);
+
+	return sqrtf((d2 + q.z * q.z) / m2) * (fmaxf(q.z, -p.y) >= 0.0f ? 1.0f : -1.0f);
+}
+
 //--------------------------------------------------------------------------------------------------------------------------------//
 //UTILITY:
 
@@ -208,8 +236,15 @@ static void _DN_shape(DNvolume* vol, DNvoxel voxel, VoxelTransformFunc func, voi
 //SHAPES
 
 //note: this function is implemented differently so as to be more efficient
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, VoxelTransformFunc func, void* userData)
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, DNquaternion orient, VoxelTransformFunc func, void* userData)
 {
+	//get inverse transform mat (for transform func):
+	DNmat4 transform;
+	transform = DN_mat4_translate(c);
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
+
+	DNmat4 invTransform = DN_mat4_inv(transform);
+
 	//find min and max points:
 	DNvec3 min = {c.x - r, c.y - r, c.z - r};
 	DNvec3 max = {c.x + r, c.y + r, c.z + r};
@@ -270,7 +305,7 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, f
 					fromCenter = DN_vec3_scale(fromCenter, 1.0f / maxNormal);
 
 					if(func != NULL)
-						finalVox = func(pos, fromCenter, voxel, min, max, DN_mat4_identity(), userData);
+						finalVox = func(pos, fromCenter, voxel, min, max, invTransform, userData);
 					else
 						finalVox.normal = fromCenter;
 				}
@@ -287,7 +322,7 @@ void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, f
 				fromCenter = DN_vec3_scale(fromCenter, -1.0f / maxNormal);
 
 				if(func != NULL)
-					oldVox = func(pos, fromCenter, oldVox, min, max, DN_mat4_identity(), userData);
+					oldVox = func(pos, fromCenter, oldVox, min, max, invTransform, userData);
 				else
 					oldVox.normal = fromCenter;
 
@@ -387,6 +422,22 @@ void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, flo
 	DNvec3 max = { r,  0,  r};
 
 	_DN_shape(vol, voxel, func, userData, flipNormals, min, max, transform, _DN_sdf_cone);
+}
+
+void DN_shape_pyramid(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, DNvec3 len, DNquaternion orient, VoxelTransformFunc func, void* userData)
+{
+	DNmat4 transform;
+	transform = DN_mat4_translate(b);
+	transform = DN_mat4_mult(transform, DN_quaternion_to_mat4(orient));
+
+	g_length.x = len.x;
+	g_length.z = len.z;
+	g_height = len.y;
+
+	DNvec3 min = {-len.x * 0.5f, 0.0f , -len.z * 0.5f};
+	DNvec3 max = { len.x * 0.5f, len.y,  len.z * 0.5f};
+
+	_DN_shape(vol, voxel, func, userData, flipNormals, min, max, transform, _DN_sdf_pyramid);
 }
 
 //--------------------------------------------------------------------------------------------------------------------------------//

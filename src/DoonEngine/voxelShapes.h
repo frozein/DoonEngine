@@ -33,10 +33,11 @@ typedef DNvoxel (*VoxelTransformFunc)(DNvec3 pos, DNvec3 normal, DNvoxel vox, DN
  * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
  * @param c the sphere's center
  * @param r the sphere's radius
+ * @param orient the spheres's orientation (really only useful if you have a transform func), expressed as {pitch, yaw, roll}
  * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
  * @param userData optional user-defined data that gets passed into the transformation function, if provided
  */
-void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, VoxelTransformFunc func, void* userData);
+void DN_shape_sphere(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c, float r, DNquaternion orient, VoxelTransformFunc func, void* userData);
 /* Places a box into a map
  * @param vol the volume to edit
  * @param voxel the voxel to place (the normal will be calculated automatically)
