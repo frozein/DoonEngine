@@ -108,6 +108,17 @@ void DN_shape_cylinder(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 c,
  * @param userData optional user-defined data that gets passed into the transformation function, if provided
  */
 void DN_shape_cone(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, float r, float h, DNquaternion orient, VoxelTransformFunc func, void* userData);
+/* Places a pyramid into a map
+ * @param vol the volume to edit
+ * @param voxel the voxel to place (the normal will be calculated automatically)
+ * @param flipNormals determines whether or not to update the normals of voxels adjacent to removed voxels, if voxel.material == DN_MATERIAL_EMPTY
+ * @param b the position of the pyramid's base
+ * @param len the length of the pyramid, expressed as {base width, height, base depth}
+ * @param orient the cone's orientation, expressed as {pitch, yaw, roll}
+ * @param func the function that is called to determine the voxel that is actually placed or NULL if you just want to place the the voxel from the last param
+ * @param userData optional user-defined data that gets passed into the transformation function, if provided
+ */
+void DN_shape_pyramid(DNvolume* vol, DNvoxel voxel, bool flipNormals, DNvec3 b, DNvec3 len, DNquaternion orient, VoxelTransformFunc func, void* userData);
 
 //--------------------------------------------------------------------------------------------------------------------------------//
 //VOX FILE MODELS:
