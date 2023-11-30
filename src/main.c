@@ -21,6 +21,8 @@
 //Processes keyboard input for the current frame. CALL ONCE PER FRAME ONLY
 void process_input(GLFWwindow *window);
 
+//Error callback for glfw
+void glfw_error_callback(int error, const char* msg);
 //Handles updates to the mouse position. DO NOT CALL DIRECTLY
 void mouse_pos_callback(GLFWwindow* window, double x, double y);
 //Handles updates to the mouse buttons. DO NOT CALL DIRECTLY
@@ -120,22 +122,20 @@ void place_cereal_bowl(DNvolume* vol, DNvoxel bowlVox, DNvec3 pos, float radius,
 	}
 }
 
-void error_callback(int error, const char* msg)
-{
-	printf("%s\n", msg);
-}
 int main()
 {
 	srand(1234);
 
 	//init GLFW:
 	//---------------------------------
-	glfwSetErrorCallback(error_callback);
-	if(glfwInit() != GLFW_TRUE){
-		printf("GLFW failed to initialise\n");
-		glfwTerminate();
+	glfwSetErrorCallback(glfw_error_callback);
+
+	if(glfwInit() != GLFW_TRUE)
+	{
+		printf("GLFW failed to initialize\n");
 		return -1;
 	}
+
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
 	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
 	glfwWindowHint(GLFW_RESIZABLE, GL_TRUE);
@@ -538,6 +538,11 @@ int main()
 	glfwTerminate();
 
 	return 0;
+}
+
+void glfw_error_callback(int error, const char* msg)
+{
+	printf("GLFW ERROR: %s\n", msg);
 }
 
 void mouse_pos_callback(GLFWwindow *window, double x, double y)
